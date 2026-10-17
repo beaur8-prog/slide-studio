@@ -1,0 +1,99 @@
+import type { ShapePath } from "./types";
+
+const child = (n: Element, name: string) =>
+  Array.from(n.children).find((c) => c.localName === name);
+// Rebuild geometry from numeric DrawingML commands. Never inject source SVG/XML.
+export function drawingPaths(
+  geometry: Element | undefined,
+  fallback?: { width: number; height: number },
+): ShapePath[] | undefined {
+  const paths = geometry && child(geometry, "pathLst");
+  if (!paths) return undefined;
+  try {
+    return Array.from(paths.children).map((path) => {
+      const width = Number(path.getAttribute("w") ?? fallback?.width),
+        height = Number(path.getAttribute("h") ?? fallback?.height);
+      if (
+        !Number.isFinite(width) ||
+        !Number.isFinite(height) ||
+        width <= 0 ||
+        height <= 0
+      )
+        throw Error("dimensions");
+      let x = 0,
+        y = 0;
+      const d: string[] = [];
+      const point = (p: Element) => {
+        const a = Number(p.getAttribute("x")),
+          b = Number(p.getAttribute("y"));
+        if (
+          !Number.isFinite(a) ||
+          !Number.isFinite(b) ||
+          Math.abs(a) > 1e12 ||
+          Math.abs(b) > 1e12
+        )
+          throw Error("point");
+        return [a, b];
+      };
+      for (const command of Array.from(path.children)) {
+        const pts = Array.from(command.children)
+          .filter((n) => n.localName === "pt")
+          .map(point);
+        if (command.localName === "close") d.push("Z");
+        else if (
+          ["moveTo", "lnTo", "cubicBezTo", "quadBezTo"].includes(
+            command.localName,
+          )
+        ) {
+          const names: Record<string, string> = {
+            moveTo: "M",
+            lnTo: "L",
+            cubicBezTo: "C",
+            quadBezTo: "Q",
+          };
+          const expected: Record<string, number> = {
+            moveTo: 1,
+            lnTo: 1,
+            cubicBezTo: 3,
+            quadBezTo: 2,
+          };
+          if (pts.length !== expected[command.localName]) throw Error("points");
+          d.push(names[command.localName] + " " + pts.flat().join(" "));
+          [x, y] = pts.at(-1)!;
+        } else if (command.localName === "arcTo") {
+          const rx = Number(command.getAttribute("wR")),
+            ry = Number(command.getAttribute("hR"));
+          const start =
+              ((Number(command.getAttribute("stAng")) / 60000) * Math.PI) / 180,
+            swing =
+              ((Number(command.getAttribute("swAng")) / 60000) * Math.PI) / 180;
+          if (
+            ![rx, ry, start, swing].every(Number.isFinite) ||
+            rx <= 0 ||
+            ry <= 0
+          )
+            throw Error("arc");
+          const cx = x - rx * Math.cos(start),
+            cy = y - ry * Math.sin(start);
+          // Split full ellipses: SVG arcs with identical endpoints are empty.
+          const pieces = Math.max(1, Math.ceil(Math.abs(swing) / Math.PI));
+          if (pieces > 100) throw Error("arc");
+          for (let i = 1; i <= pieces; i++) {
+            x = cx + rx * Math.cos(start + (swing * i) / pieces);
+            y = cy + ry * Math.sin(start + (swing * i) / pieces);
+            d.push(`A ${rx} ${ry} 0 0 ${swing >= 0 ? 1 : 0} ${x} ${y}`);
+          }
+        } else throw Error("command");
+      }
+      return {
+        d: d.join(" "),
+        width,
+        height,
+        fill: path.getAttribute("fill") !== "none",
+        stroke: path.getAttribute("stroke") !== "0",
+      };
+    });
+  } catch {
+    return undefined;
+  }
+}

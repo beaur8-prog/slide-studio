@@ -1,0 +1,29 @@
+'use strict';
+
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('desktop', Object.freeze({
+  saveFile: payload => ipcRenderer.invoke('slide-studio:save-file', payload),
+  openFile: () => ipcRenderer.invoke('slide-studio:open-file'),
+  exportPDF: name => ipcRenderer.invoke('slide-studio:export-pdf', name),
+  print: () => ipcRenderer.invoke('slide-studio:print'),
+  onMenu: callback => {
+    if (typeof callback !== 'function') throw new TypeError('A menu callback is required.');
+    const listener = (_event, action) => callback(action);
+    ipcRenderer.on('slide-studio:menu', listener);
+    return () => ipcRenderer.removeListener('slide-studio:menu', listener);
+  },
+}));
+
+// User-initiated web links open in the system browser. No generic IPC or shell
+// capability is exposed to the editor, and generated click events are ignored.
+window.addEventListener('click', event => {
+  const link = event.composedPath().find(node => node instanceof HTMLAnchorElement);
+  if (!link) return;
+  let url;
+  try { url = new URL(link.href); } catch { return; }
+  if (!['https:', 'http:'].includes(url.protocol)) return;
+  if (url.origin === window.location.origin) return;
+  event.preventDefault();
+  if (event.isTrusted) ipcRenderer.send('slide-studio:open-external', url.href);
+}, true);

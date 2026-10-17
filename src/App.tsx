@@ -1,0 +1,2636 @@
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import type { CSSProperties, ReactNode } from "react";
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpToLine,
+  ArrowDownToLine,
+  Bold,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Circle,
+  Copy,
+  Download,
+  File,
+  FolderOpen,
+  Grid2X2,
+  Image as ImageIcon,
+  Italic,
+  Layers,
+  LayoutTemplate,
+  LockKeyhole,
+  Maximize,
+  Minus,
+  MoreHorizontal,
+  MousePointer2,
+  PanelLeft,
+  Play,
+  Plus,
+  Redo2,
+  Save,
+  Settings2,
+  Shapes,
+  Square,
+  StickyNote,
+  Trash2,
+  Type,
+  Underline,
+  Undo2,
+  UnlockKeyhole,
+  X,
+  ZoomIn,
+  Keyboard,
+  Triangle,
+  MoveUpRight,
+  ArrowRight,
+  LoaderCircle,
+  AlertCircle,
+  Presentation,
+  FileDown,
+  Printer,
+} from "lucide-react";
+import type { Deck, ShapeKind, Slide, SlideElement } from "./types";
+import { editText, patchText, scaleElement } from "./text-layout";
+import {
+  blankDeck,
+  duplicateSlide,
+  element,
+  newSlide,
+  reorder,
+  sampleDeck,
+  slideTitle,
+  THEMES,
+  uid,
+} from "./model";
+import SlideCanvas, { SlideVisual } from "./SlideCanvas";
+import { exportPptx, importPptx, parseDeckJson, serializeDeck } from "./io";
+import { listAutosaves, loadAutosave, saveAutosave } from "./storage";
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+const shortcut = (key: string) => isMac ? `⌘${key}` : `Ctrl+${key}`;
+
+type History = { past: Deck[]; present: Deck; future: Deck[] };
+type Tab = "home" | "insert" | "design" | "transitions" | "view";
+type Modal = "new" | "library" | "shortcuts" | "import" | null;
+const LIMIT = 60;
+const clone = <T,>(value: T): T => structuredClone(value);
+const round = (n: number) => Math.round(n * 10) / 10;
+const editingTarget = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
+    target.isContentEditable);
+function Tool({
+  icon,
+  children,
+  onClick,
+  active,
+  disabled,
+  title,
+  small = false,
+}: {
+  icon: ReactNode;
+  children?: ReactNode;
+  onClick?: () => void;
+  active?: boolean;
+  disabled?: boolean;
+  title?: string;
+  small?: boolean;
+}) {
+  return (
+    <button
+      className={`tool ${small ? "small" : ""} ${active ? "active" : ""}`}
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={typeof children === "string" ? children : title}
+      aria-pressed={active === undefined ? undefined : active}
+    >
+      {icon}
+      {children && <span>{children}</span>}
+    </button>
+  );
+}
+function NumberField({
+  label,
+  value,
+  onChange,
+  min = -10000,
+  max = 10000,
+  step = 1,
+}: {
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
+  return (
+    <label className="number-field">
+      <span>{label}</span>
+      <input
+        type="number"
+        aria-label={label}
+        value={round(value)}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n)) onChange(Math.max(min, Math.min(max, n)));
+        }}
+      />
+    </label>
+  );
+}
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (c: string) => void;
+}) {
+  return (
+    <label className="color-field">
+      <span>{label}</span>
+      <span className="color-input">
+        <input
+          type="color"
+          value={value === "transparent" ? "#FFFFFF" : value}
+          aria-label={label}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <code>{value === "transparent" ? "없음" : value.toUpperCase()}</code>
+      </span>
+    </label>
+  );
+}
+
+export default function App() {
+  const [history, setHistory] = useState<History>(() => ({
+    past: [],
+    present: sampleDeck(),
+    future: [],
+  }));
+  const deck = history.present;
+  const deckRef = useRef(deck);
+  deckRef.current = deck;
+  const [activeId, setActiveId] = useState(deck.slides[0].id);
+  const activeIndex = Math.max(
+    0,
+    deck.slides.findIndex((s) => s.id === activeId),
+  );
+  const slide = deck.slides[activeIndex];
+  const [selected, setSelected] = useState<string[]>([]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const selectedElement = slide.elements.find((e) => e.id === selected[0]);
+  const [tab, setTab] = useState<Tab>("home");
+  const [ready, setReady] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">(
+    "saving",
+  );
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const [busy, setBusy] = useState("");
+  const printing = useRef(false);
+  const [modal, setModal] = useState<Modal>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [library, setLibrary] = useState<Deck[]>([]);
+  const [menu, setMenu] = useState<"file" | "layout" | "shape" | null>(null);
+  const [layout, setLayout] = useState("title");
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [fitScale, setFitScale] = useState(0.6);
+  const scale = zoom === null ? fitScale : zoom;
+  const [notesVisible, setNotesVisible] = useState(true);
+  const [grid, setGrid] = useState(false);
+  const [guides, setGuides] = useState(false);
+  const [sorter, setSorter] = useState(false);
+  const [presenting, setPresenting] = useState(false);
+  const [presentIndex, setPresentIndex] = useState(0);
+  const [presentNotes, setPresentNotes] = useState(false);
+  const [blackout, setBlackout] = useState(false);
+  const [windowSize, setWindowSize] = useState({
+    w: window.innerWidth,
+    h: window.innerHeight,
+  });
+  const [dragSlide, setDragSlide] = useState<number | null>(null);
+  const [dropSlide, setDropSlide] = useState<number | null>(null);
+  const canvasArea = useRef<HTMLDivElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const transaction = useRef<Deck | null>(null);
+  const clipboard = useRef<{ elements?: SlideElement[]; slide?: Slide }>({});
+  const loadedRef = useRef(false);
+
+  const notify = useCallback((message: string) => {
+    setToast(message);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), 4200);
+  }, []);
+  const commit = useCallback((update: (d: Deck) => Deck) => {
+    setHistory((h) => {
+      const next = update(h.present);
+      if (next === h.present) return h;
+      return {
+        past: [...h.past, h.present].slice(-LIMIT),
+        present: next,
+        future: [],
+      };
+    });
+  }, []);
+  const begin = useCallback(() => {
+    // All document updates are immutable. Reuse the snapshot, including large
+    // embedded images, instead of cloning the entire deck on each edit.
+    if (!transaction.current) transaction.current = deckRef.current;
+  }, []);
+  const preview = useCallback((update: (d: Deck) => Deck) => {
+    setHistory((h) => ({ ...h, present: update(h.present) }));
+  }, []);
+  const finish = useCallback(() => {
+    const before = transaction.current;
+    transaction.current = null;
+    if (before)
+      setHistory((h) =>
+        before === h.present
+          ? h
+          : {
+              past: [...h.past, before].slice(-LIMIT),
+              present: h.present,
+              future: [],
+            },
+      );
+  }, []);
+  const undo = useCallback(() => {
+    setEditing(null);
+    transaction.current = null;
+    setSelected([]);
+    setHistory((h) =>
+      h.past.length
+        ? {
+            past: h.past.slice(0, -1),
+            present: h.past[h.past.length - 1],
+            future: [h.present, ...h.future],
+          }
+        : h,
+    );
+  }, []);
+  const redo = useCallback(() => {
+    setEditing(null);
+    transaction.current = null;
+    setSelected([]);
+    setHistory((h) =>
+      h.future.length
+        ? {
+            past: [...h.past, h.present],
+            present: h.future[0],
+            future: h.future.slice(1),
+          }
+        : h,
+    );
+  }, []);
+  const changeSlide = (update: (s: Slide) => Slide) =>
+    commit((d) => ({
+      ...d,
+      slides: d.slides.map((s) => (s.id === slide.id ? update(s) : s)),
+    }));
+  const updateSelected = (patch: Partial<SlideElement>) =>
+    changeSlide((s) => ({
+      ...s,
+      elements: s.elements.map((e) =>
+        selected.includes(e.id) && !e.locked ? patchText(e, patch) : e,
+      ),
+    }));
+  const selectSlide = (id: string) => {
+    finish();
+    setActiveId(id);
+    setSelected([]);
+    setEditing(null);
+    setMenu(null);
+  };
+  const replaceDeck = (next: Deck) => {
+    setHistory({ past: [], present: next, future: [] });
+    setActiveId(next.slides[0].id);
+    setSelected([]);
+    setEditing(null);
+    setModal(null);
+    setMenu(null);
+    setZoom(null);
+    setSorter(false);
+  };
+
+  useEffect(() => {
+    let disposed = false;
+    loadAutosave()
+      .then((saved) => {
+        if (disposed) return;
+        if (saved) {
+          try {
+            const safe = parseDeckJson(JSON.stringify(saved));
+            setHistory({ past: [], present: safe, future: [] });
+            setActiveId(safe.slides[0].id);
+          } catch {
+            notify("저장된 문서를 읽지 못해 새 예제를 열었습니다.");
+          }
+        }
+        loadedRef.current = true;
+        setReady(true);
+      })
+      .catch(() => {
+        if (!disposed) {
+          setReady(true);
+          setSaveStatus("error");
+          notify("자동 저장소를 열지 못했습니다. 파일로 저장해 주세요.");
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [notify]);
+  useEffect(() => {
+    if (!ready || !loadedRef.current) return;
+    setSaveStatus("saving");
+    let live = true;
+    const timer = setTimeout(() => {
+      saveAutosave(deck)
+        .then(() => {
+          if (live) setSaveStatus("saved");
+        })
+        .catch(() => {
+          if (live) {
+            setSaveStatus("error");
+            notify("자동 저장에 실패했습니다. 파일로 저장해 주세요.");
+          }
+        });
+    }, 450);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [deck, ready, notify]);
+  useEffect(() => {
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (saveStatus !== "saved") {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [saveStatus]);
+  useEffect(() => {
+    if (!deck.slides.some((s) => s.id === activeId)) {
+      setActiveId(
+        deck.slides[Math.min(activeIndex, deck.slides.length - 1)].id,
+      );
+      setSelected([]);
+    }
+  }, [deck.slides, activeId, activeIndex]);
+  useLayoutEffect(() => {
+    if (!canvasArea.current) return;
+    const measure = () => {
+      if (canvasArea.current) {
+        const { width, height } = canvasArea.current.getBoundingClientRect();
+        setFitScale(
+          Math.min(
+            (width - 94) / deck.width,
+            (height - 72) / deck.height,
+            1.25,
+          ),
+        );
+      }
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(canvasArea.current);
+    measure();
+    return () => ro.disconnect();
+  }, [deck.width, deck.height, ready, sorter, notesVisible]);
+  useEffect(() => {
+    const resize = () =>
+      setWindowSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [menu]);
+
+  const addSlide = (chosen = "content") => {
+    const next = newSlide(chosen, deck.theme, deck.width, deck.height);
+    commit((d) => {
+      const slides = [...d.slides];
+      slides.splice(activeIndex + 1, 0, next);
+      return { ...d, slides };
+    });
+    selectSlide(next.id);
+    setSorter(false);
+  };
+  const duplicateCurrentSlide = () => {
+    const next = duplicateSlide(slide);
+    commit((d) => {
+      const slides = [...d.slides];
+      slides.splice(activeIndex + 1, 0, next);
+      return { ...d, slides };
+    });
+    selectSlide(next.id);
+    notify("슬라이드를 복제했습니다.");
+  };
+  const removeSlide = (id = slide.id) => {
+    if (deck.slides.length === 1) {
+      notify("프레젠테이션에는 슬라이드가 하나 이상 필요합니다.");
+      return;
+    }
+    const idx = deck.slides.findIndex((s) => s.id === id);
+    commit((d) => ({ ...d, slides: d.slides.filter((s) => s.id !== id) }));
+    selectSlide(deck.slides[Math.max(0, idx - 1)].id);
+  };
+  const addElement = (type: SlideElement["type"], shape?: ShapeKind) => {
+    const theme = THEMES.find((t) => t.id === deck.theme) || THEMES[0];
+    const next = element(type, {
+      x: deck.width * 0.28,
+      y: deck.height * 0.35,
+      ...(type === "text" ? { color: theme.text } : {}),
+      ...(shape
+        ? {
+            shape,
+            fill: theme.accent,
+            width: shape === "line" || shape === "arrow" ? 360 : 260,
+            height: shape === "line" || shape === "arrow" ? 24 : 180,
+          }
+        : {}),
+    });
+    changeSlide((s) => ({ ...s, elements: [...s.elements, next] }));
+    setSelected([next.id]);
+    setMenu(null);
+  };
+  const removeSelected = () => {
+    if (selected.length) {
+      changeSlide((s) => ({
+        ...s,
+        elements: s.elements.filter(
+          (e) => !selected.includes(e.id) || e.locked,
+        ),
+      }));
+      setSelected([]);
+    } else removeSlide();
+  };
+  const duplicateSelected = () => {
+    if (!selected.length) {
+      duplicateCurrentSlide();
+      return;
+    }
+    const copies = slide.elements
+      .filter((e) => selected.includes(e.id))
+      .map((e) => ({
+        ...clone(e),
+        id: uid(),
+        x: e.x + 24,
+        y: e.y + 24,
+        locked: false,
+      }));
+    changeSlide((s) => ({ ...s, elements: [...s.elements, ...copies] }));
+    setSelected(copies.map((e) => e.id));
+  };
+  const copySelection = () => {
+    clipboard.current = selected.length
+      ? {
+          elements: clone(
+            slide.elements.filter((e) => selected.includes(e.id)),
+          ),
+        }
+      : { slide: clone(slide) };
+    notify(
+      selected.length ? "개체를 복사했습니다." : "슬라이드를 복사했습니다.",
+    );
+  };
+  const pasteSelection = () => {
+    if (clipboard.current.elements) {
+      const copies = clipboard.current.elements.map((e) => ({
+        ...clone(e),
+        id: uid(),
+        x: e.x + 24,
+        y: e.y + 24,
+        locked: false,
+      }));
+      changeSlide((s) => ({ ...s, elements: [...s.elements, ...copies] }));
+      setSelected(copies.map((e) => e.id));
+    } else if (clipboard.current.slide) {
+      const next = duplicateSlide(clipboard.current.slide);
+      commit((d) => {
+        const slides = [...d.slides];
+        slides.splice(activeIndex + 1, 0, next);
+        return { ...d, slides };
+      });
+      selectSlide(next.id);
+    }
+  };
+  const layerSelected = (where: "front" | "back" | "up" | "down") =>
+    changeSlide((s) => {
+      let elements = [...s.elements];
+      if (where === "front" || where === "back") {
+        const chosen = elements.filter((e) => selected.includes(e.id));
+        const rest = elements.filter((e) => !selected.includes(e.id));
+        elements =
+          where === "front" ? [...rest, ...chosen] : [...chosen, ...rest];
+      } else {
+        const indices = elements
+          .map((e, i) => (selected.includes(e.id) ? i : -1))
+          .filter((i) => i >= 0);
+        if (where === "up") indices.reverse();
+        indices.forEach((i) => {
+          const next = i + (where === "up" ? 1 : -1);
+          if (
+            next >= 0 &&
+            next < elements.length &&
+            !selected.includes(elements[next].id)
+          )
+            elements = reorder(elements, i, next);
+        });
+      }
+      return { ...s, elements };
+    });
+  const alignElements = (direction: "left" | "center" | "right") =>
+    changeSlide((s) => ({
+      ...s,
+      elements: s.elements.map((e) =>
+        selected.includes(e.id) && !e.locked
+          ? {
+              ...e,
+              x:
+                direction === "left"
+                  ? 0
+                  : direction === "center"
+                    ? (deck.width - e.width) / 2
+                    : deck.width - e.width,
+            }
+          : e,
+      ),
+    }));
+  const addImage = async (file: File) => {
+    if (!/^image\/(png|jpeg|gif|webp)$/.test(file.type)) {
+      notify("PNG, JPG, GIF, WebP 이미지를 선택해 주세요.");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      notify("15MB 이하의 이미지를 선택해 주세요.");
+      return;
+    }
+    try {
+      const src = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const image = new window.Image();
+      image.src = src;
+      await image.decode();
+      const ratio = Math.min(
+        1,
+        (deck.width * 0.65) / image.naturalWidth,
+        (deck.height * 0.7) / image.naturalHeight,
+      );
+      const width = image.naturalWidth * ratio,
+        height = image.naturalHeight * ratio;
+      const next = element("image", {
+        src,
+        alt: file.name,
+        x: (deck.width - width) / 2,
+        y: (deck.height - height) / 2,
+        width,
+        height,
+      });
+      changeSlide((s) => ({ ...s, elements: [...s.elements, next] }));
+      setSelected([next.id]);
+    } catch {
+      notify("이 이미지를 열 수 없습니다. 다른 파일을 선택해 주세요.");
+    }
+  };
+  const saveBytes = async (
+    name: string,
+    data: Uint8Array,
+    extensions: string[],
+  ) => {
+    if (window.desktop)
+      return !!(await window.desktop.saveFile({
+        name,
+        data,
+        extensions,
+      }));
+    const url = URL.createObjectURL(new Blob([new Uint8Array(data)]));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return true;
+  };
+  const saveProject = async () => {
+    setMenu(null);
+    try {
+      if (
+        await saveBytes(
+          `${deck.name}.slide`,
+          new TextEncoder().encode(serializeDeck(deck)),
+          ["slide"],
+        )
+      )
+        notify("편집 가능한 프로젝트 파일을 저장했습니다.");
+    } catch (error) {
+      notify(
+        `저장 실패: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+  const exportDeck = async () => {
+    setMenu(null);
+    setBusy("PowerPoint 파일을 만들고 있습니다");
+    try {
+      const bytes = await exportPptx(deck);
+      if (await saveBytes(`${deck.name}.pptx`, bytes, ["pptx"]))
+        notify("PPTX 파일을 저장했습니다.");
+    } catch (error) {
+      notify(
+        `PPTX 내보내기 실패: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setBusy("");
+    }
+  };
+  const exportPdf = async () => {
+    setMenu(null);
+    try {
+      if (window.desktop) {
+        setBusy("PDF를 만들고 있습니다");
+        const result = await window.desktop.exportPDF(deck.name);
+        if (result) notify("PDF 파일을 저장했습니다.");
+      } else window.print();
+    } catch (error) {
+      notify(
+        `PDF 내보내기 실패: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setBusy("");
+    }
+  };
+  const printDeck = async () => {
+    if (printing.current || busy) return;
+    printing.current = true;
+    finish();
+    setEditing(null);
+    setMenu(null);
+    setBusy("인쇄 창을 열고 있습니다");
+    try {
+      if (window.desktop) {
+        const submitted = await window.desktop.print();
+        notify(submitted ? "인쇄 작업을 보냈습니다." : "인쇄를 취소했습니다.");
+      } else {
+        await document.fonts.ready;
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+        await Promise.all(
+          Array.from(
+            document.querySelectorAll<HTMLImageElement>(".print-deck img"),
+            (image) => image.decode().catch(() => {}),
+          ),
+        );
+        window.print();
+      }
+    } catch (error) {
+      notify(
+        `인쇄 실패: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      printing.current = false;
+      setBusy("");
+    }
+  };
+  const readFile = async (name: string, data: ArrayBuffer | Uint8Array) => {
+    setBusy("프레젠테이션을 열고 있습니다");
+    try {
+      await saveAutosave(deck);
+      if (/\.pptx$/i.test(name)) {
+        const result = await importPptx(data);
+        replaceDeck(result.deck);
+        if (result.warnings.length) {
+          setWarnings(result.warnings);
+          setModal("import");
+        } else
+          notify(`${result.deck.slides.length}개의 슬라이드를 불러왔습니다.`);
+      } else {
+        const imported = parseDeckJson(new TextDecoder().decode(data));
+        replaceDeck(imported);
+        notify("프로젝트를 열었습니다.");
+      }
+    } catch (error) {
+      notify(
+        `파일 열기 실패: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setBusy("");
+    }
+  };
+  const openProject = async () => {
+    setMenu(null);
+    try {
+      if (window.desktop) {
+        const file = await window.desktop.openFile();
+        if (file) await readFile(file.name, file.data);
+      } else fileInput.current?.click();
+    } catch (error) {
+      notify(
+        `파일 열기 실패: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+  const showLibrary = async () => {
+    try {
+      await saveAutosave(deck);
+      setLibrary(await listAutosaves());
+      setModal("library");
+      setMenu(null);
+    } catch {
+      notify("저장된 문서를 불러오지 못했습니다.");
+    }
+  };
+  const createDocument = async (isSample = false) => {
+    try {
+      await saveAutosave(deck);
+      const next = isSample ? sampleDeck() : blankDeck();
+      if (!isSample) next.slides = [newSlide(layout)];
+      replaceDeck(next);
+      notify("새 프레젠테이션을 만들었습니다.");
+    } catch {
+      notify(
+        "현재 문서의 자동 저장에 실패했습니다. 파일로 저장한 후 다시 시도해 주세요.",
+      );
+    }
+  };
+  const startPresent = (fromBeginning = false) => {
+    finish();
+    setEditing(null);
+    setPresentIndex(fromBeginning ? 0 : activeIndex);
+    setBlackout(false);
+    setPresenting(true);
+    setMenu(null);
+  };
+  const stopPresent = () => {
+    setPresenting(false);
+    setBlackout(false);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  };
+  const movePresent = (direction: number) =>
+    setPresentIndex((i) =>
+      Math.max(0, Math.min(deck.slides.length - 1, i + direction)),
+    );
+  const applyTheme = (id: string) => {
+    const from = THEMES.find((t) => t.id === deck.theme) || THEMES[0],
+      to = THEMES.find((t) => t.id === id)!;
+    const map = (color: string | undefined) =>
+      color === from.background
+        ? to.background
+        : color === from.text
+          ? to.text
+          : color === from.accent
+            ? to.accent
+            : color === from.secondary
+              ? to.secondary
+              : color;
+    commit((d) => ({
+      ...d,
+      theme: id,
+      slides: d.slides.map((s) => ({
+        ...s,
+        background: map(s.background)!,
+        elements: s.elements.map((e) => ({
+          ...e,
+          color: map(e.color),
+          fill: map(e.fill),
+          stroke: map(e.stroke),
+          ...(e.paragraphs
+            ? {
+                paragraphs: e.paragraphs.map((p) => ({
+                  ...p,
+                  runs: p.runs.map((r) => ({ ...r, color: map(r.color) })),
+                })),
+              }
+            : {}),
+          ...(e.borders
+            ? {
+                borders: e.borders.map((b) => ({
+                  ...b,
+                  color: map(b.color)!,
+                })) as NonNullable<SlideElement["borders"]>,
+              }
+            : {}),
+        })),
+      })),
+    }));
+  };
+  const resizeDeck = (width: number, height: number) => {
+    commit((d) => ({
+      ...d,
+      width,
+      height,
+      slides: d.slides.map((s) => ({
+        ...s,
+        elements: s.elements.map((e) =>
+          scaleElement(e, width / d.width, height / d.height),
+        ),
+      })),
+    }));
+    setZoom(null);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (presenting) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          stopPresent();
+        } else if (
+          ["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key)
+        ) {
+          e.preventDefault();
+          movePresent(1);
+        } else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) {
+          e.preventDefault();
+          movePresent(-1);
+        } else if (e.key === "Home") {
+          e.preventDefault();
+          setPresentIndex(0);
+        } else if (e.key === "End") {
+          e.preventDefault();
+          setPresentIndex(deck.slides.length - 1);
+        } else if (e.key.toLowerCase() === "b") setBlackout((b) => !b);
+        return;
+      }
+      const cmd = e.metaKey || e.ctrlKey;
+      if (cmd && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void saveProject();
+        return;
+      }
+      if (cmd && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        void openProject();
+        return;
+      }
+      if (e.key === "Escape") {
+        setMenu(null);
+        setModal(null);
+        setSelected([]);
+        setEditing(null);
+        return;
+      }
+      if (editingTarget(e.target) || modal) return;
+      if (cmd && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        e.shiftKey ? redo() : undo();
+      } else if (cmd && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+      } else if (cmd && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        duplicateSelected();
+      } else if (cmd && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        setSelected(slide.elements.map((el) => el.id));
+      } else if (cmd && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        copySelection();
+      } else if (cmd && e.key.toLowerCase() === "x") {
+        e.preventDefault();
+        copySelection();
+        if (selected.length) removeSelected();
+      } else if (cmd && e.key.toLowerCase() === "v") {
+        if (clipboard.current.elements || clipboard.current.slide) {
+          e.preventDefault();
+          pasteSelection();
+        }
+      } else if (cmd && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        addSlide();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        removeSelected();
+      } else if (e.key === "F5") {
+        e.preventDefault();
+        startPresent(!e.shiftKey);
+      } else if (
+        e.key === "Enter" &&
+        selectedElement?.type === "text" &&
+        !selectedElement.locked
+      ) {
+        e.preventDefault();
+        begin();
+        setEditing(selectedElement.id);
+      } else if (
+        ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)
+      ) {
+        e.preventDefault();
+        if (selected.length) {
+          const amount = e.shiftKey ? 10 : 1;
+          changeSlide((s) => ({
+            ...s,
+            elements: s.elements.map((el) =>
+              selected.includes(el.id) && !el.locked
+                ? {
+                    ...el,
+                    x:
+                      el.x +
+                      (e.key === "ArrowLeft"
+                        ? -amount
+                        : e.key === "ArrowRight"
+                          ? amount
+                          : 0),
+                    y:
+                      el.y +
+                      (e.key === "ArrowUp"
+                        ? -amount
+                        : e.key === "ArrowDown"
+                          ? amount
+                          : 0),
+                  }
+                : el,
+            ),
+          }));
+        } else {
+          const idx = Math.max(
+            0,
+            Math.min(
+              deck.slides.length - 1,
+              activeIndex + (["ArrowLeft", "ArrowUp"].includes(e.key) ? -1 : 1),
+            ),
+          );
+          selectSlide(deck.slides[idx].id);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+  useEffect(() => {
+    const paste = (e: ClipboardEvent) => {
+      if (editingTarget(e.target)) return;
+      const file = Array.from(e.clipboardData?.items || [])
+        .find((i) => i.type.startsWith("image/"))
+        ?.getAsFile();
+      if (file) {
+        e.preventDefault();
+        void addImage(file);
+      }
+    };
+    window.addEventListener("paste", paste);
+    return () => window.removeEventListener("paste", paste);
+  });
+  useEffect(() =>
+    window.desktop?.onMenu((action) => {
+      if (action === "new") setModal("new");
+      if (action === "open") void openProject();
+      if (action === "save") void saveProject();
+      if (action === "export-pptx") void exportDeck();
+      if (action === "export-pdf") void exportPdf();
+      if (action === "print") void printDeck();
+      if (action === "present") startPresent();
+    }),
+  );
+
+  useEffect(() => {
+    // Desktop shortcuts are handled by the native menu. Capture the browser
+    // shortcut before a text editor stops bubbling the key event.
+    if (window.desktop) return;
+    const onPrintKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) void printDeck();
+      }
+    };
+    window.addEventListener("keydown", onPrintKey, true);
+    return () => window.removeEventListener("keydown", onPrintKey, true);
+  });
+
+  const fontTools = (
+    <>
+      <div className="font-row">
+        <select
+          aria-label="글꼴"
+          value={selectedElement?.fontFamily || "Arial"}
+          disabled={selectedElement?.type !== "text"}
+          onChange={(e) => updateSelected({ fontFamily: e.target.value })}
+        >
+          {[
+            ...new Set([
+              selectedElement?.fontFamily || "Arial",
+              "Arial",
+              "Calibri",
+              "Calibri Light",
+              "나눔바른고딕",
+              "Apple SD Gothic Neo",
+              "Helvetica Neue",
+              "Georgia",
+              "Times New Roman",
+              "Courier New",
+            ]),
+          ].map((f) => (
+            <option key={f}>{f}</option>
+          ))}
+        </select>
+        <input
+          aria-label="글자 크기"
+          type="number"
+          min="8"
+          max="240"
+          value={selectedElement?.fontSize || 32}
+          disabled={selectedElement?.type !== "text"}
+          onChange={(e) =>
+            updateSelected({
+              fontSize: Math.max(8, Math.min(240, Number(e.target.value) || 8)),
+            })
+          }
+        />
+      </div>
+      <div className="format-row">
+        <Tool
+          small
+          icon={<Bold size={17} />}
+          title="굵게"
+          active={selectedElement?.bold || false}
+          disabled={selectedElement?.type !== "text"}
+          onClick={() => updateSelected({ bold: !selectedElement?.bold })}
+        />
+        <Tool
+          small
+          icon={<Italic size={17} />}
+          title="기울임"
+          active={selectedElement?.italic || false}
+          disabled={selectedElement?.type !== "text"}
+          onClick={() => updateSelected({ italic: !selectedElement?.italic })}
+        />
+        <Tool
+          small
+          icon={<Underline size={17} />}
+          title="밑줄"
+          active={selectedElement?.underline || false}
+          disabled={selectedElement?.type !== "text"}
+          onClick={() =>
+            updateSelected({ underline: !selectedElement?.underline })
+          }
+        />
+        <label className="toolbar-color" title="글자 색">
+          <span>A</span>
+          <input
+            type="color"
+            aria-label="글자 색"
+            disabled={selectedElement?.type !== "text"}
+            value={selectedElement?.color || "#233D35"}
+            onChange={(e) => updateSelected({ color: e.target.value })}
+          />
+        </label>
+      </div>
+    </>
+  );
+  const shapeMenu = (
+    <div
+      className="popover shape-popover"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <h4>도형 삽입</h4>
+      <div className="shape-options">
+        {(
+          [
+            ["rect", "사각형", <Square />],
+            [
+              "roundRect",
+              "둥근 사각형",
+              <Square style={{ borderRadius: 5 }} />,
+            ],
+            ["ellipse", "타원", <Circle />],
+            ["triangle", "삼각형", <Triangle />],
+            ["line", "선", <Minus />],
+            ["arrow", "화살표", <ArrowRight />],
+          ] as [ShapeKind, string, ReactNode][]
+        ).map(([shape, label, icon]) => (
+          <button key={shape} onClick={() => addElement("shape", shape)}>
+            {icon}
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+  const layoutMenu = (
+    <div
+      className="popover layout-popover"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <h4>새 슬라이드 레이아웃</h4>
+      {[
+        ["title", "제목 슬라이드"],
+        ["content", "제목 및 내용"],
+        ["two-column", "두 개의 내용"],
+        ["blank", "빈 슬라이드"],
+      ].map(([id, label]) => (
+        <button key={id} onClick={() => addSlide(id)}>
+          <LayoutTemplate size={17} />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (!ready)
+    return (
+      <div className="loading-screen">
+        <Presentation size={38} />
+        <h2>Slide Studio</h2>
+        <p>작업 공간을 열고 있습니다</p>
+        <LoaderCircle className="spin" size={20} />
+      </div>
+    );
+  return (
+    <>
+      <div className="app-shell">
+        <header className="topbar">
+          <button
+            className="app-brand"
+            onClick={() => void showLibrary()}
+            title="내 프레젠테이션"
+          >
+            <span className="brand-mark">
+              <Presentation size={21} />
+            </span>
+            <span>
+              Slide<span className="brand-light"> Studio</span>
+            </span>
+          </button>
+          <div className="top-separator" />
+          <div className="document-title">
+            <input
+              aria-label="프레젠테이션 이름"
+              value={deck.name}
+              maxLength={100}
+              onChange={(e) => commit((d) => ({ ...d, name: e.target.value }))}
+              onBlur={() => {
+                if (!deck.name.trim())
+                  commit((d) => ({ ...d, name: "제목 없는 프레젠테이션" }));
+              }}
+            />
+            <span
+              className={`save-indicator ${saveStatus}`}
+              title={
+                saveStatus === "saved"
+                  ? "이 기기에 자동 저장되었습니다"
+                  : saveStatus === "saving"
+                    ? "변경 사항을 저장하고 있습니다"
+                    : "자동 저장 실패. 파일로 저장해 주세요."
+              }
+            >
+              {saveStatus === "saved" ? (
+                <CheckCircle2 size={13} />
+              ) : saveStatus === "saving" ? (
+                <LoaderCircle size={13} className="spin" />
+              ) : (
+                <AlertCircle size={13} />
+              )}
+              <span>
+                {saveStatus === "saved"
+                  ? "저장됨"
+                  : saveStatus === "saving"
+                    ? "저장 중"
+                    : "저장 실패"}
+              </span>
+            </span>
+          </div>
+          <div className="header-actions">
+            <button
+              className="icon-button"
+              aria-label="실행 취소"
+              title={`실행 취소 ${shortcut("Z")}`}
+              disabled={!history.past.length}
+              onClick={undo}
+            >
+              <Undo2 size={17} />
+            </button>
+            <button
+              className="icon-button"
+              aria-label="다시 실행"
+              title={`다시 실행 ${isMac ? "⇧⌘Z" : "Ctrl+Y"}`}
+              disabled={!history.future.length}
+              onClick={redo}
+            >
+              <Redo2 size={17} />
+            </button>
+            <span className="action-divider" />
+            <button
+              className="button secondary export-button"
+              onClick={() => void exportDeck()}
+            >
+              <Download size={15} />
+              PPTX 내보내기
+            </button>
+            <button className="button primary" onClick={() => startPresent()}>
+              <Play size={15} fill="currentColor" />
+              발표하기
+            </button>
+          </div>
+        </header>
+        <nav className="tabs" aria-label="리본 메뉴">
+          <div className="menu-anchor">
+            <button
+              className={menu === "file" ? "selected-tab file-tab" : "file-tab"}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setMenu(menu === "file" ? null : "file")}
+            >
+              파일
+              <ChevronDown size={12} />
+            </button>
+            {menu === "file" && (
+              <div
+                className="popover file-popover"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => {
+                    setModal("new");
+                    setMenu(null);
+                  }}
+                >
+                  <File size={16} />새 프레젠테이션
+                </button>
+                <button onClick={() => void showLibrary()}>
+                  <FolderOpen size={16} />내 프레젠테이션
+                </button>
+                <button onClick={() => void openProject()}>
+                  <FolderOpen size={16} />
+                  파일 열기<span>{shortcut("O")}</span>
+                </button>
+                <hr />
+                <button onClick={() => void saveProject()}>
+                  <Save size={16} />
+                  프로젝트 저장<span>{shortcut("S")}</span>
+                </button>
+                <button onClick={() => void exportDeck()}>
+                  <FileDown size={16} />
+                  PowerPoint (.pptx)
+                </button>
+                <button onClick={() => void exportPdf()}>
+                  <FileDown size={16} />
+                  PDF 내보내기
+                </button>
+                <button onClick={() => void printDeck()}>
+                  <Printer size={16} />
+                  인쇄<span>{shortcut("P")}</span>
+                </button>
+                <hr />
+                <button
+                  onClick={() => {
+                    setModal("shortcuts");
+                    setMenu(null);
+                  }}
+                >
+                  <Keyboard size={16} />
+                  키보드 단축키
+                </button>
+              </div>
+            )}
+          </div>
+          {(
+            [
+              ["home", "홈"],
+              ["insert", "삽입"],
+              ["design", "디자인"],
+              ["transitions", "전환"],
+              ["view", "보기"],
+            ] as [Tab, string][]
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              className={tab === id ? "selected-tab" : ""}
+              onClick={() => {
+                setTab(id);
+                setMenu(null);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="tab-spacer" />
+          <span className="local-badge">
+            <span />내 기기에 저장
+          </span>
+        </nav>
+        <div className="ribbon">
+          {tab === "home" && (
+            <>
+              <div className="ribbon-group slide-group">
+                <div className="tools-row">
+                  <div className="menu-anchor">
+                    <Tool icon={<Plus size={24} />} onClick={() => addSlide()}>
+                      새 슬라이드
+                    </Tool>
+                    <button
+                      className="split-arrow"
+                      aria-label="슬라이드 레이아웃 선택"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={() =>
+                        setMenu(menu === "layout" ? null : "layout")
+                      }
+                    >
+                      <ChevronDown size={13} />
+                    </button>
+                    {menu === "layout" && layoutMenu}
+                  </div>
+                  <div className="tools-stack">
+                    <button onClick={duplicateCurrentSlide}>
+                      <Copy size={14} />
+                      복제
+                    </button>
+                    <button
+                      onClick={() => removeSlide()}
+                      disabled={deck.slides.length === 1}
+                    >
+                      <Trash2 size={14} />
+                      삭제
+                    </button>
+                  </div>
+                </div>
+                <span className="group-label">슬라이드</span>
+              </div>
+              <div className="ribbon-group font-group">
+                {fontTools}
+                <span className="group-label">글꼴</span>
+              </div>
+              <div className="ribbon-group">
+                <div className="tools-row align-tools">
+                  {(
+                    [
+                      ["left", AlignLeft, "왼쪽 정렬"],
+                      ["center", AlignCenter, "가운데 정렬"],
+                      ["right", AlignRight, "오른쪽 정렬"],
+                    ] as const
+                  ).map(([align, Icon, label]) => (
+                    <Tool
+                      key={align}
+                      small
+                      icon={<Icon size={18} />}
+                      title={label}
+                      active={selectedElement?.align === align}
+                      disabled={selectedElement?.type !== "text"}
+                      onClick={() => updateSelected({ align })}
+                    />
+                  ))}
+                </div>
+                <button
+                  className="ribbon-text-action"
+                  disabled={selectedElement?.type !== "text"}
+                  onClick={() => {
+                    if (selectedElement)
+                      updateSelected({
+                        text: (selectedElement.text || "")
+                          .split("\n")
+                          .map((l) =>
+                            l.startsWith("• ") ? l.slice(2) : `• ${l}`,
+                          )
+                          .join("\n"),
+                      });
+                  }}
+                >
+                  • 글머리 기호
+                </button>
+                <span className="group-label">단락</span>
+              </div>
+              <div className="ribbon-group">
+                <div className="tools-row">
+                  <Tool
+                    icon={<Type size={24} />}
+                    onClick={() => addElement("text")}
+                  >
+                    텍스트
+                  </Tool>
+                  <div className="menu-anchor">
+                    <Tool
+                      icon={<Shapes size={24} />}
+                      onClick={() => setMenu(menu === "shape" ? null : "shape")}
+                    >
+                      도형
+                    </Tool>
+                    {menu === "shape" && shapeMenu}
+                  </div>
+                  <Tool
+                    icon={<ImageIcon size={23} />}
+                    onClick={() => imageInput.current?.click()}
+                  >
+                    이미지
+                  </Tool>
+                </div>
+                <span className="group-label">삽입</span>
+              </div>
+              <div className="ribbon-group arrange-group">
+                <div className="tools-stack">
+                  <button
+                    disabled={!selected.length}
+                    onClick={() => layerSelected("front")}
+                  >
+                    <ArrowUpToLine size={15} />맨 앞으로
+                  </button>
+                  <button
+                    disabled={!selected.length}
+                    onClick={() => layerSelected("back")}
+                  >
+                    <ArrowDownToLine size={15} />맨 뒤로
+                  </button>
+                </div>
+                <span className="group-label">정렬</span>
+              </div>
+            </>
+          )}
+          {tab === "insert" && (
+            <>
+              <div className="ribbon-group">
+                <div className="tools-row">
+                  <Tool
+                    icon={<Type size={26} />}
+                    onClick={() => addElement("text")}
+                  >
+                    텍스트 상자
+                  </Tool>
+                  <Tool
+                    icon={<ImageIcon size={26} />}
+                    onClick={() => imageInput.current?.click()}
+                  >
+                    그림 삽입
+                  </Tool>
+                  <div className="menu-anchor">
+                    <Tool
+                      icon={<Shapes size={26} />}
+                      onClick={() => setMenu(menu === "shape" ? null : "shape")}
+                    >
+                      도형
+                    </Tool>
+                    {menu === "shape" && shapeMenu}
+                  </div>
+                </div>
+                <span className="group-label">개체</span>
+              </div>
+              <div className="ribbon-group">
+                <div className="tools-row">
+                  {(
+                    [
+                      ["rect", "사각형", Square],
+                      ["ellipse", "타원", Circle],
+                      ["triangle", "삼각형", Triangle],
+                      ["arrow", "화살표", ArrowRight],
+                    ] as const
+                  ).map(([kind, label, Icon]) => (
+                    <Tool
+                      key={kind}
+                      icon={<Icon size={24} />}
+                      onClick={() => addElement("shape", kind)}
+                    >
+                      {label}
+                    </Tool>
+                  ))}
+                </div>
+                <span className="group-label">빠른 도형</span>
+              </div>
+              <div className="ribbon-hint">
+                <MousePointer2 size={18} />
+                <span>
+                  개체를 더블클릭하면 텍스트를 편집할 수 있어요.
+                  <br />
+                  Shift를 누르면 여러 개체를 함께 선택합니다.
+                </span>
+              </div>
+            </>
+          )}
+          {tab === "design" && (
+            <>
+              <div className="ribbon-group theme-ribbon">
+                <div className="theme-options">
+                  {THEMES.map((t) => (
+                    <button
+                      key={t.id}
+                      aria-label={t.name}
+                      className={`theme-choice ${deck.theme === t.id ? "chosen" : ""}`}
+                      onClick={() => applyTheme(t.id)}
+                    >
+                      <div style={{ background: t.background, color: t.text }}>
+                        <span>Aa</span>
+                        <i style={{ background: t.accent }} />
+                      </div>
+                      <small>{t.name}</small>
+                    </button>
+                  ))}
+                </div>
+                <span className="group-label">테마</span>
+              </div>
+              <div className="ribbon-group">
+                <Tool
+                  icon={<LayoutTemplate size={25} />}
+                  onClick={() =>
+                    resizeDeck(1280, deck.height === 720 ? 960 : 720)
+                  }
+                >
+                  비율{" "}
+                  {Math.abs(deck.width / deck.height - 16 / 9) < 0.02
+                    ? "16:9"
+                    : "4:3"}
+                </Tool>
+                <span className="group-label">슬라이드 크기</span>
+              </div>
+              <div className="ribbon-hint">
+                <span>
+                  테마를 선택하면 전체 슬라이드의
+                  <br />
+                  기본 배경과 글자 색이 바뀝니다.
+                </span>
+              </div>
+            </>
+          )}
+          {tab === "transitions" && (
+            <>
+              <div className="ribbon-group">
+                <div className="tools-row">
+                  <Tool
+                    icon={<Square size={25} />}
+                    active={slide.transition === "none"}
+                    onClick={() =>
+                      changeSlide((s) => ({ ...s, transition: "none" }))
+                    }
+                  >
+                    없음
+                  </Tool>
+                  <Tool
+                    icon={<Layers size={25} />}
+                    active={slide.transition === "fade"}
+                    onClick={() =>
+                      changeSlide((s) => ({ ...s, transition: "fade" }))
+                    }
+                  >
+                    페이드
+                  </Tool>
+                </div>
+                <span className="group-label">화면 전환</span>
+              </div>
+              <div className="ribbon-group">
+                <Tool
+                  icon={<Check size={24} />}
+                  onClick={() =>
+                    commit((d) => ({
+                      ...d,
+                      slides: d.slides.map((s) => ({
+                        ...s,
+                        transition: slide.transition,
+                      })),
+                    }))
+                  }
+                >
+                  모두 적용
+                </Tool>
+                <span className="group-label">설정</span>
+              </div>
+              <div className="ribbon-hint">
+                <span>
+                  앱의 발표 모드에 적용됩니다.
+                  <br />
+                  슬라이드 내용은 그대로 유지됩니다.
+                </span>
+              </div>
+            </>
+          )}
+          {tab === "view" && (
+            <>
+              <div className="ribbon-group">
+                <div className="tools-row">
+                  <Tool
+                    icon={<PanelLeft size={25} />}
+                    active={!sorter}
+                    onClick={() => setSorter(false)}
+                  >
+                    기본 보기
+                  </Tool>
+                  <Tool
+                    icon={<Grid2X2 size={25} />}
+                    active={sorter}
+                    onClick={() => setSorter(true)}
+                  >
+                    여러 슬라이드
+                  </Tool>
+                  <Tool
+                    icon={<StickyNote size={24} />}
+                    active={notesVisible}
+                    onClick={() => setNotesVisible((v) => !v)}
+                  >
+                    발표자 노트
+                  </Tool>
+                </div>
+                <span className="group-label">작업 보기</span>
+              </div>
+              <div className="ribbon-group">
+                <div className="tools-stack">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={guides}
+                      onChange={(e) => setGuides(e.target.checked)}
+                    />
+                    가운데 안내선
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={grid}
+                      onChange={(e) => setGrid(e.target.checked)}
+                    />
+                    눈금에 맞추기
+                  </label>
+                </div>
+                <span className="group-label">정렬 도구</span>
+              </div>
+              <div className="ribbon-group">
+                <Tool
+                  icon={<Maximize size={24} />}
+                  onClick={() => setZoom(null)}
+                >
+                  화면에 맞춤
+                </Tool>
+                <span className="group-label">확대/축소</span>
+              </div>
+              <div className="ribbon-group">
+                <Tool
+                  icon={<Play size={24} />}
+                  onClick={() => startPresent(true)}
+                >
+                  처음부터 발표
+                </Tool>
+                <span className="group-label">슬라이드 쇼</span>
+              </div>
+            </>
+          )}
+        </div>
+        <main className="workspace">
+          <aside className="slide-sidebar">
+            <div className="sidebar-heading">
+              <span>
+                슬라이드 <small>{deck.slides.length}</small>
+              </span>
+              <button
+                className="icon-button"
+                aria-label="여러 슬라이드 보기"
+                onClick={() => setSorter((v) => !v)}
+              >
+                <Grid2X2 size={15} />
+              </button>
+            </div>
+            <div className="thumbnail-list">
+              {deck.slides.map((s, i) => (
+                <div
+                  key={s.id}
+                  className={`thumbnail-row ${s.id === slide.id ? "active" : ""} ${dropSlide === i ? "drop-before" : ""}`}
+                  draggable
+                  onDragStart={(e) => {
+                    setDragSlide(i);
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", s.id);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDropSlide(i);
+                  }}
+                  onDragEnd={() => {
+                    setDragSlide(null);
+                    setDropSlide(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragSlide !== null && dragSlide !== i)
+                      commit((d) => ({
+                        ...d,
+                        slides: reorder(d.slides, dragSlide, i),
+                      }));
+                    setDragSlide(null);
+                    setDropSlide(null);
+                  }}
+                >
+                  <span className="slide-number">{i + 1}</span>
+                  <button
+                    className="thumbnail-button"
+                    aria-label={`슬라이드 ${i + 1}: ${slideTitle(s)}`}
+                    aria-current={s.id === slide.id ? "true" : undefined}
+                    onClick={() => selectSlide(s.id)}
+                  >
+                    <div
+                      className="thumbnail-preview"
+                      style={{ height: (176 * deck.height) / deck.width }}
+                    >
+                      <SlideVisual
+                        slide={s}
+                        width={deck.width}
+                        height={deck.height}
+                        scale={176 / deck.width}
+                      />
+                    </div>
+                  </button>
+                  <span className="thumbnail-caption">{slideTitle(s)}</span>
+                </div>
+              ))}
+            </div>
+            <button className="add-slide-button" onClick={() => addSlide()}>
+              <Plus size={16} />
+              슬라이드 추가
+            </button>
+          </aside>
+          <section className="editor-column">
+            <div className="canvas-topline">
+              <span>{sorter ? "모든 슬라이드" : slideTitle(slide)}</span>
+              <span>
+                {selected.length
+                  ? `${selected.length}개 개체 선택됨`
+                  : `${activeIndex + 1} / ${deck.slides.length}`}
+              </span>
+            </div>
+            {sorter ? (
+              <div className="slide-sorter">
+                {deck.slides.map((s, i) => (
+                  <button
+                    key={s.id}
+                    className={s.id === slide.id ? "chosen" : ""}
+                    onClick={() => {
+                      selectSlide(s.id);
+                      setSorter(false);
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 260,
+                        height: (260 * deck.height) / deck.width,
+                        position: "relative",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <SlideVisual
+                        slide={s}
+                        width={deck.width}
+                        height={deck.height}
+                        scale={260 / deck.width}
+                      />
+                    </div>
+                    <span>
+                      {i + 1}. {slideTitle(s)}
+                    </span>
+                  </button>
+                ))}
+                <button className="sorter-add" onClick={() => addSlide()}>
+                  <Plus size={30} />
+                  <span>슬라이드 추가</span>
+                </button>
+              </div>
+            ) : (
+              <div
+                className="canvas-area"
+                ref={canvasArea}
+                onPointerDown={(e) => {
+                  if (e.target === e.currentTarget) setSelected([]);
+                }}
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types.includes("Files"))
+                    e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files[0];
+                  if (file) void addImage(file);
+                }}
+              >
+                <div className="canvas-scaler">
+                  <div className="ruler horizontal-ruler">
+                    <span>0</span>
+                    <span>{Math.round(deck.width / 4)}</span>
+                    <span>{Math.round(deck.width / 2)}</span>
+                    <span>{Math.round((deck.width * 3) / 4)}</span>
+                    <span>{deck.width}</span>
+                  </div>
+                  <SlideCanvas
+                    deck={deck}
+                    slide={slide}
+                    scale={Math.max(0.1, scale)}
+                    selected={selected}
+                    editing={editing}
+                    select={(ids) => {
+                      if (editing) {
+                        finish();
+                        setEditing(null);
+                      }
+                      setSelected(ids);
+                    }}
+                    edit={setEditing}
+                    begin={begin}
+                    finish={finish}
+                    preview={(elements) =>
+                      preview((d) => ({
+                        ...d,
+                        slides: d.slides.map((s) =>
+                          s.id === slide.id ? { ...s, elements } : s,
+                        ),
+                      }))
+                    }
+                    changeText={(id, text) =>
+                      preview((d) => ({
+                        ...d,
+                        slides: d.slides.map((s) =>
+                          s.id === slide.id
+                            ? {
+                                ...s,
+                                elements: s.elements.map((el) =>
+                                  el.id === id ? editText(el, text) : el,
+                                ),
+                              }
+                            : s,
+                        ),
+                      }))
+                    }
+                    showGuides={guides}
+                    grid={grid}
+                  />
+                </div>
+              </div>
+            )}
+            {notesVisible && (
+              <div className="notes-pane">
+                <div>
+                  <StickyNote size={14} />
+                  <span>발표자 노트</span>
+                  <small>발표 화면에는 표시되지 않습니다</small>
+                  <button
+                    className="icon-button"
+                    aria-label="노트 닫기"
+                    onClick={() => setNotesVisible(false)}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <textarea
+                  aria-label="발표자 노트"
+                  placeholder="이 슬라이드에서 이야기할 내용을 적어두세요…"
+                  value={slide.notes}
+                  onFocus={begin}
+                  onChange={(e) =>
+                    preview((d) => ({
+                      ...d,
+                      slides: d.slides.map((s) =>
+                        s.id === slide.id ? { ...s, notes: e.target.value } : s,
+                      ),
+                    }))
+                  }
+                  onBlur={finish}
+                />
+              </div>
+            )}
+          </section>
+          <aside className="inspector">
+            <div className="inspector-heading">
+              <Settings2 size={16} />
+              <span>{selectedElement ? "개체 서식" : "슬라이드 서식"}</span>
+              {selectedElement && (
+                <button
+                  className="icon-button"
+                  aria-label="선택 해제"
+                  onClick={() => setSelected([])}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <div className="inspector-body">
+              {selectedElement ? (
+                <>
+                  <div className="inspector-section">
+                    <h4>
+                      위치 및 크기{" "}
+                      <span>
+                        {selected.length > 1
+                          ? `${selected.length}개 선택`
+                          : selectedElement.type === "text"
+                            ? "텍스트"
+                            : selectedElement.type === "image"
+                              ? "이미지"
+                              : "도형"}
+                      </span>
+                    </h4>
+                    <div className="number-grid">
+                      <NumberField
+                        label="X"
+                        value={selectedElement.x}
+                        onChange={(x) => updateSelected({ x })}
+                      />
+                      <NumberField
+                        label="Y"
+                        value={selectedElement.y}
+                        onChange={(y) => updateSelected({ y })}
+                      />
+                      <NumberField
+                        label="너비"
+                        value={selectedElement.width}
+                        min={16}
+                        onChange={(width) => updateSelected({ width })}
+                      />
+                      <NumberField
+                        label="높이"
+                        value={selectedElement.height}
+                        min={8}
+                        onChange={(height) => updateSelected({ height })}
+                      />
+                      <NumberField
+                        label="회전"
+                        value={selectedElement.rotation}
+                        min={-360}
+                        max={360}
+                        onChange={(rotation) => updateSelected({ rotation })}
+                      />
+                      <NumberField
+                        label="불투명도"
+                        value={selectedElement.opacity * 100}
+                        min={0}
+                        max={100}
+                        onChange={(n) => updateSelected({ opacity: n / 100 })}
+                      />
+                    </div>
+                  </div>
+                  {selectedElement.type === "text" && (
+                    <div className="inspector-section">
+                      <h4>텍스트</h4>
+                      <ColorField
+                        label="색상"
+                        value={selectedElement.color || "#233D35"}
+                        onChange={(color) => updateSelected({ color })}
+                      />
+                      <label className="select-field">
+                        세로 정렬
+                        <select
+                          aria-label="세로 정렬"
+                          value={selectedElement.verticalAlign || "top"}
+                          onChange={(e) =>
+                            updateSelected({
+                              verticalAlign: e.target
+                                .value as SlideElement["verticalAlign"],
+                            })
+                          }
+                        >
+                          <option value="top">위쪽</option>
+                          <option value="middle">가운데</option>
+                          <option value="bottom">아래쪽</option>
+                        </select>
+                      </label>
+                      <button
+                        className="text-button full"
+                        onClick={() => {
+                          begin();
+                          setEditing(selectedElement.id);
+                        }}
+                        disabled={selectedElement.locked}
+                      >
+                        텍스트 편집
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  )}
+                  {selectedElement.type === "shape" && (
+                    <div className="inspector-section">
+                      <h4>채우기 및 윤곽선</h4>
+                      <ColorField
+                        label="채우기"
+                        value={selectedElement.fill || "#D4613F"}
+                        onChange={(fill) => updateSelected({ fill })}
+                      />
+                      <label className="check-field">
+                        <input
+                          type="checkbox"
+                          checked={selectedElement.fill === "transparent"}
+                          onChange={(e) =>
+                            updateSelected({
+                              fill: e.target.checked
+                                ? "transparent"
+                                : "#D4613F",
+                            })
+                          }
+                        />
+                        채우기 없음
+                      </label>
+                      <ColorField
+                        label="선 색상"
+                        value={selectedElement.stroke || "#233D35"}
+                        onChange={(stroke) =>
+                          updateSelected({
+                            stroke,
+                            strokeWidth: selectedElement.strokeWidth || 2,
+                          })
+                        }
+                      />
+                      <NumberField
+                        label="선 두께"
+                        value={selectedElement.strokeWidth || 0}
+                        min={0}
+                        max={30}
+                        onChange={(strokeWidth) =>
+                          updateSelected({ strokeWidth })
+                        }
+                      />
+                    </div>
+                  )}
+                  <div className="inspector-section">
+                    <h4>슬라이드에 맞춰 정렬</h4>
+                    <div className="inspector-tools">
+                      <Tool
+                        small
+                        icon={<AlignLeft size={17} />}
+                        title="왼쪽 가장자리 맞춤"
+                        onClick={() => alignElements("left")}
+                      />
+                      <Tool
+                        small
+                        icon={<AlignCenter size={17} />}
+                        title="가로 가운데 맞춤"
+                        onClick={() => alignElements("center")}
+                      />
+                      <Tool
+                        small
+                        icon={<AlignRight size={17} />}
+                        title="오른쪽 가장자리 맞춤"
+                        onClick={() => alignElements("right")}
+                      />
+                      <Tool
+                        small
+                        icon={<ArrowUp size={17} />}
+                        title="앞으로 한 단계"
+                        onClick={() => layerSelected("up")}
+                      />
+                      <Tool
+                        small
+                        icon={<ArrowDown size={17} />}
+                        title="뒤로 한 단계"
+                        onClick={() => layerSelected("down")}
+                      />
+                    </div>
+                  </div>
+                  <div className="inspector-section">
+                    <div className="object-actions">
+                      <button onClick={duplicateSelected}>
+                        <Copy size={15} />
+                        복제
+                      </button>
+                      <button
+                        onClick={() =>
+                          changeSlide((s) => ({
+                            ...s,
+                            elements: s.elements.map((e) =>
+                              selected.includes(e.id)
+                                ? { ...e, locked: !selectedElement.locked }
+                                : e,
+                            ),
+                          }))
+                        }
+                      >
+                        {selectedElement.locked ? (
+                          <UnlockKeyhole size={15} />
+                        ) : (
+                          <LockKeyhole size={15} />
+                        )}{" "}
+                        {selectedElement.locked ? "잠금 해제" : "잠금"}
+                      </button>
+                      <button
+                        className="danger"
+                        onClick={removeSelected}
+                        disabled={selectedElement.locked}
+                      >
+                        <Trash2 size={15} />
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="inspector-section">
+                    <h4>배경</h4>
+                    <ColorField
+                      label="단색 채우기"
+                      value={slide.background}
+                      onChange={(background) =>
+                        changeSlide((s) => ({ ...s, background }))
+                      }
+                    />
+                    <div className="swatches">
+                      {[
+                        "#FFFFFF",
+                        "#FAF8F2",
+                        "#E7EBDD",
+                        "#233D35",
+                        "#D4613F",
+                        "#1E2634",
+                        "#EFF5F8",
+                        "#F8F0EF",
+                      ].map((color) => (
+                        <button
+                          key={color}
+                          aria-label={`배경 ${color}`}
+                          style={{ background: color }}
+                          className={slide.background === color ? "chosen" : ""}
+                          onClick={() =>
+                            changeSlide((s) => ({ ...s, background: color }))
+                          }
+                        >
+                          {slide.background === color && (
+                            <Check
+                              size={12}
+                              color={
+                                ["#233D35", "#1E2634", "#D4613F"].includes(
+                                  color,
+                                )
+                                  ? "white"
+                                  : "#233D35"
+                              }
+                            />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="outline-button full"
+                      onClick={() =>
+                        commit((d) => ({
+                          ...d,
+                          slides: d.slides.map((s) => ({
+                            ...s,
+                            background: slide.background,
+                          })),
+                        }))
+                      }
+                    >
+                      모든 슬라이드에 적용
+                    </button>
+                  </div>
+                  <div className="inspector-section">
+                    <h4>레이아웃</h4>
+                    <div className="layout-preview-grid">
+                      {[
+                        ["title", "제목"],
+                        ["content", "제목 + 내용"],
+                        ["two-column", "두 단"],
+                        ["blank", "빈 화면"],
+                      ].map(([id, label]) => (
+                        <button key={id} onClick={() => addSlide(id)}>
+                          <div className={`layout-mini ${id}`}>
+                            <i />
+                            <i />
+                            {id === "two-column" && <i />}
+                          </div>
+                          <span>{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="section-note">
+                      선택한 레이아웃으로 새 슬라이드를 추가합니다.
+                    </p>
+                  </div>
+                  <div className="inspector-section">
+                    <h4>슬라이드 크기</h4>
+                    <select
+                      className="wide-select"
+                      aria-label="슬라이드 비율"
+                      value={
+                        Math.abs(deck.width / deck.height - 4 / 3) < 0.02
+                          ? "standard"
+                          : "wide"
+                      }
+                      onChange={(e) =>
+                        resizeDeck(1280, e.target.value === "wide" ? 720 : 960)
+                      }
+                    >
+                      <option value="wide">와이드스크린 (16:9)</option>
+                      <option value="standard">표준 (4:3)</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              <div className="layers-section">
+                <h4>
+                  <Layers size={14} />
+                  레이어<span>{slide.elements.length}</span>
+                </h4>
+                {slide.elements.length === 0 ? (
+                  <p>텍스트나 이미지를 추가해 보세요.</p>
+                ) : (
+                  [...slide.elements].reverse().map((e) => (
+                    <button
+                      key={e.id}
+                      className={selected.includes(e.id) ? "chosen" : ""}
+                      onClick={() => setSelected([e.id])}
+                    >
+                      {e.type === "text" ? (
+                        <Type size={13} />
+                      ) : e.type === "image" ? (
+                        <ImageIcon size={13} />
+                      ) : (
+                        <Square size={13} />
+                      )}
+                      <span>
+                        {e.type === "text"
+                          ? (e.text || "텍스트").split("\n")[0]
+                          : e.type === "image"
+                            ? e.alt || "이미지"
+                            : "도형"}
+                      </span>
+                      {e.locked && <LockKeyhole size={11} />}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </aside>
+        </main>
+        <footer className="statusbar">
+          <span>
+            슬라이드 {activeIndex + 1} / {deck.slides.length}
+          </span>
+          <span className="status-divider" />
+          <button onClick={() => setModal("shortcuts")}>
+            <Keyboard size={13} />
+            단축키
+          </button>
+          <span className="footer-spacer" />
+          <button
+            className={notesVisible ? "on" : ""}
+            onClick={() => setNotesVisible((v) => !v)}
+          >
+            <StickyNote size={13} />
+            노트
+          </button>
+          <span className="status-divider" />
+          <button aria-label="기본 편집 보기" onClick={() => setSorter(false)}>
+            <PanelLeft size={14} />
+          </button>
+          <button
+            aria-label="전체 슬라이드 보기"
+            onClick={() => setSorter(true)}
+          >
+            <Grid2X2 size={14} />
+          </button>
+          <button aria-label="발표 모드" onClick={() => startPresent()}>
+            <Play size={14} />
+          </button>
+          <span className="status-divider" />
+          <button
+            aria-label="축소"
+            onClick={() => setZoom(Math.max(0.2, scale - 0.1))}
+          >
+            <Minus size={13} />
+          </button>
+          <input
+            aria-label="확대 비율"
+            type="range"
+            min="20"
+            max="150"
+            value={Math.round(scale * 100)}
+            onChange={(e) => setZoom(Number(e.target.value) / 100)}
+          />
+          <button
+            aria-label="확대"
+            onClick={() => setZoom(Math.min(1.5, scale + 0.1))}
+          >
+            <Plus size={13} />
+          </button>
+          <span className="zoom-value">{Math.round(scale * 100)}%</span>
+          <button
+            aria-label="화면에 맞춤"
+            title="화면에 맞춤"
+            onClick={() => setZoom(null)}
+          >
+            <Maximize size={14} />
+          </button>
+        </footer>
+      </div>
+      <input
+        ref={imageInput}
+        type="file"
+        hidden
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        onChange={(e) => {
+          if (e.target.files?.[0]) void addImage(e.target.files[0]);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={fileInput}
+        type="file"
+        hidden
+        accept=".slide,.json,.pptx"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) {
+            if (file.size > 256 * 1024 * 1024)
+              notify("256 MiB 이하의 파일을 선택해 주세요.");
+            else {
+              try {
+                await readFile(file.name, await file.arrayBuffer());
+              } catch {
+                notify("파일 데이터를 읽지 못했습니다. 다시 선택해 주세요.");
+              }
+            }
+          }
+        }}
+      />
+      {toast && (
+        <div className="toast" role="status">
+          <CheckCircle2 size={17} />
+          <span>{toast}</span>
+          <button onClick={() => setToast("")} aria-label="알림 닫기">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      {busy && (
+        <div className="modal-backdrop busy-backdrop">
+          <div className="busy-dialog">
+            <LoaderCircle className="spin" size={24} />
+            <p>{busy}</p>
+          </div>
+        </div>
+      )}
+      {modal && (
+        <div
+          className="modal-backdrop"
+          onPointerDown={(e) => {
+            if (e.target === e.currentTarget) setModal(null);
+          }}
+        >
+          <div
+            className={`dialog ${modal === "library" ? "library-dialog" : ""}`}
+            role="dialog"
+            aria-modal="true"
+          >
+            <button
+              className="dialog-close icon-button"
+              aria-label="대화상자 닫기"
+              onClick={() => setModal(null)}
+            >
+              <X size={19} />
+            </button>
+            {modal === "new" ? (
+              <>
+                <div className="dialog-eyebrow">A FRESH START</div>
+                <h2>어떤 이야기를 시작할까요?</h2>
+                <p>첫 슬라이드의 레이아웃을 선택하세요.</p>
+                <div className="new-layouts">
+                  {[
+                    ["title", "제목 슬라이드"],
+                    ["content", "제목 및 내용"],
+                    ["two-column", "두 개의 내용"],
+                    ["blank", "빈 슬라이드"],
+                  ].map(([id, label]) => (
+                    <button
+                      key={id}
+                      className={layout === id ? "chosen" : ""}
+                      onClick={() => setLayout(id)}
+                    >
+                      <div className={`layout-mini ${id}`}>
+                        <i />
+                        <i />
+                        {id === "two-column" && <i />}
+                      </div>
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="dialog-actions">
+                  <button
+                    className="text-button"
+                    onClick={() => void createDocument(true)}
+                  >
+                    예제 프레젠테이션
+                  </button>
+                  <button
+                    className="button primary"
+                    onClick={() => void createDocument()}
+                  >
+                    만들기
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+              </>
+            ) : modal === "library" ? (
+              <>
+                <div className="dialog-eyebrow">YOUR WORKSPACE</div>
+                <h2>내 프레젠테이션</h2>
+                <p>이 기기에 자동 저장한 문서입니다.</p>
+                <div className="library-grid">
+                  <button
+                    className="library-new"
+                    onClick={() => setModal("new")}
+                  >
+                    <Plus size={27} />
+                    <strong>새 프레젠테이션</strong>
+                  </button>
+                  {library.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() =>
+                        replaceDeck(parseDeckJson(JSON.stringify(d)))
+                      }
+                    >
+                      <div
+                        style={{
+                          position: "relative",
+                          width: 230,
+                          height: (230 * d.height) / d.width,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <SlideVisual
+                          slide={d.slides[0]}
+                          width={d.width}
+                          height={d.height}
+                          scale={230 / d.width}
+                        />
+                      </div>
+                      <strong>{d.name}</strong>
+                      <small>{d.slides.length}개의 슬라이드</small>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : modal === "shortcuts" ? (
+              <>
+                <div className="dialog-eyebrow">MAKE IT FLOW</div>
+                <h2>키보드 단축키</h2>
+                <div className="shortcut-list">
+                  {[
+                    ["파일 저장", "⌘ / Ctrl + S"],
+                    ["파일 열기", "⌘ / Ctrl + O"],
+                    ["인쇄", "⌘ / Ctrl + P"],
+                    ["새 슬라이드", "⌘ / Ctrl + M"],
+                    ["복제", "⌘ / Ctrl + D"],
+                    ["실행 취소", "⌘ / Ctrl + Z"],
+                    ["다시 실행", "⇧ + ⌘ / Ctrl + Z"],
+                    ["전체 개체 선택", "⌘ / Ctrl + A"],
+                    ["복사 / 붙여넣기", "⌘ / Ctrl + C / V"],
+                    ["개체 미세 이동", "방향키 (Shift: 10px)"],
+                    ["텍스트 편집", "더블클릭 / Enter"],
+                    ["처음부터 / 현재부터 발표", "F5 / Shift + F5"],
+                    ["발표 중 이동 / 종료", "방향키 / Esc"],
+                    ["발표 중 검은 화면", "B"],
+                  ].map(([label, key]) => (
+                    <div key={label}>
+                      <span>{label}</span>
+                      <kbd>{key}</kbd>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="dialog-eyebrow">PRESENTATION IMPORT</div>
+                <h2>슬라이드를 불러왔습니다</h2>
+                <p>이 파일에서 아래 항목은 지원 범위에 제한이 있습니다.</p>
+                <ul className="warning-list">
+                  {warnings.map((warning, i) => (
+                    <li key={i}>{warning}</li>
+                  ))}
+                </ul>
+                <button
+                  className="button primary"
+                  onClick={() => setModal(null)}
+                >
+                  편집 시작하기
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {presenting && (
+        <div
+          className={`presentation-view ${blackout ? "blackout" : ""}`}
+          data-testid="presentation-view"
+          onClick={() => movePresent(1)}
+        >
+          <div
+            key={presentIndex}
+            className={`present-slide ${deck.slides[presentIndex].transition === "fade" ? "fade-in" : ""}`}
+            style={{
+              width:
+                deck.width *
+                Math.min(
+                  windowSize.w / deck.width,
+                  (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
+                ),
+              height:
+                deck.height *
+                Math.min(
+                  windowSize.w / deck.width,
+                  (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
+                ),
+            }}
+          >
+            <SlideVisual
+              slide={deck.slides[presentIndex]}
+              width={deck.width}
+              height={deck.height}
+              scale={Math.min(
+                windowSize.w / deck.width,
+                (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
+              )}
+            />
+          </div>
+          <div
+            className="present-controls"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button aria-label="발표 종료" onClick={stopPresent}>
+              <X size={18} />
+            </button>
+            <span />
+            <button
+              aria-label="이전 슬라이드"
+              onClick={() => movePresent(-1)}
+              disabled={presentIndex === 0}
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <small>
+              {presentIndex + 1} / {deck.slides.length}
+            </small>
+            <button
+              aria-label="다음 슬라이드"
+              onClick={() => movePresent(1)}
+              disabled={presentIndex === deck.slides.length - 1}
+            >
+              <ChevronRight size={20} />
+            </button>
+            <span />
+            <button
+              aria-label="발표 노트 보기"
+              onClick={() => setPresentNotes((v) => !v)}
+            >
+              <StickyNote size={17} />
+            </button>
+            <button
+              aria-label="전체 화면"
+              onClick={() => {
+                if (document.fullscreenElement) void document.exitFullscreen();
+                else
+                  document.documentElement
+                    .requestFullscreen()
+                    .catch(() => notify("전체 화면을 사용할 수 없습니다."));
+              }}
+            >
+              <Maximize size={17} />
+            </button>
+          </div>
+          {presentNotes && (
+            <div className="present-notes" onClick={(e) => e.stopPropagation()}>
+              <strong>발표자 노트</strong>
+              <p>
+                {deck.slides[presentIndex].notes ||
+                  "이 슬라이드에 노트가 없습니다."}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+      <div className="print-deck">
+        <style>{`@media print { @page { size: ${deck.width / 96}in ${deck.height / 96}in; margin: 0; } }`}</style>
+        {deck.slides.map((s) => (
+          <div
+            className="print-slide"
+            key={s.id}
+            style={{ width: deck.width, height: deck.height }}
+          >
+            <SlideVisual slide={s} width={deck.width} height={deck.height} />
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}

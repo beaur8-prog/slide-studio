@@ -14,6 +14,13 @@ import { paragraphLines, paragraphText } from "./text-layout";
 import { drawingPaths } from "./drawing-path";
 import { readTextBody } from "./pptx-text";
 import { restoreLayoutXml } from "./pptx-export-layout";
+import {
+  importedField,
+  preserveObjectLinks,
+  restoreInsertFields,
+} from "./pptx-insert-fields";
+import { tableCellStyle, tableSizes, validateTable } from "./table";
+import { resolveDeckFields, validateElementLink } from "./insert-fields";
 
 // The editor uses CSS pixels. OOXML uses English Metric Units and PptxGenJS
 // uses inches/points; keeping these conversions in one place avoids drift.
@@ -29,6 +36,7 @@ const MAX_ELEMENTS = 10000;
 const MAX_ZIP_FILES = 5000;
 const REL_NS =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const TABLE_NS = "urn:slide-studio:table:v1";
 const SHAPES = new Set<ShapeKind>([
   "rect",
   "roundRect",
@@ -233,7 +241,7 @@ export function parseDeckJson(text: string): Deck {
             id: stringValue(source.id, `${elLabel} ID`, 160, false),
             type: enumValue(
               source.type,
-              ["text", "shape", "image"],
+              ["text", "shape", "image", "table"],
               `${elLabel} 종류`,
             ),
             x: numberValue(source.x, `${elLabel} X`, -100000, 100000),
@@ -251,6 +259,20 @@ export function parseDeckJson(text: string): Deck {
           if (elementIds.has(el.id))
             fail(`${label}: 개체 ID가 중복되어 있습니다.`);
           elementIds.add(el.id);
+          if (el.type === "table") {
+            el.table = validateTable(source.table);
+            elementCount += el.table.cells.length * el.table.cells[0].length;
+            if (elementCount > MAX_ELEMENTS)
+              fail("표 셀을 포함한 프로젝트 개체 수가 10,000개를 초과합니다.");
+          }
+          if (source.hyperlink !== undefined)
+            el.hyperlink = validateElementLink(source.hyperlink);
+          if (source.field !== undefined)
+            el.field = enumValue(
+              source.field,
+              ["slideNumber", "date", "fixedDate", "footer"] as const,
+              `${elLabel} 필드`,
+            );
           if (source.locked !== undefined)
             el.locked = booleanValue(source.locked, `${elLabel} 잠금`);
           if (source.text !== undefined)
@@ -561,15 +583,81 @@ export function parseDeckJson(text: string): Deck {
 }
 
 export function serializeDeck(deck: Deck): string {
-  return JSON.stringify(parseDeckJson(JSON.stringify(deck)), null, 2);
+  return JSON.stringify(
+    parseDeckJson(JSON.stringify(resolveDeckFields(deck))),
+    null,
+    2,
+  );
 }
 
 const hex = (color: string | undefined, fallback: string) =>
   color && color !== "transparent" ? color.replace(/^#/, "") : fallback;
 
+function restoreTableXml(doc: Document, elements: SlideElement[]) {
+  const A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+  for (const element of elements) {
+    if (element.type !== "table" || !element.table) continue;
+    const nonVisual = all(doc, "cNvPr").find(
+      (node) => node.getAttribute("name") === element.id,
+    );
+    const frame = nonVisual?.parentElement?.parentElement;
+    const table = frame && first(frame, "tbl");
+    if (!frame || !table || !nonVisual) continue;
+    const data = element.table;
+    const { cells, columnWidths, rowHeights, ...style } = data;
+    const extensions = doc.createElementNS(A, "a:extLst");
+    const extension = doc.createElementNS(A, "a:ext");
+    extension.setAttribute("uri", "{F30B672B-58DD-4794-8C8B-B397C176F98D}");
+    const metadata = doc.createElementNS(TABLE_NS, "ss:table");
+    metadata.textContent = JSON.stringify({
+      version: 1,
+      style,
+      opacity: element.opacity,
+    });
+    extension.appendChild(metadata);
+    extensions.appendChild(extension);
+    nonVisual.appendChild(extensions);
+    const transform = child(frame, "xfrm");
+    transform?.setAttribute(
+      "rot",
+      String(Math.round(element.rotation * 60000)),
+    );
+    const extent = child(transform, "ext");
+    extent?.setAttribute("cx", String(Math.round(element.width * EMU_PER_PX)));
+    extent?.setAttribute("cy", String(Math.round(element.height * EMU_PER_PX)));
+    const widths = tableSizes(
+      columnWidths,
+      cells[0].length,
+      element.width * EMU_PER_PX,
+    );
+    children(child(table, "tblGrid"), "gridCol").forEach((col, i) =>
+      col.setAttribute("w", String(Math.round(widths[i]))),
+    );
+    const heights = tableSizes(
+      rowHeights,
+      cells.length,
+      element.height * EMU_PER_PX,
+    );
+    children(table, "tr").forEach((row, i) =>
+      row.setAttribute("h", String(Math.round(heights[i]))),
+    );
+    const props = child(table, "tblPr");
+    props?.setAttribute("firstRow", data.header ? "1" : "0");
+    props?.setAttribute("bandRow", data.striped ? "1" : "0");
+    for (const color of all(table, "srgbClr")) {
+      child(color, "alpha")?.remove();
+      if (element.opacity < 1) {
+        const alpha = doc.createElementNS(A, "a:alpha");
+        alpha.setAttribute("val", String(Math.round(element.opacity * 100000)));
+        color.appendChild(alpha);
+      }
+    }
+  }
+}
+
 /** Produce actual editable DrawingML objects, not screenshots of the slide. */
 export async function exportPptx(input: Deck): Promise<Uint8Array> {
-  const deck = parseDeckJson(JSON.stringify(input));
+  const deck = parseDeckJson(JSON.stringify(resolveDeckFields(input)));
   const pptx = new PptxGenJS();
   pptx.defineLayout({
     name: "SLIDE_STUDIO",
@@ -587,12 +675,21 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
     slide.background = { color: hex(source.background, "FFFFFF") };
     if (source.notes) slide.addNotes(source.notes);
     for (const el of source.elements) {
+      const linkedSlide = el.hyperlink?.slideId
+        ? deck.slides.findIndex((slide) => slide.id === el.hyperlink!.slideId)
+        : -1;
+      const hyperlink = el.hyperlink?.url
+        ? { url: el.hyperlink.url }
+        : linkedSlide >= 0
+          ? { slide: linkedSlide + 1 }
+          : undefined;
       const box = {
         x: el.x / 96,
         y: el.y / 96,
         w: el.width / 96,
         h: el.height / 96,
         rotate: ((el.rotation % 360) + 360) % 360,
+        ...(hyperlink ? { hyperlink } : {}),
       };
       const transparency = (1 - el.opacity) * 100;
       const line: PptxGenJS.ShapeLineProps = {
@@ -652,6 +749,49 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
           fill,
           line,
         });
+      } else if (el.type === "table" && el.table) {
+        const table = el.table;
+        slide.addTable(
+          table.cells.map((row, r) =>
+            row.map((text) => {
+              const style = tableCellStyle(table, r);
+              return {
+                text,
+                options: {
+                  fill: { color: hex(style.fill, "FFFFFF"), transparency },
+                  color: hex(style.color, "233D35"),
+                  bold: style.bold,
+                  ...(hyperlink ? { hyperlink } : {}),
+                },
+              };
+            }),
+          ),
+          {
+            ...box,
+            objectName: el.id,
+            autoPage: false,
+            colW: tableSizes(
+              table.columnWidths,
+              table.cells[0].length,
+              el.width / 96,
+            ),
+            rowH: tableSizes(
+              table.rowHeights,
+              table.cells.length,
+              el.height / 96,
+            ),
+            fontFace: table.fontFamily,
+            fontSize: table.fontSize * 0.75,
+            align: table.align,
+            valign: table.verticalAlign,
+            margin: table.padding * 0.75,
+            border: {
+              type: table.borderWidth ? "solid" : "none",
+              color: hex(table.borderColor, "AABCB3"),
+              pt: table.borderWidth * 0.75,
+            },
+          },
+        );
       } else if (el.type === "image") {
         slide.addImage({
           ...box,
@@ -710,7 +850,10 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
     const doc = xmlDocument(xml, path);
     if (slide.hidden) doc.documentElement.setAttribute("show", "0");
     else doc.documentElement.removeAttribute("show");
+    preserveObjectLinks(doc, slide.elements);
     restoreLayoutXml(doc, slide.elements);
+    restoreInsertFields(doc, slide.elements);
+    restoreTableXml(doc, slide.elements);
     xml = new XMLSerializer().serializeToString(doc);
     zip.file(
       path,
@@ -878,6 +1021,7 @@ interface Relationship {
   type: string;
   path?: string;
   external: boolean;
+  target?: string;
 }
 interface Theme {
   colors: Record<string, string>;
@@ -1199,6 +1343,7 @@ export async function importPptx(
         id: el.getAttribute("Id") ?? "",
         type: el.getAttribute("Type") ?? "",
         external,
+        ...(external ? { target: el.getAttribute("Target") ?? "" } : {}),
         path: external
           ? undefined
           : resolvePart(path, el.getAttribute("Target") ?? ""),
@@ -1222,8 +1367,21 @@ export async function importPptx(
   if (width < 100 || height < 100 || width > 10000 || height > 10000)
     fail("슬라이드 크기가 지원 범위 (100–10,000 px)를 벗어났습니다.");
   const slideIds = children(first(presentation, "sldIdLst"), "sldId");
+  const slideNumbersStartAtOne =
+    Number(
+      presentation.documentElement.getAttribute("firstSlideNum") ?? "1",
+    ) === 1;
   if (slideIds.length < 1 || slideIds.length > MAX_SLIDES)
     fail(`PPTX 슬라이드는 1–${MAX_SLIDES}장이어야 합니다.`);
+  const importedSlideIds = slideIds.map(() => uid());
+  const slidePathIds = new Map(
+    slideIds.map((id, index) => [
+      presentationRels.find(
+        (r) => r.id === relId(id) && r.type.endsWith("/slide"),
+      )?.path,
+      importedSlideIds[index],
+    ]),
+  );
   const core = await readXml("docProps/core.xml");
   const deck: Deck = {
     version: 1,
@@ -1336,7 +1494,7 @@ export async function importPptx(
         "일부 배경의 그라데이션·이미지·효과는 단색 배경으로 대체되었습니다.",
       );
     const slide: Slide = {
-      id: uid(),
+      id: importedSlideIds[slideIndex],
       ...(["0", "false"].includes(
         doc.documentElement.getAttribute("show") ?? "",
       )
@@ -1356,10 +1514,8 @@ export async function importPptx(
     }
     if (first(doc, "timing"))
       warn("개체 애니메이션과 오디오·비디오 타이밍은 가져오지 않습니다.");
-    if (rels.some((r) => r.external))
-      warn(
-        "외부 링크 이미지·미디어·하이퍼링크는 불러오거나 실행하지 않습니다.",
-      );
+    if (rels.some((r) => r.external && !r.type.endsWith("/hyperlink")))
+      warn("외부 링크 이미지·미디어는 불러오거나 실행하지 않습니다.");
 
     const addElement = (el: SlideElement) => {
       if (
@@ -1856,6 +2012,110 @@ export async function importPptx(
         warn("표의 행·열 크기를 읽을 수 없습니다.");
         return;
       }
+      // Our native tables retain a small style extension, but cell text and
+      // geometry always come from DrawingML. Modified/complex cell formatting
+      // falls back to the existing fidelity-preserving per-cell importer.
+      const marker = node.getElementsByTagNameNS(TABLE_NS, "table")[0];
+      if (marker && (marker.textContent?.length ?? 0) <= 16000) {
+        try {
+          const metadata = JSON.parse(marker.textContent ?? "");
+          if (metadata.version !== 1) throw new Error("Unknown table version");
+          const cellElements = rows.map((row) => children(row, "tc"));
+          if (
+            cellElements.some(
+              (cells) =>
+                cells.length !== columns.length ||
+                cells.some(
+                  (cell) =>
+                    ["gridSpan", "rowSpan"].some(
+                      (key) => attrNumber(cell, key, 1) !== 1,
+                    ) ||
+                    ["hMerge", "vMerge"].some((key) =>
+                      ["1", "true"].includes(cell.getAttribute(key) ?? ""),
+                    ),
+                ),
+            )
+          )
+            throw new Error("Merged table");
+          const texts = cellElements.map((cells) =>
+            cells.map((cell) => {
+              const body = child(cell, "txBody");
+              if (!body) throw new Error("Missing table text");
+              return makeText(
+                body,
+                [cell],
+                geometry,
+                parent,
+                child(cell, "tcPr"),
+              );
+            }),
+          );
+          const data = validateTable({
+            ...metadata.style,
+            cells: texts.map((cells) => cells.map((el) => el.text ?? "")),
+            columnWidths: columns.map(
+              (n) => n / columns.reduce((a, b) => a + b, 0),
+            ),
+            rowHeights: heights.map(
+              (n) => n / heights.reduce((a, b) => a + b, 0),
+            ),
+          });
+          const opacity = numberValue(metadata.opacity, "표 불투명도", 0, 1);
+          const close = (a: number | undefined, b: number) =>
+            a !== undefined && Math.abs(a - b) < 0.05;
+          const compatible = texts.every((cells, r) =>
+            cells.every((el, c) => {
+              const style = tableCellStyle(data, r);
+              const props = child(cellElements[r][c], "tcPr");
+              const fill = readColor(child(props, "solidFill"), theme);
+              return (
+                fill?.color === style.fill &&
+                el.verticalAlign === data.verticalAlign &&
+                (el.textInsets ?? []).every((n) => close(n, data.padding)) &&
+                (el.paragraphs ?? []).every(
+                  (p) =>
+                    (p.align ?? el.align) === data.align &&
+                    p.runs.every(
+                      (run) =>
+                        !run.text ||
+                        ((run.fontFamily ?? el.fontFamily) ===
+                          data.fontFamily &&
+                          close(run.fontSize ?? el.fontSize, data.fontSize) &&
+                          (run.color ?? el.color) === style.color &&
+                          (run.bold ?? el.bold ?? false) === style.bold &&
+                          !run.italic &&
+                          !run.underline &&
+                          !run.baseline),
+                    ),
+                ) &&
+                ["T", "R", "B", "L"].every((side) => {
+                  const line = child(props, "ln" + side);
+                  return data.borderWidth === 0
+                    ? !!child(line, "noFill")
+                    : close(
+                        attrNumber(line, "w") / EMU_PER_PX,
+                        data.borderWidth,
+                      ) &&
+                        readColor(child(line, "solidFill"), theme)?.color ===
+                          data.borderColor;
+                })
+              );
+            }),
+          );
+          if (compatible) {
+            addElement({
+              id: uid(),
+              type: "table",
+              ...geometry,
+              opacity,
+              table: data,
+            });
+            return;
+          }
+        } catch {
+          // Untrusted/obsolete metadata cannot override the native cell data.
+        }
+      }
       const widths = columns.map(
         (n) => (n / columns.reduce((a, b) => a + b, 0)) * geometry.width,
       );
@@ -2077,6 +2337,7 @@ export async function importPptx(
       if (depth > 30) fail("PPTX 그룹 중첩이 너무 깊습니다.");
       for (const node of Array.from(tree.children)) {
         if (decorationsOnly && placeholder(node)) continue;
+        const elementStart = slide.elements.length;
         if (node.localName === "sp" || node.localName === "cxnSp")
           parseShape(node, parent);
         else if (node.localName === "pic")
@@ -2202,6 +2463,83 @@ export async function importPptx(
           else warn("대체 표시 데이터가 없는 확장 콘텐츠를 제외했습니다.");
         } else if (node.localName === "contentPart")
           warn("지원하지 않는 확장 콘텐츠를 제외했습니다.");
+        if (["sp", "cxnSp", "pic", "graphicFrame"].includes(node.localName)) {
+          const field = importedField(node, slideNumbersStartAtOne);
+          if (!slideNumbersStartAtOne && importedField(node) === "slideNumber")
+            warn(
+              "1 이외의 시작 번호를 사용하는 슬라이드 번호는 표시된 텍스트로 유지했습니다.",
+            );
+          const properties = first(node, "cNvPr");
+          const click = child(properties, "hlinkClick");
+          const resolveLink = (
+            link: Element | undefined,
+          ): SlideElement["hyperlink"] => {
+            if (!link) return undefined;
+            const relationship = sourceRelationships.find(
+              (r) => r.id === relId(link),
+            );
+            if (
+              relationship?.external &&
+              relationship.type.endsWith("/hyperlink")
+            ) {
+              try {
+                return validateElementLink({ url: relationship.target });
+              } catch {
+                warn("지원하지 않는 주소의 하이퍼링크를 제외했습니다.");
+                return undefined;
+              }
+            }
+            if (relationship?.path && relationship.type.endsWith("/slide")) {
+              const target = slidePathIds.get(relationship.path);
+              if (target) return { slideId: target };
+            }
+            warn(
+              "지원하지 않거나 찾을 수 없는 대상의 하이퍼링크를 제외했습니다.",
+            );
+            return undefined;
+          };
+          const sameLink = (
+            a: SlideElement["hyperlink"],
+            b: SlideElement["hyperlink"],
+          ) => !!a && !!b && a.url === b.url && a.slideId === b.slideId;
+          let hyperlink = resolveLink(click);
+          // Native PowerPoint text links live in rPr, often across several
+          // differently formatted runs. Promote only an identical link covering
+          // every text run; linking unlinked words would change their behavior.
+          const runs = [...all(node, "r"), ...all(node, "fld")].filter(
+            (run) => (child(run, "t")?.textContent?.length ?? 0) > 0,
+          );
+          const runClicks = runs.map((run) =>
+            child(child(run, "rPr"), "hlinkClick"),
+          );
+          const textClicks = all(node, "hlinkClick").filter(
+            (link) => link !== click,
+          );
+          if (textClicks.length) {
+            const links = runClicks.map(resolveLink);
+            const candidate = links[0];
+            const fullyCovered =
+              !!candidate &&
+              links.every((link) => sameLink(link, candidate)) &&
+              textClicks.every((link) => runClicks.includes(link));
+            if (!click && fullyCovered) hyperlink = candidate;
+            else if (
+              !click ||
+              textClicks.some((link) => !runClicks.includes(link)) ||
+              links.some(
+                (link, index) => runClicks[index] && !sameLink(link, hyperlink),
+              )
+            )
+              warn(
+                "텍스트 일부에만 연결되거나 서로 다른 대상으로 연결된 하이퍼링크는 유지할 수 없어 제외했습니다. 텍스트는 유지됩니다.",
+              );
+          }
+          for (let i = elementStart; i < slide.elements.length; i++) {
+            if (hyperlink) slide.elements[i].hyperlink = hyperlink;
+            if (field && slide.elements[i].type === "text")
+              slide.elements[i].field = field;
+          }
+        }
       }
     };
     if (doc.documentElement.getAttribute("showMasterSp") !== "0") {

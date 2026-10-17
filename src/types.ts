@@ -55,9 +55,36 @@ export interface LineEnd {
   width: "sm" | "med" | "lg";
   length: "sm" | "med" | "lg";
 }
+export interface ElementLink {
+  url?: string;
+  slideId?: string;
+}
+export interface TableData {
+  cells: string[][];
+  header: boolean;
+  striped: boolean;
+  headerFill: string;
+  headerColor: string;
+  fill: string;
+  stripeFill: string;
+  color: string;
+  borderColor: string;
+  borderWidth: number;
+  fontFamily: string;
+  fontSize: number;
+  padding: number;
+  align: "left" | "center" | "right";
+  verticalAlign: "top" | "middle" | "bottom";
+  // Relative sizes; resizing the element scales the table grid as a whole.
+  columnWidths?: number[];
+  rowHeights?: number[];
+}
 export interface SlideElement {
   id: string;
-  type: "text" | "shape" | "image";
+  type: "text" | "shape" | "image" | "table";
+  table?: TableData;
+  hyperlink?: ElementLink;
+  field?: "slideNumber" | "date" | "fixedDate" | "footer";
   x: number;
   y: number;
   width: number;

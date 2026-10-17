@@ -7,6 +7,10 @@ declare global {
       loadOfficeLightFont?(): Promise<Uint8Array | null>;
       setChromeTheme?(theme: "dark" | "light"): Promise<void>;
       setPresentationMode?(enabled: boolean): Promise<void>;
+      listCaptureSources?(): Promise<
+        Array<{ id: string; name: string; thumbnail: string }>
+      >;
+      captureSource?(id: string): Promise<string>;
       onPresentationEnded?(callback: () => void): () => void;
       saveFile(payload: {
         name: string;

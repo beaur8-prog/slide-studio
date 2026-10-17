@@ -11,12 +11,16 @@ PPTX export creates real editable PresentationML text boxes, basic shapes, lines
 arrow lines, and embedded images. It preserves slide dimensions, backgrounds,
 object order, positions, sizes, rotations, paragraph/run formatting, text insets,
 vertical writing, image crops/flips, supported custom paths, opacity, speaker
-notes, and optional fade transitions. Table cells export as individual editable
-text boxes with backgrounds and borders, rather than a native PowerPoint table.
+notes, and optional fade transitions. Tables created with Insert → Table export
+as native PowerPoint tables, including cell text, fills, borders and row/column
+sizes. Previously flattened external table cells still export as individual
+editable text boxes with backgrounds and borders.
 Pixels are converted at 96 px/in;
 font sizes and stroke widths are converted to points at 0.75 pt/px. Fonts are
 referenced by name, not embedded. A recipient may need the same fonts for matching
 line wrapping. The exported PPTX does not contain a hidden proprietary project.
+Small, validated DrawingML extensions preserve the supported native-table style
+model and generated footer field kind. These extensions do not embed the deck.
 Hidden-slide flags survive both project and PPTX round trips. Normal slideshow
 navigation skips them; starting at the selected slide or entering its number can
 still show a hidden slide explicitly.
@@ -81,7 +85,11 @@ a terminal stop/comma to hang when it avoids an extra line, without changing the
 text or widening its box. This fallback currently covers horizontal terminal
 punctuation, not full line-edge punctuation rules for vertical or mixed writing.
 
-Tables are flattened into editable cells, preserving supported merged-cell
+Native tables exported by this app can reopen as editable tables. Their
+extension is used only when current XML geometry and formatting match the
+supported model; actual cell text is read from the table XML. Unsupported edits
+in another editor fall back to the existing cell importer to retain their
+appearance. Other external tables are flattened into editable cells, preserving supported merged-cell
 geometry, row/column styling, fills, text and edge borders. When saved row heights
 sum to less than the table frame, the extra height is allocated to multiline
 cells first. Explicit line breaks retain their own run sizes, including blank
@@ -104,7 +112,21 @@ formula-defined paths, effects, and flipped/rotated groups remain partial.
 The known layout regressions and current limits are documented in
 [the corpus report](qa/REPORT.md).
 
-Charts, SmartArt without saved drawing geometry, object animations, hyperlinks, embedded OLE/ActiveX/macros,
+Insert-generated charts, diagrams, icons, WordArt and equations use editable
+shapes, text and numeric custom paths. They are not native chart/SmartArt/Office
+Math data objects. Chart insertion supports one series and up to 12 categories.
+Slide numbers export as native `slidenum` fields. Generated dates and footer
+labels preserve their field kind in this app; automatic dates refresh here and
+export their current text rather than an Office automatic-date field.
+Web links accept only HTTP(S) without embedded credentials. Whole-object web and
+internal-slide links survive export/import and work during presentation. Partial
+text-run links cannot be represented independently in the current object model;
+complete text with the same link is promoted to an object link, while partial or
+mixed links produce a warning. Imported slide numbers with a nondefault starting
+number preserve their displayed text and report that automatic renumbering was
+not retained.
+
+Native chart data, SmartArt without saved drawing geometry, object animations, embedded OLE/ActiveX/macros,
 and playable media are not imported. SVG/EMF/WMF images are excluded. Unsupported
 objects and alternative content without a usable fallback produce warnings.
 The JSON project is the format for lossless continuation in Slide Studio; PPTX

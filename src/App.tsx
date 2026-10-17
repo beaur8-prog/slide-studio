@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -66,6 +67,17 @@ import {
   Sun,
   Moon,
   PanelRight,
+  Table2,
+  BarChart3,
+  Network,
+  Smile,
+  Images,
+  Link as LinkIcon,
+  CalendarDays,
+  Hash,
+  Sigma,
+  Omega,
+  Camera,
 } from "lucide-react";
 import CommandSearch from "./CommandSearch";
 import CanvasScrollbar from "./CanvasScrollbar";
@@ -85,13 +97,45 @@ import {
 import SlideCanvas, { SlideVisual } from "./SlideCanvas";
 import { exportPptx, importPptx, parseDeckJson, serializeDeck } from "./io";
 import { listAutosaves, loadAutosave, saveAutosave } from "./storage";
+import TableEditor from "./TableEditor";
+import { createTableElement } from "./table";
+import { InsertContentDialog } from "./InsertContentDialog";
+import type { InsertContentKind } from "./insert-content";
+import {
+  FooterDialog,
+  LinkDialog,
+  PhotoAlbumDialog,
+  imageElementFromData,
+} from "./InsertExtras";
+import { applyFooters, resolveDeckFields } from "./insert-fields";
+import ScreenshotDialog from "./ScreenshotDialog";
+import { EXTRA_SHAPES } from "./shape-presets";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const shortcut = (key: string) => (isMac ? `⌘${key}` : `Ctrl+${key}`);
 
 type History = { past: Deck[]; present: Deck; future: Deck[] };
 type Tab = "home" | "insert" | "design" | "transitions" | "slideshow" | "view";
-type Modal = "new" | "library" | "shortcuts" | "import" | null;
+type Modal =
+  | "new"
+  | "library"
+  | "shortcuts"
+  | "import"
+  | "table"
+  | "album"
+  | "link"
+  | "footer"
+  | "screenshot"
+  | InsertContentKind
+  | null;
+const contentDialogs: InsertContentKind[] = [
+  "chart",
+  "diagram",
+  "icons",
+  "wordart",
+  "equation",
+  "symbol",
+];
 const LIMIT = 60;
 const clone = <T,>(value: T): T => structuredClone(value);
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -267,7 +311,10 @@ export default function App() {
     present: sampleDeck(),
     future: [],
   }));
-  const deck = history.present;
+  const deck = useMemo(
+    () => resolveDeckFields(history.present),
+    [history.present],
+  );
   const deckRef = useRef(deck);
   deckRef.current = deck;
   const [activeId, setActiveId] = useState(deck.slides[0].id);
@@ -291,6 +338,16 @@ export default function App() {
   const [busy, setBusy] = useState("");
   const printing = useRef(false);
   const [modal, setModal] = useState<Modal>(null);
+  const modalRef = useRef<Modal>(modal);
+  modalRef.current = modal;
+  const modalInstance = useRef(0);
+  useLayoutEffect(() => {
+    modalInstance.current++;
+  }, [modal]);
+  const [tableEditId, setTableEditId] = useState<string | null>(null);
+  const [footerInitial, setFooterInitial] = useState<
+    "footer" | "date" | "number"
+  >("footer");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [menu, setMenu] = useState<"file" | "layout" | "shape" | null>(null);
   const [layout, setLayout] = useState("title");
@@ -688,6 +745,47 @@ export default function App() {
     });
     changeSlide((s) => ({ ...s, elements: [...s.elements, next] }));
     setSelected([next.id]);
+    setMenu(null);
+  };
+  const insertElements = (elements: SlideElement[]) => {
+    if (!elements.length) return;
+    try {
+      // Validate new objects against the same limits as saved projects before
+      // adding them to the undo history. Existing image strings remain shared.
+      const checked = parseDeckJson(
+        JSON.stringify({ ...deck, slides: [{ ...slide, elements }] }),
+      ).slides[0].elements;
+      if (
+        slide.elements.length + checked.length > 1000 ||
+        deck.slides.reduce((n, s) => n + s.elements.length, 0) +
+          checked.length >
+          10000
+      )
+        throw new Error(
+          "슬라이드에는 1,000개, 문서에는 10,000개까지 개체를 넣을 수 있습니다.",
+        );
+      changeSlide((s) => ({ ...s, elements: [...s.elements, ...checked] }));
+      setSelected(checked.map((el) => el.id));
+      setEditing(null);
+      setModal(null);
+      setMenu(null);
+      setSorter(false);
+    } catch (err) {
+      notify((err as Error).message);
+    }
+  };
+  const openTable = (id: string | null = null) => {
+    if (editing) {
+      finish();
+      setEditing(null);
+    }
+    setTableEditId(id);
+    setModal("table");
+    setMenu(null);
+  };
+  const openFooter = (initial: "footer" | "date" | "number") => {
+    setFooterInitial(initial);
+    setModal("footer");
     setMenu(null);
   };
   const removeSelected = () => {
@@ -1229,6 +1327,16 @@ export default function App() {
       if (presenting) {
         // Modifier shortcuts must not become slide numbers or navigation.
         if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+        if (
+          e.target instanceof Element &&
+          e.target.closest(".presentation-link") &&
+          (e.key === "Enter" || e.key === " ")
+        ) {
+          presentationNumber.current = "";
+          // Let links/buttons perform their native keyboard activation.
+          if (e.key === " " && e.target.closest("a")) e.preventDefault();
+          return;
+        }
         if (e.key === "Escape") {
           e.preventDefault();
           stopPresent();
@@ -1296,7 +1404,14 @@ export default function App() {
         return;
       }
       if (editingTarget(e.target) || modal) return;
-      if (cmd && e.key.toLowerCase() === "z") {
+      if (
+        e.key === "Enter" &&
+        selectedElement?.type === "table" &&
+        !selectedElement.locked
+      ) {
+        e.preventDefault();
+        openTable(selectedElement.id);
+      } else if (cmd && e.key.toLowerCase() === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
       } else if (cmd && e.key.toLowerCase() === "y") {
@@ -1540,6 +1655,44 @@ export default function App() {
             <span>{label}</span>
           </button>
         ))}
+        {EXTRA_SHAPES.map((preset) => (
+          <button
+            key={preset.id}
+            onClick={() => {
+              const theme =
+                THEMES.find((t) => t.id === deck.theme) || THEMES[0];
+              insertElements([
+                element("shape", {
+                  shape: "custom",
+                  paths: [
+                    {
+                      d: preset.d,
+                      width: 100,
+                      height: 100,
+                      fill: true,
+                      stroke: true,
+                    },
+                  ],
+                  x: deck.width * 0.35,
+                  y: deck.height * 0.3,
+                  width: 220,
+                  height: 180,
+                  fill: theme.accent,
+                }),
+              ]);
+            }}
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="-4 -4 108 108"
+              aria-hidden="true"
+            >
+              <path d={preset.d} fill="currentColor" />
+            </svg>
+            <span>{preset.name}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -1692,6 +1845,68 @@ export default function App() {
                 id: "picture",
                 label: "그림 삽입",
                 run: () => imageInput.current?.click(),
+              },
+              {
+                id: "table",
+                label: "표 삽입",
+                keywords: "행 열 셀",
+                run: () => openTable(),
+              },
+              {
+                id: "chart",
+                label: "차트 삽입",
+                keywords: "그래프 막대 원 꺾은선",
+                run: () => setModal("chart"),
+              },
+              {
+                id: "diagram",
+                label: "다이어그램 삽입",
+                keywords: "조직도 순서도 SmartArt",
+                run: () => setModal("diagram"),
+              },
+              {
+                id: "icons",
+                label: "아이콘 삽입",
+                run: () => setModal("icons"),
+              },
+              {
+                id: "album",
+                label: "사진 앨범 만들기",
+                run: () => setModal("album"),
+              },
+              {
+                id: "screenshot",
+                label: "스크린샷 삽입",
+                keywords: "화면 캡처",
+                run: () => setModal("screenshot"),
+              },
+              {
+                id: "link",
+                label: "링크 삽입",
+                keywords: "하이퍼링크",
+                run: () => setModal("link"),
+              },
+              {
+                id: "footer",
+                label: "날짜 · 번호 · 바닥글",
+                run: () => openFooter("footer"),
+              },
+              {
+                id: "wordart",
+                label: "WordArt 삽입",
+                keywords: "장식 글자",
+                run: () => setModal("wordart"),
+              },
+              {
+                id: "equation",
+                label: "수식 삽입",
+                keywords: "분수",
+                run: () => setModal("equation"),
+              },
+              {
+                id: "symbol",
+                label: "기호 삽입",
+                run: () => setModal("symbol"),
               },
               {
                 id: "format",
@@ -1870,7 +2085,10 @@ export default function App() {
             )}
           </button>
         </nav>
-        <div className="ribbon" hidden={ribbonCollapsed}>
+        <div
+          className={`ribbon ${tab === "insert" ? "insert-ribbon" : ""}`}
+          hidden={ribbonCollapsed}
+        >
           {tab === "home" && (
             <>
               <div className="ribbon-group clipboard-group">
@@ -2028,19 +2246,51 @@ export default function App() {
           {tab === "insert" && (
             <>
               <div className="ribbon-group">
+                <Tool icon={<Plus size={25} />} onClick={() => addSlide()}>
+                  새 슬라이드
+                </Tool>
+                <span className="group-label">슬라이드</span>
+              </div>
+              <div className="ribbon-group">
                 <div className="tools-row">
-                  <Tool
-                    icon={<Type size={26} />}
-                    onClick={() => addElement("text")}
-                  >
-                    텍스트 상자
+                  <Tool icon={<Table2 size={26} />} onClick={() => openTable()}>
+                    표
                   </Tool>
+                  {selectedElement?.type === "table" && (
+                    <Tool
+                      icon={<Settings2 size={22} />}
+                      disabled={selectedElement.locked}
+                      onClick={() => openTable(selectedElement.id)}
+                    >
+                      표 편집
+                    </Tool>
+                  )}
+                </div>
+                <span className="group-label">표</span>
+              </div>
+              <div className="ribbon-group">
+                <div className="tools-row">
                   <Tool
                     icon={<ImageIcon size={26} />}
                     onClick={() => imageInput.current?.click()}
                   >
                     그림 삽입
                   </Tool>
+                  <div className="tools-stack">
+                    <button onClick={() => setModal("screenshot")}>
+                      <Camera size={16} />
+                      스크린샷
+                    </button>
+                    <button onClick={() => setModal("album")}>
+                      <Images size={16} />
+                      사진 앨범
+                    </button>
+                  </div>
+                </div>
+                <span className="group-label">이미지</span>
+              </div>
+              <div className="ribbon-group">
+                <div className="tools-row">
                   <div className="menu-anchor">
                     <Tool
                       icon={<Shapes size={26} />}
@@ -2050,37 +2300,89 @@ export default function App() {
                     </Tool>
                     {menu === "shape" && shapeMenu}
                   </div>
+                  <Tool
+                    icon={<Smile size={25} />}
+                    onClick={() => setModal("icons")}
+                  >
+                    아이콘
+                  </Tool>
+                  <Tool
+                    icon={<Network size={25} />}
+                    onClick={() => setModal("diagram")}
+                  >
+                    다이어그램
+                  </Tool>
+                  <Tool
+                    icon={<BarChart3 size={25} />}
+                    onClick={() => setModal("chart")}
+                  >
+                    차트
+                  </Tool>
                 </div>
-                <span className="group-label">개체</span>
+                <span className="group-label">일러스트레이션</span>
+              </div>
+              <div className="ribbon-group">
+                <Tool
+                  icon={<LinkIcon size={25} />}
+                  disabled={selectedElement?.locked}
+                  onClick={() => setModal("link")}
+                >
+                  링크
+                </Tool>
+                <span className="group-label">연결</span>
               </div>
               <div className="ribbon-group">
                 <div className="tools-row">
-                  {(
-                    [
-                      ["rect", "사각형", Square],
-                      ["ellipse", "타원", Circle],
-                      ["triangle", "삼각형", Triangle],
-                      ["arrow", "화살표", ArrowRight],
-                    ] as const
-                  ).map(([kind, label, Icon]) => (
-                    <Tool
-                      key={kind}
-                      icon={<Icon size={24} />}
-                      onClick={() => addElement("shape", kind)}
-                    >
-                      {label}
-                    </Tool>
-                  ))}
+                  <Tool
+                    icon={<Type size={25} />}
+                    onClick={() => addElement("text")}
+                  >
+                    텍스트 상자
+                  </Tool>
+                  <Tool
+                    icon={
+                      <Type
+                        size={26}
+                        style={{ fontStyle: "italic", color: "#ca684a" }}
+                      />
+                    }
+                    onClick={() => setModal("wordart")}
+                  >
+                    WordArt
+                  </Tool>
+                  <div className="tools-stack">
+                    <button onClick={() => openFooter("date")}>
+                      <CalendarDays size={15} />
+                      날짜 및 시간
+                    </button>
+                    <button onClick={() => openFooter("number")}>
+                      <Hash size={15} />
+                      슬라이드 번호
+                    </button>
+                    <button onClick={() => openFooter("footer")}>
+                      <PanelLeft size={15} />
+                      바닥글
+                    </button>
+                  </div>
                 </div>
-                <span className="group-label">빠른 도형</span>
+                <span className="group-label">텍스트</span>
               </div>
-              <div className="ribbon-hint">
-                <MousePointer2 size={18} />
-                <span>
-                  개체를 더블클릭하면 텍스트를 편집할 수 있어요.
-                  <br />
-                  Shift를 누르면 여러 개체를 함께 선택합니다.
-                </span>
+              <div className="ribbon-group">
+                <div className="tools-row">
+                  <Tool
+                    icon={<Sigma size={25} />}
+                    onClick={() => setModal("equation")}
+                  >
+                    수식
+                  </Tool>
+                  <Tool
+                    icon={<Omega size={25} />}
+                    onClick={() => setModal("symbol")}
+                  >
+                    기호
+                  </Tool>
+                </div>
+                <span className="group-label">기호</span>
               </div>
             </>
           )}
@@ -2485,6 +2787,7 @@ export default function App() {
                         setSelected(ids);
                       }}
                       edit={setEditing}
+                      editTable={(id) => openTable(id)}
                       begin={begin}
                       finish={finish}
                       preview={(elements) =>
@@ -2503,7 +2806,12 @@ export default function App() {
                               ? {
                                   ...s,
                                   elements: s.elements.map((el) =>
-                                    el.id === id ? editText(el, text) : el,
+                                    el.id === id
+                                      ? {
+                                          ...editText(el, text),
+                                          field: undefined,
+                                        }
+                                      : el,
                                   ),
                                 }
                               : s,
@@ -3015,6 +3323,123 @@ export default function App() {
           }
         }}
       />
+      {modal === "table" && (
+        <TableEditor
+          slideWidth={deck.width}
+          slideHeight={deck.height}
+          elementSize={
+            tableEditId
+              ? slide.elements.find((el) => el.id === tableEditId)
+              : undefined
+          }
+          initial={
+            tableEditId
+              ? slide.elements.find((el) => el.id === tableEditId)?.table
+              : undefined
+          }
+          onCancel={() => setModal(null)}
+          onApply={(table) => {
+            if (tableEditId) {
+              changeSlide((s) => ({
+                ...s,
+                elements: s.elements.map((el) =>
+                  el.id === tableEditId && !el.locked ? { ...el, table } : el,
+                ),
+              }));
+              setModal(null);
+            } else
+              insertElements([
+                createTableElement(table, deck.width, deck.height),
+              ]);
+          }}
+        />
+      )}
+      {modal && contentDialogs.includes(modal as InsertContentKind) && (
+        <InsertContentDialog
+          kind={modal as InsertContentKind}
+          deck={deck}
+          background={slide.background}
+          onInsert={insertElements}
+          onCancel={() => setModal(null)}
+        />
+      )}
+      {modal === "link" && (
+        <LinkDialog
+          deck={deck}
+          selected={selectedElement}
+          onCancel={() => setModal(null)}
+          onApply={(hyperlink, label) => {
+            if (selectedElement) {
+              changeSlide((s) => ({
+                ...s,
+                elements: s.elements.map((el) =>
+                  el.id === selectedElement.id && !el.locked
+                    ? { ...el, hyperlink }
+                    : el,
+                ),
+              }));
+              setModal(null);
+            } else if (hyperlink)
+              insertElements([
+                element("text", {
+                  text: label,
+                  hyperlink,
+                  x: deck.width * 0.2,
+                  y: deck.height * 0.4,
+                  color: "#2563EB",
+                  underline: true,
+                }),
+              ]);
+          }}
+        />
+      )}
+      {modal === "footer" && (
+        <FooterDialog
+          slide={slide}
+          initial={footerInitial}
+          onCancel={() => setModal(null)}
+          onApply={(options, all) => {
+            commit((d) => applyFooters(d, slide.id, options, all));
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === "album" && (
+        <PhotoAlbumDialog
+          deck={deck}
+          onCancel={() => setModal(null)}
+          onInsert={(slides) => {
+            const next = [...deck.slides];
+            next.splice(activeIndex + 1, 0, ...slides);
+            const valid = parseDeckJson(
+              JSON.stringify({ ...deck, slides: next }),
+            );
+            commit(() => valid);
+            selectSlide(slides[0].id);
+            setModal(null);
+            setSorter(false);
+          }}
+        />
+      )}
+      {modal === "screenshot" && (
+        <ScreenshotDialog
+          onCancel={() => setModal(null)}
+          onInsert={(src) => {
+            const deckId = deck.id;
+            const instance = modalInstance.current;
+            void imageElementFromData(src, deck)
+              .then((el) => {
+                if (
+                  deckRef.current.id === deckId &&
+                  modalRef.current === "screenshot" &&
+                  modalInstance.current === instance
+                )
+                  insertElements([el]);
+              })
+              .catch(() => notify("스크린샷을 이미지로 읽지 못했습니다."));
+          }}
+        />
+      )}
       {toast && (
         <div className="toast" role="status">
           <CheckCircle2 size={17} />
@@ -3032,7 +3457,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {modal && (
+      {modal && ["new", "library", "shortcuts", "import"].includes(modal) && (
         <div
           className="modal-backdrop"
           onPointerDown={(e) => {
@@ -3191,6 +3616,11 @@ export default function App() {
             >
               <SlideVisual
                 slide={deck.slides[presentIndex]}
+                interactive={!blackout}
+                onSlideLink={(slideId) => {
+                  const index = deck.slides.findIndex((s) => s.id === slideId);
+                  if (index >= 0) showPresentationSlide(index);
+                }}
                 width={deck.width}
                 height={deck.height}
                 scale={Math.min(

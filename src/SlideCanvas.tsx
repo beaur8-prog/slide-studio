@@ -15,6 +15,7 @@ import {
   scriptRuns,
 } from "./text-layout";
 import { LineShape } from "./LineShape";
+import { TableVisual } from "./TableEditor";
 
 // Chromium does not implement CSS hanging-punctuation. Try letting the terminal
 // stop/comma hang, and keep it only when that prevents an extra line. A sentence
@@ -261,6 +262,7 @@ function TextBorders({ element: e }: { element: SlideElement }) {
 }
 
 export function ElementVisual({ element: e }: { element: SlideElement }) {
+  if (e.type === "table") return <TableVisual element={e} />;
   if (e.type === "image")
     return (
       <div
@@ -434,11 +436,15 @@ export const SlideVisual = memo(function SlideVisual({
   width,
   height,
   scale = 1,
+  interactive = false,
+  onSlideLink,
 }: {
   slide: Slide;
   width: number;
   height: number;
   scale?: number;
+  interactive?: boolean;
+  onSlideLink?: (slideId: string) => void;
 }) {
   return (
     <div
@@ -457,6 +463,26 @@ export const SlideVisual = memo(function SlideVisual({
           style={elementStyle(e)}
         >
           <ElementVisual element={e} />
+          {interactive && e.hyperlink?.url && (
+            <a
+              className="presentation-link"
+              href={e.hyperlink.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={e.text || e.alt || "웹 링크 열기"}
+              onClick={(event) => event.stopPropagation()}
+            />
+          )}
+          {interactive && e.hyperlink?.slideId && (
+            <button
+              className="presentation-link"
+              aria-label={e.text || "연결한 슬라이드로 이동"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSlideLink?.(e.hyperlink!.slideId!);
+              }}
+            />
+          )}
         </div>
       ))}
     </div>
@@ -529,6 +555,7 @@ interface Props {
   editing: string | null;
   select: (ids: string[]) => void;
   edit: (id: string | null) => void;
+  editTable?: (id: string) => void;
   begin: () => void;
   preview: (elements: SlideElement[]) => void;
   finish: () => void;
@@ -544,6 +571,7 @@ export default function SlideCanvas({
   editing,
   select,
   edit,
+  editTable,
   begin,
   preview,
   finish,
@@ -690,6 +718,10 @@ export default function SlideCanvas({
               onPointerDown={(ev) => down(ev, e)}
               onDoubleClick={(ev) => {
                 ev.stopPropagation();
+                if (e.type === "table" && !e.locked) {
+                  select([e.id]);
+                  editTable?.(e.id);
+                }
                 if (e.type === "text" && !e.locked) {
                   select([e.id]);
                   begin();
@@ -743,7 +775,9 @@ export default function SlideCanvas({
                       ? "텍스트"
                       : e.type === "image"
                         ? "이미지"
-                        : "도형"}
+                        : e.type === "table"
+                          ? "표 · 더블클릭하여 편집"
+                          : "도형"}
                 </span>
               )}
             </div>

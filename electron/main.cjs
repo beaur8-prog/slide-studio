@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, session, shell } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
@@ -22,6 +22,25 @@ let mainWindow = null;
 let nativeOperationPending = false;
 let officeLightFont;
 let presentationWindowState = null;
+const captureSources = new Map();
+let captureExpiry;
+let captureOperationPending = false;
+const CAPTURE_SOURCE_LIMIT = 24;
+const CAPTURE_LIFETIME_MS = 60000;
+
+function clearCaptureSources() {
+  captureSources.clear();
+  clearTimeout(captureExpiry);
+  captureExpiry = undefined;
+}
+
+async function withCaptureOperation(event, task) {
+  requireTrustedSender(event);
+  if (captureOperationPending || nativeOperationPending) throw new Error('다른 캡처 또는 파일 작업이 끝난 후 다시 시도하세요.');
+  captureOperationPending = true;
+  try { return await task(); }
+  finally { captureOperationPending = false; }
+}
 
 app.setName(PRODUCT_NAME);
 app.setPath('userData', path.join(app.getPath('appData'), PRODUCT_NAME));
@@ -76,7 +95,7 @@ function decodeFilePayload(payload) {
 
 async function withNativeDialog(event, task) {
   requireTrustedSender(event);
-  if (nativeOperationPending) throw new Error('Finish the open file or print dialog first.');
+  if (nativeOperationPending || captureOperationPending) throw new Error('Finish the open file, print, or screenshot operation first.');
   nativeOperationPending = true;
   try {
     return await task();
@@ -171,6 +190,70 @@ function installMenu() {
 }
 
 function installIPC() {
+  ipcMain.handle('slide-studio:list-capture-sources', (event, ...args) => withCaptureOperation(event, async () => {
+    if (args.length) throw new TypeError('이 요청에는 인수가 필요하지 않습니다.');
+    clearCaptureSources();
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 }, fetchWindowIcons: false,
+    });
+    requireTrustedSender(event);
+    const ownWindow = mainWindow.getMediaSourceId();
+    const expires = Date.now() + CAPTURE_LIFETIME_MS;
+    const choices = [];
+    for (const source of sources) {
+      if (choices.length >= CAPTURE_SOURCE_LIMIT) break;
+      if (source.id === ownWindow || source.thumbnail.isEmpty()) continue;
+      const type = source.id.startsWith('screen:') ? 'screen' : source.id.startsWith('window:') ? 'window' : null;
+      if (!type) continue;
+      const id = randomUUID();
+      captureSources.set(id, { sourceId: source.id, name: source.name, type, expires });
+      choices.push({ id, name: String(source.name).slice(0, 240), thumbnail: source.thumbnail.toDataURL() });
+    }
+    // Keep only bounded source identifiers, never NativeImages or image data.
+    captureExpiry = setTimeout(clearCaptureSources, CAPTURE_LIFETIME_MS);
+    captureExpiry.unref();
+    return choices;
+  }));
+
+  ipcMain.handle('slide-studio:capture-source', (event, id) => withCaptureOperation(event, async () => {
+    const selected = typeof id === 'string' && id.length <= 64 ? captureSources.get(id) : undefined;
+    if (!selected || Date.now() >= selected.expires) {
+      clearCaptureSources();
+      throw new Error('캡처 목록이 만료되었습니다. 새로 고침 후 다시 선택하세요.');
+    }
+    // A selection is single-use; late or repeated requests cannot reuse it.
+    clearCaptureSources();
+    const window = mainWindow;
+    const wasVisible = window.isVisible();
+    const wasFocused = window.isFocused();
+    try {
+      // The source picker must not appear in a full-screen screenshot.
+      if (wasVisible) window.hide();
+      await new Promise(resolve => setTimeout(resolve, 180));
+      requireTrustedSender(event);
+      const sources = await desktopCapturer.getSources({
+        types: [selected.type], thumbnailSize: { width: 1920, height: 1080 }, fetchWindowIcons: false,
+      });
+      requireTrustedSender(event);
+      const source = sources.find(item => item.id === selected.sourceId && item.name === selected.name);
+      if (!source || source.thumbnail.isEmpty()) throw new Error('선택한 창을 캡처할 수 없습니다. 창이 열려 있는지 확인하세요.');
+      let image = source.thumbnail;
+      const size = image.getSize();
+      if (size.width > 1920 || size.height > 1080) {
+        const ratio = Math.min(1920 / size.width, 1080 / size.height);
+        image = image.resize({ width: Math.max(1, Math.round(size.width * ratio)), height: Math.max(1, Math.round(size.height * ratio)) });
+      }
+      const png = image.toPNG();
+      if (!png.length || png.length > 15 * 1024 * 1024) throw new Error('캡처 이미지가 너무 큽니다. 더 작은 창을 선택하세요.');
+      return `data:image/png;base64,${png.toString('base64')}`;
+    } finally {
+      if (wasVisible && !window.isDestroyed()) {
+        window.show();
+        if (wasFocused) window.focus();
+      }
+    }
+  }));
+
   ipcMain.handle('slide-studio:set-presentation-mode', (event, enabled) => {
     requireTrustedSender(event);
     if (typeof enabled !== 'boolean') throw new TypeError('Presentation mode must be a boolean.');
@@ -369,10 +452,10 @@ async function createWindow() {
     mainWindow.webContents.send('slide-studio:presentation-ended');
   });
   mainWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
-    if (mainFrame && !inPlace) setPresentationMode(false);
+    if (mainFrame && !inPlace) { clearCaptureSources(); setPresentationMode(false); }
   });
-  mainWindow.webContents.on('render-process-gone', () => setPresentationMode(false));
-  mainWindow.on('closed', () => { presentationWindowState = null; mainWindow = null; });
+  mainWindow.webContents.on('render-process-gone', () => { clearCaptureSources(); setPresentationMode(false); });
+  mainWindow.on('closed', () => { clearCaptureSources(); presentationWindowState = null; mainWindow = null; });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
   try {

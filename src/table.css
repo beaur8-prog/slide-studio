@@ -1,0 +1,118 @@
+.dialog.table-editor-dialog {
+  width: min(1120px, calc(100vw - 48px));
+  max-width: 1120px;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+.table-editor-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.table-editor-heading h2 {
+  margin: 4px 0 16px;
+}
+.table-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.table-editor-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.table-editor-toolbar input {
+  width: 64px;
+}
+.table-editor-toolbar button,
+.table-editor-toolbar input,
+.table-editor-options button,
+.table-editor-options input,
+.table-editor-options select {
+  border: 1px solid #9aa2ac66;
+  border-radius: 5px;
+  padding: 6px 8px;
+  background: transparent;
+  color: inherit;
+}
+.table-editor-toolbar button:disabled {
+  opacity: 0.4;
+}
+.table-editor-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 225px;
+  gap: 22px;
+}
+.table-editor-grid-scroll {
+  max-height: 490px;
+  overflow: auto;
+  border: 1px solid #9aa2ac66;
+  border-radius: 6px;
+  align-self: start;
+}
+.table-editor-grid {
+  display: grid;
+  min-width: 100%;
+}
+.table-editor-grid textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 120px;
+  height: 84px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid;
+  border-radius: 0;
+  line-height: 1.4;
+  font: inherit;
+  font-size: 14px;
+}
+.table-editor-grid textarea.selected-cell {
+  outline: 3px solid #4c9fff;
+  outline-offset: -3px;
+}
+.table-editor-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.table-editor-options label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.table-editor-options input[type="number"] {
+  width: 72px;
+}
+.table-editor-options input[type="color"] {
+  box-sizing: border-box;
+  width: 50px;
+  height: 28px;
+  padding: 2px;
+}
+.table-editor-options select {
+  max-width: 125px;
+}
+.table-editor-options .table-option-check {
+  justify-content: flex-start;
+}
+.table-editor-hint {
+  font-size: 12px;
+  opacity: 0.7;
+  margin: 15px 0;
+}
+@media (max-width: 760px) {
+  .table-editor-body {
+    grid-template-columns: 1fr;
+  }
+  .table-editor-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}

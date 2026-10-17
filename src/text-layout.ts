@@ -287,6 +287,23 @@ export function scaleElement(
     kerning: scaled(element.kerning),
     strokeWidth: scaled(element.strokeWidth),
     cornerRadius: scaled(element.cornerRadius),
+    ...(element.table
+      ? {
+          table: {
+            ...element.table,
+            // Ratio changes must still produce valid, reopenable table data.
+            fontSize: Math.max(
+              6,
+              Math.min(144, element.table.fontSize * scale),
+            ),
+            padding: Math.max(0, Math.min(60, element.table.padding * scale)),
+            borderWidth: Math.max(
+              0,
+              Math.min(12, element.table.borderWidth * scale),
+            ),
+          },
+        }
+      : {}),
     ...(element.textInsets
       ? {
           textInsets: element.textInsets.map(

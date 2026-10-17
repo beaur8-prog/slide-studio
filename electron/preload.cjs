@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('desktop', Object.freeze({
   loadOfficeLightFont: () => ipcRenderer.invoke('slide-studio:load-office-light-font'),
   setChromeTheme: theme => ipcRenderer.invoke('slide-studio:set-chrome-theme', theme),
   setPresentationMode: enabled => ipcRenderer.invoke('slide-studio:set-presentation-mode', enabled),
+  listCaptureSources: () => ipcRenderer.invoke('slide-studio:list-capture-sources'),
+  captureSource: id => ipcRenderer.invoke('slide-studio:capture-source', id),
   onPresentationEnded: callback => {
     if (typeof callback !== 'function') throw new TypeError('A presentation callback is required.');
     const listener = () => callback();

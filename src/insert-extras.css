@@ -1,0 +1,151 @@
+.dialog.insert-extras-dialog {
+  width: min(620px, calc(100vw - 40px));
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+}
+.insert-extras-dialog.wide {
+  width: min(850px, calc(100vw - 40px));
+}
+.insert-extras-dialog > label,
+.insert-extras-dialog .insert-indent > label,
+.album-options > label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+  font-size: 13px;
+}
+.insert-extras-dialog input:not([type="checkbox"]),
+.insert-extras-dialog select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--panel, #fff);
+  color: inherit;
+}
+.insert-extras-dialog label.check-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.insert-extras-dialog input[type="checkbox"] {
+  accent-color: #c55c3a;
+  width: 16px;
+  height: 16px;
+}
+.insert-indent {
+  padding-left: 26px;
+}
+.insert-extras-dialog .dialog-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.insert-extras-dialog .dialog-actions > span {
+  margin-right: auto;
+  font-size: 12px;
+}
+.insert-extras-dialog .insert-error {
+  color: #df7166;
+  font-size: 13px;
+}
+.footer-preview {
+  display: grid;
+  grid-template-columns: 1fr 2fr 0.5fr;
+  gap: 8px;
+  min-height: 70px;
+  align-items: end;
+  padding: 12px;
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  background: #faf8f2;
+  color: #233d35;
+  font-size: 11px;
+}
+.footer-preview span {
+  overflow-wrap: anywhere;
+}
+.footer-preview span:nth-child(2) {
+  text-align: center;
+}
+.footer-preview span:last-child {
+  text-align: right;
+}
+.album-options {
+  display: flex;
+  gap: 25px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.album-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+.album-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px;
+  font-size: 12px;
+}
+.album-item img {
+  width: 72px;
+  height: 48px;
+  object-fit: contain;
+  background: #eee;
+}
+.album-item span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.album-item button {
+  display: flex;
+  padding: 7px;
+}
+.ribbon.insert-ribbon {
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 0;
+  padding-left: 14px;
+  padding-right: 14px;
+  scrollbar-width: thin;
+}
+.insert-ribbon .ribbon-group {
+  padding-left: 12px;
+  padding-right: 12px;
+  flex-shrink: 0;
+}
+.insert-ribbon .tool {
+  min-width: 48px;
+  padding: 5px;
+}
+.insert-ribbon .tools-stack button {
+  min-height: 24px;
+  white-space: nowrap;
+}
+.insert-ribbon .shape-popover {
+  position: fixed;
+  top: 170px;
+  left: 200px;
+  max-height: calc(100dvh - 190px);
+  overflow: auto;
+}
+.slide-element .presentation-link {
+  position: absolute;
+  inset: 0;
+  display: block;
+  cursor: pointer;
+  border-radius: 2px;
+  pointer-events: auto;
+}
+.slide-element .presentation-link:focus-visible {
+  outline: 3px solid #448eff;
+  outline-offset: 3px;
+}

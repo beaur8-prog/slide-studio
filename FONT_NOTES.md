@@ -1,4 +1,4 @@
-# Font matching in Slide Studio 1.2.1
+# Font matching in Slide Studio
 
 Installed source fonts are first in every font stack. The app does not install or
 redistribute Microsoft fonts. Source names and point sizes stay in the editable
@@ -86,6 +86,16 @@ runner's `--office-fonts` option explicitly loads the same optional cache face
 for desktop-equivalent screenshots; it records whether loading succeeded.
 
 ## Remaining differences
+
+Malgun Gothic is normally available on Windows but is absent on the Mac used
+for the 1.4.0 release checks. Its Apple SD Gothic Neo fallback has different
+advances: the DSU slide 10 labels remain complete and contained in two lines,
+but the exact break positions differ from the Windows reference. The regression
+test checks text preservation, line count and bounds on every platform, and
+checks the reference break positions when Malgun Gothic is actually installed.
+The hanging-punctuation test also measures the renderer's complete font stack
+instead of measuring an unavailable Windows face in isolation. These changes
+make the tests portable; they do not eliminate source-font substitution.
 
 Uninstalled commercial faces such as HY나무M, HY바다M and Sandoll fonts still use
 local substitutes. Light-face shape/thickness, advanced typography, custom tab

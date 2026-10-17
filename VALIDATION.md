@@ -2,7 +2,32 @@
 
 Verified on 2026-10-17, macOS arm64.
 
-## Current release: 1.3.0
+## Current release: 1.4.0
+
+The PC changes through `3b15e73` are included in both packages. TypeScript and
+the production build pass; the full automated suite reports **58 passed,
+2 skipped, 0 failed**. The skipped cases require Windows native window geometry
+and an actual Office font cache. Two font regression tests now distinguish a
+missing Windows font from clipping or text loss on macOS. No production font
+mapping was changed to satisfy these cross-platform tests.
+
+The actual Mac ZIP was extracted, strictly signature-verified, installed and
+launched. Native checks covered fullscreen presentation, next-slide navigation,
+Esc returning to the editor, Korean/English multiline paste and undo, exact
+project save round trip, PPTX export/reopen, editor slide navigation and PDF
+export. All four PDF pages were rendered and visually checked; Korean text and
+backgrounds are present, and notes/editor controls are excluded. This is not a
+real keyboard IME or physical printer check.
+
+All five public decks / 465 slides were rechecked on macOS Chrome, including
+the 201 MB sample and five export/reimport cycles. Both ZIPs pass CRC32 checks
+and contain the same 1.4.0 ASAR with current source/build bytes. The Windows
+runtime's checksum, PE x64 structure and executable code preservation were
+verified. Prior PC native evidence is in `POWERPOINT-ANALYSIS.md`; this newly
+generated Windows ZIP was not launched on Windows in this Mac session.
+See [1.4.0 release evidence](qa/RELEASE-1.4.0.md) for metrics and remaining limits.
+
+## Version 1.3.0
 
 Mac ARM64 and Windows x64 packages are available from [GitHub Releases](https://github.com/beaur8-prog/slide-studio/releases). The shared editor and Windows path/shortcut checks total 33 passing automated tests. Windows native execution, IME and printing are not verified. See [current scope and reproducible commands](qa/README.md).
 

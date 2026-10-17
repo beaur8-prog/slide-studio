@@ -1,6 +1,15 @@
 # 검증 범위와 재현
 
-2026-10-17, Slide Studio 1.3.0 기준입니다.
+2026-10-17, 현재 배포 버전은 Slide Studio 1.4.0입니다.
+
+## 1.4.0 배포 검증
+
+- 자동 검사 **58개 통과, 2개 환경 조건으로 제외**: Windows 네이티브 전체 화면과 Office 캐시 글꼴 검사는 이 Mac에서 실행할 수 없습니다.
+- 실제 Mac 배포 ZIP을 풀어 설치하고 전체 화면 발표·방향키·Esc 복귀, 한글/영문 두 줄 편집·실행 취소, 프로젝트 저장, PPTX 저장·재열기와 PDF 내보내기를 확인했습니다.
+- 공개 PPTX 5개 / 465장을 다시 열고 PPTX 왕복을 검사했습니다. 가장 큰 201 MB 파일을 포함해 지원 텍스트와 이미지 수를 보존했습니다. 상세 수치와 레이아웃 검사 범위는 [1.4.0 검증 기록](RELEASE-1.4.0.md)에 있습니다.
+- 두 ZIP의 CRC32, 동일한 1.4.0 앱 ASAR, Mac 서명과 Windows PE/런타임 구성을 확인했습니다. 이번 Windows ZIP의 실제 실행은 이 Mac 세션에서 검증하지 않았습니다.
+
+원본 맑은 고딕이 없는 Mac에서는 대체 글꼴의 폭 때문에 정확한 줄바꿈 위치가 달라질 수 있습니다. 두 환경 모두 내용 보존과 상자 내 배치를 검사하고, Windows 원본 글꼴이 있을 때만 원본과 동일한 줄바꿈을 요구합니다. 실제 OS IME 입력과 종이 출력은 별도 검증이 필요합니다.
 
 ## Windows 실기 비교 추가
 
@@ -58,4 +67,4 @@ node scripts/qa-corpus.mjs current --repeat=3 --round-trip
 
 자료 출처는 [CMU 16-385 강의 자료](https://www.cs.cmu.edu/~16385/)와 [동신대학교 공개 게시물](https://cess.dsu.ac.kr/lifelong/index.php?idx=2039&mode=view&pCode=lecture)입니다. 다운로드 스크립트가 URL·바이트 수·SHA-256을 `qa/samples/sources.json`에 기록합니다. 원본 자료와 파생 비교 이미지는 재배포하지 않습니다.
 
-`REPORT*.md`, `RELEASE-1.3.0.md`, `../VALIDATION.md`는 개발 단계의 이력입니다. 그 문서들의 `results/`, `samples/`, `release/` 링크는 로컬 검증 산출물을 가리키며 GitHub 저장소에는 포함하지 않습니다. 현재 다운로드는 [GitHub Releases](https://github.com/beaur8-prog/slide-studio/releases)를 사용하세요.
+`REPORT*.md`, `RELEASE-*.md`, `../VALIDATION.md`는 버전별 검증 기록입니다. 그 문서들의 `results/`, `samples/`, `release/` 링크는 로컬 검증 산출물을 가리키며 GitHub 저장소에는 포함하지 않습니다. 현재 다운로드는 [GitHub Releases](https://github.com/beaur8-prog/slide-studio/releases/latest)를 사용하세요.

@@ -2,7 +2,7 @@
 
 Mac과 Windows에서 독립적으로 실행하는 프레젠테이션 편집 앱입니다. PowerPoint의 공개 사용법에 나오는 리본, 슬라이드 목록, 개체 편집과 발표 흐름을 참고해 새로 구현했습니다. Microsoft PowerPoint 원본이나 원본 소스를 복원한 제품은 아닙니다.
 
-이 작업 사본은 실행 중인 Windows PowerPoint의 화면을 참고해 제목 표시줄·리본·작업 영역을 개선했습니다. **Ctrl+K**로 명령과 슬라이드를 검색하고, **Ctrl+F1**로 리본을 접을 수 있습니다. 오른쪽 위 **서식** 버튼으로 서식 패널을 열고, 해/달 버튼으로 편집 화면의 밝기를 바꿉니다. 분석 근거와 검증 범위는 [Windows PowerPoint 관찰 기록](POWERPOINT-ANALYSIS.md)을 참고하세요. 아래 다운로드 링크는 기존 v1.3.0 공개 릴리스이며 이 작업 사본의 변경은 아직 게시되지 않았습니다.
+**1.4.0**은 Windows에서 작업한 제목 표시줄·리본·작업 영역 개선, 편집 영역 스크롤바, 표·도형·줄바꿈 보정과 자동 전체 화면 발표를 포함합니다. **Ctrl+K**로 명령과 슬라이드를 검색하고, **Ctrl+F1**로 리본을 접을 수 있습니다. 오른쪽 위 **서식** 버튼으로 서식 패널을 열고, 해/달 버튼으로 편집 화면의 밝기를 바꿉니다. 분석 근거는 [Windows PowerPoint 관찰 기록](POWERPOINT-ANALYSIS.md), 이번 배포 검증은 [1.4.0 검증 기록](qa/RELEASE-1.4.0.md)을 참고하세요.
 
 ## 다운로드와 실행
 
@@ -10,10 +10,10 @@ Mac과 Windows에서 독립적으로 실행하는 프레젠테이션 편집 앱�
 
 | 운영체제 | 다운로드 | 실행 방법 |
 | --- | --- | --- |
-| macOS 12 이상 · Apple Silicon(M1 이후) | [Mac ARM64 ZIP](https://github.com/beaur8-prog/slide-studio/releases/download/v1.3.0/Slide-Studio-mac-arm64.zip) | ZIP을 풀고 Slide Studio.app을 응용 프로그램 폴더로 옮겨 실행 |
-| Windows 10/11 · Intel/AMD 64비트 | [Windows x64 ZIP](https://github.com/beaur8-prog/slide-studio/releases/download/v1.3.0/Slide-Studio-win-x64.zip) | ZIP 전체를 풀고 Slide Studio.exe 실행 |
+| macOS 12 이상 · Apple Silicon(M1 이후) | [Mac ARM64 ZIP](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-mac-arm64.zip) | ZIP을 풀고 Slide Studio.app을 응용 프로그램 폴더로 옮겨 실행 |
+| Windows 10/11 · Intel/AMD 64비트 | [Windows x64 ZIP](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-win-x64.zip) | ZIP 전체를 풀고 Slide Studio.exe 실행 |
 
-Windows에서는 EXE와 `resources`, `locales`, DLL을 함께 보관하세요. Mac 빌드는 Apple 공증을 받지 않았고 Windows 빌드는 배포용 코드 서명이 없습니다. Windows 실제 기기에서의 실행·IME·프린터 검증은 아직 하지 않았습니다. Intel Mac, Windows ARM 및 32비트용 패키지는 제공하지 않습니다.
+Windows에서는 EXE와 `resources`, `locales`, DLL을 함께 보관하세요. Mac 빌드는 Apple 공증을 받지 않았고 Windows 빌드는 배포용 코드 서명이 없습니다. 이번 Mac 1.4.0 배포 앱은 직접 실행해 편집·발표·파일 입출력을 확인했습니다. Windows 변경 사항은 앞선 PC 실기 검증 기록이 있지만, 이번에 재생성한 1.4.0 Windows ZIP은 Mac에서 패키지 검사만 수행했습니다. 실제 키보드 IME와 종이 출력은 미검증입니다. Intel Mac, Windows ARM 및 32비트용 패키지는 제공하지 않습니다.
 
 다운로드한 파일의 해시는 릴리스에 첨부된 `SHA256SUMS.txt`와 비교할 수 있습니다.
 
@@ -59,7 +59,7 @@ npm start
 - 이미지와 기본 도형을 삽입하고 마우스로 이동·크기 조절합니다. 오른쪽 패널에서 위치, 크기, 회전과 불투명도를 정확하게 지정합니다.
 - Shift로 여러 개체를 선택합니다. 복사·붙여넣기, 복제, 레이어 순서, 잠금, 정렬, 눈금 맞춤과 안내선을 지원합니다.
 - 테마와 배경, 16:9 / 4:3 비율을 변경합니다. 발표자 노트와 페이드 전환을 설정합니다.
-- 발표 화면에서 방향키·Space로 이동하고 Esc로 편집 화면에 돌아갑니다. B는 검은 화면, 전체 화면 버튼은 화면 확장입니다.
+- 발표를 시작하면 자동으로 전체 화면으로 전환합니다. 클릭·방향키·Space로 이동하고 Esc로 편집 화면에 돌아갑니다. B는 검은 화면 전환입니다.
 - 실행 취소와 다시 실행을 지원합니다. 변경 내용은 이 기기의 IndexedDB에 자동 저장합니다. 로고 또는 파일 메뉴의 **내 프레젠테이션**에서 이전 문서를 열 수 있습니다.
 
 ## 파일
@@ -74,7 +74,7 @@ npm start
 
 파일 입력 상한은 256 MiB이며, 압축 해제 크기·이미지·개체 수에는 별도 제한이 있습니다. 공개 PPTX 5개, 총 465장으로 검사하고 확인된 글자 겹침·잘림과 표·그림 누락을 수정했습니다. 검사 범위와 재현 방법은 [검증 안내](qa/README.md)를 확인하세요.
 
-발표자 노트 표시 버튼은 현재 발표 창 아래에 노트를 표시합니다. 별도 모니터로 분리된 발표자 화면 기능은 없습니다. 청중에게 화면을 공유할 때에는 노트를 숨기세요.
+발표자 노트는 편집 화면에서 작성하며 발표 화면에는 표시하지 않습니다. 별도 모니터로 분리된 발표자 화면 기능은 없습니다.
 
 ## 검증과 빌드
 

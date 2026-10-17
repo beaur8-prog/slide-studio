@@ -12,6 +12,7 @@ test("inherited hanging punctuation prevents a spurious last line without changi
       default: { createRoot },
     } = await import("/node_modules/.vite/deps/react-dom_client.js");
     const { ElementVisual } = await import("/src/SlideCanvas.tsx");
+    const { fontStack } = await import("/src/text-layout.ts");
     const { blankDeck, element } = await import("/src/model.ts");
     const { exportPptx, importPptx } = await import("/src/io.ts");
     const { default: JSZip } = await import(
@@ -19,7 +20,12 @@ test("inherited hanging punctuation prevents a spurious last line without changi
     );
     const text = "새로운 내용을 차례대로 정리합니다.";
     const ctx = document.createElement("canvas").getContext("2d")!;
-    ctx.font = '20px "Malgun Gothic"';
+    // Use the renderer's complete fallback stack. A missing Windows font by
+    // itself makes canvas use a different default face on macOS and measures
+    // a box that never exercises hanging punctuation in the actual renderer.
+    const font = `20px ${fontStack("Malgun Gothic")}`;
+    await document.fonts.load(font);
+    ctx.font = font;
     ctx.fontKerning = "none";
     const width = ctx.measureText(text).width - 0.5;
     const deck = blankDeck();

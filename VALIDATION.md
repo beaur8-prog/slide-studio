@@ -2,7 +2,22 @@
 
 Verified on 2026-10-18 (KST), macOS arm64.
 
-## Current release: 1.4.1
+## Current release: 1.4.2
+
+The editor now accepts small mouse-wheel notches without waiting for 60 pixels
+or a fixed 350 ms cooldown. One continuous gesture advances one slide; a quiet
+gap or direction reversal permits the next navigation. The 20 px / 120 ms
+comparison advanced on the third input in 1.4.1 and the first input in 1.4.2.
+The production build passes, and the full suite reports **90 passed, 2 skipped,
+0 failed, 0 flaky** in 143.2 seconds. New checks cover small notches, reversal,
+line-mode input, tiny jitter and a long momentum tail. Existing zoom, scrollbar,
+thumbnail and presentation checks also pass. See [1.4.2 release evidence](qa/RELEASE-1.4.2.md).
+
+The prior corpus and native save/export results below are historical 1.4.1
+checks, not new 1.4.2 measurements. The release report states the current native
+and package verification scope.
+
+## Version 1.4.1
 
 Includes the PC changes through `16c80d8`: presentation navigation and command
 isolation, paragraph editing and import fidelity, and saved-library memory

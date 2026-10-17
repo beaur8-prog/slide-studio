@@ -340,8 +340,8 @@ export default function App() {
   const thumbnailList = useRef<HTMLDivElement>(null);
   const wheelGesture = useRef({
     delta: 0,
-    lastEvent: 0,
-    lastNavigation: -Infinity,
+    lastEvent: -Infinity,
+    navigated: false,
     direction: 0,
   });
   const imageInput = useRef<HTMLInputElement>(null);
@@ -504,13 +504,24 @@ export default function App() {
         Math.abs(event.deltaX) > Math.abs(event.deltaY)
       )
         return;
-      const direction = Math.sign(dy);
+      const direction = Math.sign(dy),
+        now = performance.now(),
+        gesture = wheelGesture.current;
+      // Small mouse-wheel notches should work on their own. A quiet gap or
+      // reversal starts the next gesture; continuous trackpad momentum remains
+      // part of the current gesture instead of advancing again on a timer.
+      if (now - gesture.lastEvent > 80 || direction !== gesture.direction) {
+        gesture.delta = 0;
+        gesture.navigated = false;
+      }
+      gesture.lastEvent = now;
+      gesture.direction = direction;
       const canScroll =
         direction > 0
           ? area.scrollTop + area.clientHeight < area.scrollHeight - 2
           : area.scrollTop > 2;
       if (canScroll) {
-        wheelGesture.current.delta = 0;
+        gesture.delta = 0;
         if (event.target instanceof Node && !area.contains(event.target)) {
           event.preventDefault();
           area.scrollTop += dy;
@@ -518,22 +529,13 @@ export default function App() {
         return;
       }
       event.preventDefault();
-      const now = performance.now(),
-        gesture = wheelGesture.current;
-      if (now - gesture.lastEvent > 220 || direction !== gesture.direction)
-        gesture.delta = 0;
-      gesture.lastEvent = now;
-      gesture.direction = direction;
-      if (now - gesture.lastNavigation < 350) {
-        gesture.delta = 0;
-        return;
-      }
+      if (gesture.navigated) return;
       gesture.delta += dy;
-      if (Math.abs(gesture.delta) < 60) return;
+      if (Math.abs(gesture.delta) < 12) return;
       gesture.delta = 0;
       const next = activeIndex + direction;
       if (next < 0 || next >= deck.slides.length) return;
-      gesture.lastNavigation = now;
+      gesture.navigated = true;
       selectSlide(deck.slides[next].id);
       area.scrollTop = direction > 0 ? 0 : area.scrollHeight;
     };
@@ -1138,8 +1140,8 @@ export default function App() {
       const now = performance.now(),
         direction = Math.sign(dy),
         gesture = presentationWheel.current;
-      // Match the editor's wheel threshold and cooldown: a large delta still
-      // advances just one slide, with a cooldown for trailing wheel events.
+      // Presentations keep a conservative threshold and cooldown so a large
+      // delta advances just one slide, with a pause for trailing wheel events.
       if (now - gesture.lastEvent > 220 || direction !== gesture.direction)
         gesture.delta = 0;
       gesture.lastEvent = now;

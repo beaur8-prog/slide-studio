@@ -3,6 +3,65 @@ import { test, expect } from "@playwright/test";
 const current = (page: import("@playwright/test").Page) =>
   page.locator(".thumbnail-row.active .slide-number");
 
+test("small mouse-wheel notches advance immediately and distinct notches do not wait for a fixed cooldown", async ({
+  page,
+}) => {
+  await page.goto("http://127.0.0.1:5190");
+  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  const area = page.locator(".canvas-area");
+  await area.hover();
+  // Low-resolution mouse notches on macOS can be far below 60 CSS pixels.
+  for (const slide of [2, 3, 4]) {
+    await page.mouse.wheel(0, 20);
+    await expect(current(page)).toHaveText(String(slide));
+    await page.waitForTimeout(120);
+  }
+  await page.mouse.wheel(0, -20);
+  await expect(current(page)).toHaveText("3");
+  // A deliberate reversal should not be dropped by the previous direction.
+  await page.mouse.wheel(0, 20);
+  await expect(current(page)).toHaveText("4");
+  await page.waitForTimeout(120);
+  await area.dispatchEvent("wheel", {
+    deltaY: -1,
+    deltaMode: 1,
+    bubbles: true,
+    cancelable: true,
+  });
+  await expect(current(page)).toHaveText("3");
+});
+
+test("tiny jitter does not change slides and a long momentum tail stays on one slide", async ({
+  page,
+}) => {
+  await page.goto("http://127.0.0.1:5190");
+  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  const area = page.locator(".canvas-area");
+  for (let i = 0; i < 3; i++)
+    await area.dispatchEvent("wheel", {
+      deltaY: 2,
+      bubbles: true,
+      cancelable: true,
+    });
+  await expect(current(page)).toHaveText("1");
+  await page.waitForTimeout(120);
+  // Keep momentum arriving beyond the old 350 ms timer. It must not become
+  // another page turn merely because enough wall-clock time has elapsed.
+  await area.evaluate(async (element) => {
+    for (const deltaY of [18, 15, 12, 10, 8, 6, 5, 4, 3, 2, 2, 1, 1, 1, 1]) {
+      element.dispatchEvent(
+        new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+  });
+  await expect(current(page)).toHaveText("2");
+  await page.waitForTimeout(120);
+  await area.hover();
+  await page.mouse.wheel(0, 20);
+  await expect(current(page)).toHaveText("3");
+});
+
 test("wheel changes one slide per burst, clamps at ends and follows the active thumbnail", async ({
   page,
 }) => {
@@ -13,10 +72,20 @@ test("wheel changes one slide per burst, clamps at ends and follows the active t
   await area.hover();
   await page.mouse.wheel(0, -120);
   await expect(current(page)).toHaveText("1");
-  await page.mouse.wheel(0, 120);
-  await expect(current(page)).toHaveText("2");
-  await page.mouse.wheel(0, 120);
-  await page.mouse.wheel(0, 120);
+  // Keep this a single burst. Waiting for an assertion between inputs can
+  // introduce a quiet gap and turn them into intentional separate notches.
+  await area.evaluate(async (element) => {
+    for (let i = 0; i < 3; i++) {
+      element.dispatchEvent(
+        new WheelEvent("wheel", {
+          deltaY: 120,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+  });
   await expect(current(page)).toHaveText("2");
   await page.waitForTimeout(360);
   await page.mouse.wheel(0, -120);

@@ -55,6 +55,36 @@ labels are consequently 20 pt, matching the source XML and PDF, instead of
 References: [Office paragraph rules](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/9b34280e-538e-4811-8af9-761d34f88f20),
 [Office text-run inheritance / kerning](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/4823e093-d57b-4b05-91a6-4858174d8b64).
 
+## Windows Office light-font cache
+
+The Windows desktop app can use an **existing Arial Nova Light** face from
+`%LOCALAPPDATA%/Microsoft/FontCache/<version>/CloudFonts/Arial Nova/`. PowerPoint
+uses this Office-private face to substitute `Helvetica Light` in the public CMU
+lecture 4 presentation. Chromium otherwise resolves Windows' `Helvetica` alias
+to regular Arial, which makes the same text visibly heavier.
+
+At startup, a trusted, argument-free desktop IPC request checks only this named
+cache directory. It accepts a bounded TrueType file only when its PostScript
+name is `ArialNova-Light` and its weight is 300. Cache-version/file counts and
+font size are limited; paths escaping the cache through links are rejected.
+The renderer registers the returned bytes in memory as
+`Slide Studio Office Arial Nova Light`. This face is used after the original
+`Helvetica Light` and `Helvetica Neue` names, before the Windows `Helvetica`
+alias. Bold runs retain the previous system-font stack. Calibri and the macOS
+font behavior are unchanged.
+
+The app does not download, install, copy into its package, or redistribute this
+Office font. No Windows font-registration or Office settings are changed.
+If Office has not cached the face, if the cache is unavailable, or if validation
+fails, startup continues using the existing fallback stack. Browsers also keep
+the existing stack. The editable model and exported PPTX retain the source font
+name; exported PPTX files do not embed the cached font.
+
+The Windows font regression test checks the real selected face through Chromium
+and compares the CMU4 title's width with the native PowerPoint PDF. The corpus
+runner's `--office-fonts` option explicitly loads the same optional cache face
+for desktop-equivalent screenshots; it records whether loading succeeded.
+
 ## Remaining differences
 
 Uninstalled commercial faces such as HY나무M, HY바다M and Sandoll fonts still use

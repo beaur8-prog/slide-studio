@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 
 test('native file transport accepts typed byte slices without expanding or leaking surrounding bytes', () => {
   const filename = path.resolve('electron/main.cjs');
@@ -11,6 +12,7 @@ test('native file transport accepts typed byte slices without expanding or leaki
     __dirname: path.dirname(filename), process, Buffer, Uint8Array, URL,
     require: (id: string) => id === 'electron' ? { app: {
       isPackaged: true, setName() {}, setPath() {}, getPath() { return '/tmp'; },
+      setAppUserModelId() {},
       requestSingleInstanceLock() { return false; }, quit() {},
     } } : realRequire(id),
   };
@@ -43,4 +45,122 @@ test('Windows save names avoid reserved devices without changing Korean names', 
   expect(sandbox.filename('COM¹.pptx', 'pptx')).toBe('_COM¹.pptx');
   expect(sandbox.filename('기획안... ', 'slide')).toBe('기획안.slide');
   expect(sandbox.filename('한글 문서.pptx', 'pptx')).toBe('한글 문서.pptx');
+});
+
+for (const platform of ['win32', 'darwin']) {
+  test(`${platform} window chrome preserves native shortcuts and accepts only trusted theme updates`, async () => {
+    const filename = path.resolve('electron/main.cjs');
+    const realRequire = createRequire(filename);
+    const handlers = new Map<string, (event: any, value?: unknown) => unknown>();
+    const overlays: unknown[] = [];
+    const menuVisibility: boolean[] = [];
+    const sentActions: unknown[] = [];
+    let options: any;
+    let installedMenu: any[] = [];
+    let destroyed = false;
+    const contents = {
+      mainFrame: { url: pathToFileURL(path.resolve('dist/index.html')).href },
+      on() {}, setWindowOpenHandler() {},
+      send(...args: unknown[]) { sentActions.push(args); },
+    };
+    const sandbox: any = {
+      __dirname: path.dirname(filename), process: { ...process, platform }, Buffer, Uint8Array, URL,
+      require: (id: string) => id === 'electron' ? {
+        app: {
+          isPackaged: true, setName() {}, setPath() {}, getPath() { return '/tmp'; },
+          setAppUserModelId() {}, requestSingleInstanceLock() { return false; }, quit() {},
+        },
+        BrowserWindow: class {
+          webContents = contents;
+          constructor(config: unknown) { options = config; }
+          isDestroyed() { return destroyed; }
+          on() {} once() {}
+          async loadFile() {}
+          setMenuBarVisibility(visible: boolean) { menuVisibility.push(visible); }
+          setTitleBarOverlay(overlay: unknown) { overlays.push(overlay); }
+        },
+        ipcMain: {
+          handle(channel: string, callback: (event: any, value?: unknown) => unknown) { handlers.set(channel, callback); },
+          on() {},
+        },
+        Menu: {
+          buildFromTemplate(template: any[]) { return template; },
+          setApplicationMenu(menu: any[]) { installedMenu = menu; },
+        },
+      } : realRequire(id),
+    };
+    vm.runInNewContext(fs.readFileSync(filename, 'utf8') + '\nthis.startWindow = createWindow; this.installIPC = installIPC; this.installMenu = installMenu;', sandbox);
+    sandbox.installIPC();
+    sandbox.installMenu();
+    await sandbox.startWindow();
+
+    const saveItem = installedMenu.find(item => item.label === 'File')?.submenu
+      .find((item: any) => item.accelerator === 'CmdOrCtrl+S');
+    expect(saveItem).toBeTruthy();
+    saveItem.click();
+    expect(sentActions).toEqual([['slide-studio:menu', 'save']]);
+    expect(options.webPreferences).toMatchObject({ contextIsolation: true, nodeIntegration: false, sandbox: true });
+    if (platform === 'win32') {
+      expect(options).toMatchObject({
+        titleBarStyle: 'hidden', autoHideMenuBar: true,
+        titleBarOverlay: { color: '#151515', symbolColor: '#f2f2f2', height: 40 },
+      });
+      expect(menuVisibility).toEqual([false]);
+    } else {
+      expect(options.titleBarStyle).toBeUndefined();
+      expect(options.titleBarOverlay).toBeUndefined();
+      expect(options.autoHideMenuBar).toBe(false);
+      expect(menuVisibility).toEqual([]);
+    }
+
+    const updateTheme = handlers.get('slide-studio:set-chrome-theme')!;
+    const event = { sender: contents, senderFrame: contents.mainFrame };
+    const loadFont = handlers.get('slide-studio:load-office-light-font')!;
+    expect(() => loadFont({ ...event, sender: {} })).toThrow('editor window');
+    expect(() => loadFont({ ...event, senderFrame: { url: contents.mainFrame.url } })).toThrow('editor window');
+    expect(() => loadFont(event, 'C:\\private.ttf')).toThrow('no paths or arguments');
+    if (platform === 'darwin') expect(await loadFont(event)).toBeNull();
+    updateTheme(event, 'light');
+    updateTheme(event, 'dark');
+    expect(overlays).toHaveLength(platform === 'win32' ? 2 : 0);
+    if (platform === 'win32') {
+      expect(overlays).toEqual([
+        { color: '#f3f3f3', symbolColor: '#242424', height: 40 },
+        { color: '#151515', symbolColor: '#f2f2f2', height: 40 },
+      ]);
+    }
+    const count = overlays.length;
+    for (const invalid of ['system', '__proto__', { color: '#ff0000' }, null]) {
+      expect(() => updateTheme(event, invalid)).toThrow('dark or light');
+    }
+    expect(() => updateTheme({ ...event, sender: {} }, 'light')).toThrow('editor window');
+    expect(() => updateTheme({ ...event, senderFrame: { url: contents.mainFrame.url } }, 'light')).toThrow('editor window');
+    contents.mainFrame.url = 'https://example.com/';
+    expect(() => updateTheme(event, 'light')).toThrow('editor window');
+    contents.mainFrame.url = pathToFileURL(path.resolve('dist/index.html')).href;
+    destroyed = true;
+    expect(() => updateTheme(event, 'light')).toThrow('editor window');
+    expect(overlays).toHaveLength(count);
+  });
+}
+
+test('preload exposes an immutable platform and a narrow theme command', async () => {
+  let bridge: any;
+  const calls: unknown[] = [];
+  const sandbox = {
+    process: { platform: 'win32' },
+    window: { addEventListener() {} },
+    require: () => ({
+      contextBridge: { exposeInMainWorld(name: string, value: unknown) { expect(name).toBe('desktop'); bridge = value; } },
+      ipcRenderer: { invoke(...args: unknown[]) { calls.push(args); return Promise.resolve(); } },
+    }),
+  };
+  vm.runInNewContext(fs.readFileSync(path.resolve('electron/preload.cjs'), 'utf8'), sandbox);
+  expect(bridge.platform).toBe('win32');
+  expect(Object.isFrozen(bridge)).toBe(true);
+  await bridge.setChromeTheme('light');
+  await bridge.loadOfficeLightFont('ignored/path.ttf');
+  expect(calls).toEqual([['slide-studio:set-chrome-theme', 'light'], ['slide-studio:load-office-light-font']]);
+  expect(bridge.invoke).toBeUndefined();
+  expect(bridge.send).toBeUndefined();
 });

@@ -34,6 +34,7 @@ export interface TextParagraph {
   tabSize?: number;
   latinLineBreak?: boolean;
   eastAsianLineBreak?: boolean;
+  hangingPunctuation?: boolean;
 }
 export interface ShapePath {
   d: string;
@@ -45,6 +46,11 @@ export interface ShapePath {
 export interface TextBorder {
   color: string;
   width: number;
+}
+export interface LineEnd {
+  type: "none" | "triangle" | "stealth" | "diamond" | "oval" | "arrow";
+  width: "sm" | "med" | "lg";
+  length: "sm" | "med" | "lg";
 }
 export interface SlideElement {
   id: string;
@@ -80,9 +86,12 @@ export interface SlideElement {
   flipV?: boolean;
   crop?: [number, number, number, number];
   shape?: ShapeKind;
+  cornerRadius?: number;
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
+  lineStart?: LineEnd;
+  lineEnd?: LineEnd;
   src?: string;
   alt?: string;
 }

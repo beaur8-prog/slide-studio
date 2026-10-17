@@ -60,7 +60,15 @@ import {
   Presentation,
   FileDown,
   Printer,
+  ClipboardPaste,
+  Scissors,
+  ChevronUp,
+  Sun,
+  Moon,
+  PanelRight,
 } from "lucide-react";
+import CommandSearch from "./CommandSearch";
+import CanvasScrollbar from "./CanvasScrollbar";
 import type { Deck, ShapeKind, Slide, SlideElement } from "./types";
 import { editText, patchText, scaleElement } from "./text-layout";
 import {
@@ -79,10 +87,10 @@ import { exportPptx, importPptx, parseDeckJson, serializeDeck } from "./io";
 import { listAutosaves, loadAutosave, saveAutosave } from "./storage";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
-const shortcut = (key: string) => isMac ? `⌘${key}` : `Ctrl+${key}`;
+const shortcut = (key: string) => (isMac ? `⌘${key}` : `Ctrl+${key}`);
 
 type History = { past: Deck[]; present: Deck; future: Deck[] };
-type Tab = "home" | "insert" | "design" | "transitions" | "view";
+type Tab = "home" | "insert" | "design" | "transitions" | "slideshow" | "view";
 type Modal = "new" | "library" | "shortcuts" | "import" | null;
 const LIMIT = 60;
 const clone = <T,>(value: T): T => structuredClone(value);
@@ -221,6 +229,18 @@ export default function App() {
   const [grid, setGrid] = useState(false);
   const [guides, setGuides] = useState(false);
   const [sorter, setSorter] = useState(false);
+  const [inspectorVisible, setInspectorVisible] = useState(false);
+  const [ribbonCollapsed, setRibbonCollapsed] = useState(false);
+  const [rulerVisible, setRulerVisible] = useState(false);
+  const [chromeTheme, setChromeTheme] = useState<"dark" | "light">(() => {
+    try {
+      return localStorage.getItem("slide-studio-chrome") === "light"
+        ? "light"
+        : "dark";
+    } catch {
+      return "dark";
+    }
+  });
   const [presenting, setPresenting] = useState(false);
   const [presentIndex, setPresentIndex] = useState(0);
   const [presentNotes, setPresentNotes] = useState(false);
@@ -232,11 +252,31 @@ export default function App() {
   const [dragSlide, setDragSlide] = useState<number | null>(null);
   const [dropSlide, setDropSlide] = useState<number | null>(null);
   const canvasArea = useRef<HTMLDivElement>(null);
+  const thumbnailList = useRef<HTMLDivElement>(null);
+  const wheelGesture = useRef({
+    delta: 0,
+    lastEvent: 0,
+    lastNavigation: -Infinity,
+    direction: 0,
+  });
   const imageInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const transaction = useRef<Deck | null>(null);
   const clipboard = useRef<{ elements?: SlideElement[]; slide?: Slide }>({});
   const loadedRef = useRef(false);
+
+  useEffect(() => {
+    document.documentElement.dataset.chrome = chromeTheme;
+    try {
+      localStorage.setItem("slide-studio-chrome", chromeTheme);
+    } catch {
+      /* Optional preference storage. */
+    }
+    void window.desktop?.setChromeTheme?.(chromeTheme).catch(() => {});
+  }, [chromeTheme]);
+  useEffect(() => {
+    document.title = `${deck.name} — Slide Studio`;
+  }, [deck.name]);
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -335,6 +375,85 @@ export default function App() {
   };
 
   useEffect(() => {
+    const list = thumbnailList.current;
+    const active = list?.querySelector<HTMLElement>(".thumbnail-row.active");
+    if (!list || !active) return;
+    const frame = list.getBoundingClientRect(),
+      item = active.getBoundingClientRect();
+    if (item.top < frame.top) list.scrollTop -= frame.top - item.top + 6;
+    else if (item.bottom > frame.bottom)
+      list.scrollTop += item.bottom - frame.bottom + 6;
+  }, [activeId, ready]);
+
+  // A wheel gesture over the slide changes pages. At larger zoom levels the
+  // canvas scrolls normally until its edge; side panels keep their own scrolling.
+  useEffect(() => {
+    const area = canvasArea.current;
+    if (!area || presenting || modal || busy) return;
+    const workspace = area.parentElement!;
+    const wheel = (event: WheelEvent) => {
+      if (event.buttons || editing || editingTarget(event.target)) return;
+      const dy =
+        event.deltaY *
+        (event.deltaMode === 1
+          ? 40
+          : event.deltaMode === 2
+            ? area.clientHeight
+            : 1);
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        setZoom((previous) =>
+          Math.max(
+            0.2,
+            Math.min(1.5, (previous ?? scale) * Math.exp(-dy / 600)),
+          ),
+        );
+        return;
+      }
+      if (
+        event.shiftKey ||
+        !dy ||
+        Math.abs(event.deltaX) > Math.abs(event.deltaY)
+      )
+        return;
+      const direction = Math.sign(dy);
+      const canScroll =
+        direction > 0
+          ? area.scrollTop + area.clientHeight < area.scrollHeight - 2
+          : area.scrollTop > 2;
+      if (canScroll) {
+        wheelGesture.current.delta = 0;
+        if (event.target instanceof Node && !area.contains(event.target)) {
+          event.preventDefault();
+          area.scrollTop += dy;
+        }
+        return;
+      }
+      event.preventDefault();
+      const now = performance.now(),
+        gesture = wheelGesture.current;
+      if (now - gesture.lastEvent > 220 || direction !== gesture.direction)
+        gesture.delta = 0;
+      gesture.lastEvent = now;
+      gesture.direction = direction;
+      if (now - gesture.lastNavigation < 350) {
+        gesture.delta = 0;
+        return;
+      }
+      gesture.delta += dy;
+      if (Math.abs(gesture.delta) < 60) return;
+      gesture.delta = 0;
+      const next = activeIndex + direction;
+      if (next < 0 || next >= deck.slides.length) return;
+      gesture.lastNavigation = now;
+      selectSlide(deck.slides[next].id);
+      area.scrollTop = direction > 0 ? 0 : area.scrollHeight;
+    };
+    workspace.addEventListener("wheel", wheel, { passive: false });
+    return () => workspace.removeEventListener("wheel", wheel);
+  });
+
+  useEffect(() => {
     let disposed = false;
     loadAutosave()
       .then((saved) => {
@@ -405,11 +524,11 @@ export default function App() {
     if (!canvasArea.current) return;
     const measure = () => {
       if (canvasArea.current) {
-        const { width, height } = canvasArea.current.getBoundingClientRect();
+        const { clientWidth: width, clientHeight: height } = canvasArea.current;
         setFitScale(
           Math.min(
-            (width - 94) / deck.width,
-            (height - 72) / deck.height,
+            (width - 64) / deck.width,
+            (height - 60) / deck.height,
             1.25,
           ),
         );
@@ -885,6 +1004,11 @@ export default function App() {
         return;
       }
       const cmd = e.metaKey || e.ctrlKey;
+      if (cmd && e.key === "F1") {
+        e.preventDefault();
+        setRibbonCollapsed((value) => !value);
+        return;
+      }
       if (cmd && e.key.toLowerCase() === "s") {
         e.preventDefault();
         void saveProject();
@@ -1045,6 +1169,9 @@ export default function App() {
               "Arial",
               "Calibri",
               "Calibri Light",
+              "맑은 고딕",
+              "Segoe UI",
+              "Aptos",
               "나눔바른고딕",
               "Apple SD Gothic Neo",
               "Helvetica Neue",
@@ -1170,7 +1297,9 @@ export default function App() {
     );
   return (
     <>
-      <div className="app-shell">
+      <div
+        className={`app-shell office-shell ${window.desktop?.platform === "win32" ? "desktop-windows" : ""}`}
+      >
         <header className="topbar">
           <button
             className="app-brand"
@@ -1224,6 +1353,14 @@ export default function App() {
           </div>
           <div className="header-actions">
             <button
+              className="icon-button quick-save"
+              aria-label="빠른 저장"
+              title={`프로젝트 저장 ${shortcut("S")}`}
+              onClick={() => void saveProject()}
+            >
+              <Save size={16} />
+            </button>
+            <button
               className="icon-button"
               aria-label="실행 취소"
               title={`실행 취소 ${shortcut("Z")}`}
@@ -1241,7 +1378,85 @@ export default function App() {
             >
               <Redo2 size={17} />
             </button>
-            <span className="action-divider" />
+          </div>
+          <CommandSearch
+            enabled={!presenting && !modal && !busy}
+            commands={[
+              {
+                id: "new-slide",
+                label: "새 슬라이드",
+                hint: shortcut("M"),
+                run: () => addSlide(),
+              },
+              {
+                id: "open",
+                label: "파일 열기",
+                hint: shortcut("O"),
+                run: () => void openProject(),
+              },
+              {
+                id: "save",
+                label: "프로젝트 저장",
+                hint: shortcut("S"),
+                run: () => void saveProject(),
+              },
+              {
+                id: "text",
+                label: "텍스트 상자 삽입",
+                run: () => addElement("text"),
+              },
+              {
+                id: "shape",
+                label: "사각형 도형 삽입",
+                run: () => addElement("shape", "rect"),
+              },
+              {
+                id: "picture",
+                label: "그림 삽입",
+                run: () => imageInput.current?.click(),
+              },
+              {
+                id: "format",
+                label: "서식 패널 열기",
+                keywords: "배경 위치 크기 회전",
+                run: () => setInspectorVisible(true),
+              },
+              {
+                id: "show",
+                label: "처음부터 슬라이드 쇼",
+                hint: "F5",
+                run: () => startPresent(true),
+              },
+              {
+                id: "sorter",
+                label: "여러 슬라이드 보기",
+                run: () => setSorter(true),
+              },
+              {
+                id: "fit",
+                label: "화면에 맞춤",
+                keywords: "확대 축소",
+                run: () => setZoom(null),
+              },
+              {
+                id: "export",
+                label: "PPTX 내보내기",
+                run: () => void exportDeck(),
+              },
+              { id: "pdf", label: "PDF 내보내기", run: () => void exportPdf() },
+              ...deck.slides.map((item, index) => ({
+                id: item.id,
+                label: `${index + 1}. ${slideTitle(item)}`,
+                hint: "슬라이드로 이동",
+                keywords: item.elements.map((el) => el.text || "").join(" "),
+                run: () => {
+                  selectSlide(item.id);
+                  setSorter(false);
+                },
+              })),
+            ]}
+          />
+          <div className="document-actions">
             <button
               className="button secondary export-button"
               onClick={() => void exportDeck()}
@@ -1252,6 +1467,19 @@ export default function App() {
             <button className="button primary" onClick={() => startPresent()}>
               <Play size={15} fill="currentColor" />
               발표하기
+            </button>
+            <button
+              className="icon-button theme-toggle"
+              aria-label={
+                chromeTheme === "dark"
+                  ? "밝은 테마로 전환"
+                  : "어두운 테마로 전환"
+              }
+              onClick={() =>
+                setChromeTheme(chromeTheme === "dark" ? "light" : "dark")
+              }
+            >
+              {chromeTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
             </button>
           </div>
         </header>
@@ -1321,6 +1549,7 @@ export default function App() {
               ["insert", "삽입"],
               ["design", "디자인"],
               ["transitions", "전환"],
+              ["slideshow", "슬라이드 쇼"],
               ["view", "보기"],
             ] as [Tab, string][]
           ).map(([id, label]) => (
@@ -1329,6 +1558,7 @@ export default function App() {
               className={tab === id ? "selected-tab" : ""}
               onClick={() => {
                 setTab(id);
+                setRibbonCollapsed(false);
                 setMenu(null);
               }}
             >
@@ -1339,10 +1569,62 @@ export default function App() {
           <span className="local-badge">
             <span />내 기기에 저장
           </span>
+          <button
+            className="format-pane-toggle"
+            aria-pressed={inspectorVisible}
+            onClick={() => setInspectorVisible(!inspectorVisible)}
+          >
+            <PanelRight size={14} />
+            서식
+          </button>
+          <button
+            aria-label={ribbonCollapsed ? "리본 메뉴 펼치기" : "리본 메뉴 축소"}
+            title="리본 메뉴 표시 (Ctrl+F1)"
+            onClick={() => {
+              setRibbonCollapsed(!ribbonCollapsed);
+              setMenu(null);
+            }}
+          >
+            {ribbonCollapsed ? (
+              <ChevronDown size={14} />
+            ) : (
+              <ChevronUp size={14} />
+            )}
+          </button>
         </nav>
-        <div className="ribbon">
+        <div className="ribbon" hidden={ribbonCollapsed}>
           {tab === "home" && (
             <>
+              <div className="ribbon-group clipboard-group">
+                <div className="tools-row">
+                  <Tool
+                    icon={<ClipboardPaste size={25} />}
+                    disabled={
+                      !clipboard.current.elements && !clipboard.current.slide
+                    }
+                    onClick={pasteSelection}
+                  >
+                    붙여넣기
+                  </Tool>
+                  <div className="tools-stack">
+                    <button
+                      onClick={() => {
+                        copySelection();
+                        removeSelected();
+                      }}
+                      disabled={!selected.length}
+                    >
+                      <Scissors size={14} />
+                      잘라내기
+                    </button>
+                    <button onClick={copySelection}>
+                      <Copy size={14} />
+                      복사
+                    </button>
+                  </div>
+                </div>
+                <span className="group-label">클립보드</span>
+              </div>
               <div className="ribbon-group slide-group">
                 <div className="tools-row">
                   <div className="menu-anchor">
@@ -1652,6 +1934,14 @@ export default function App() {
                   <label>
                     <input
                       type="checkbox"
+                      checked={rulerVisible}
+                      onChange={(e) => setRulerVisible(e.target.checked)}
+                    />
+                    눈금자
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
                       checked={guides}
                       onChange={(e) => setGuides(e.target.checked)}
                     />
@@ -1686,6 +1976,57 @@ export default function App() {
                 </Tool>
                 <span className="group-label">슬라이드 쇼</span>
               </div>
+              <div className="ribbon-group">
+                <Tool
+                  icon={<PanelRight size={24} />}
+                  active={inspectorVisible}
+                  onClick={() => setInspectorVisible(!inspectorVisible)}
+                >
+                  서식 패널
+                </Tool>
+                <span className="group-label">작업 창</span>
+              </div>
+            </>
+          )}
+          {tab === "slideshow" && (
+            <>
+              <div className="ribbon-group">
+                <div className="tools-row">
+                  <Tool
+                    icon={<Presentation size={27} />}
+                    title="처음부터 (F5)"
+                    onClick={() => startPresent(true)}
+                  >
+                    처음부터
+                  </Tool>
+                  <Tool
+                    icon={<Play size={27} />}
+                    title="현재 슬라이드부터 (Shift+F5)"
+                    onClick={() => startPresent()}
+                  >
+                    현재 슬라이드부터
+                  </Tool>
+                </div>
+                <span className="group-label">슬라이드 쇼 시작</span>
+              </div>
+              <div className="ribbon-group">
+                <Tool
+                  icon={<StickyNote size={25} />}
+                  active={notesVisible}
+                  onClick={() => setNotesVisible(!notesVisible)}
+                >
+                  발표자 노트
+                </Tool>
+                <span className="group-label">발표 준비</span>
+              </div>
+              <div className="ribbon-hint">
+                <Keyboard size={19} />
+                <span>
+                  방향키 / Space로 다음 슬라이드 · B로 검은 화면
+                  <br />
+                  Esc를 누르면 편집 화면으로 돌아옵니다.
+                </span>
+              </div>
             </>
           )}
         </div>
@@ -1703,7 +2044,7 @@ export default function App() {
                 <Grid2X2 size={15} />
               </button>
             </div>
-            <div className="thumbnail-list">
+            <div className="thumbnail-list" ref={thumbnailList}>
               {deck.slides.map((s, i) => (
                 <div
                   key={s.id}
@@ -1807,73 +2148,85 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              <div
-                className="canvas-area"
-                ref={canvasArea}
-                onPointerDown={(e) => {
-                  if (e.target === e.currentTarget) setSelected([]);
-                }}
-                onDragOver={(e) => {
-                  if (e.dataTransfer.types.includes("Files"))
+              <div className="canvas-workspace">
+                <div
+                  id="slide-workspace"
+                  className="canvas-area"
+                  ref={canvasArea}
+                  onPointerDown={(e) => {
+                    if (e.target === e.currentTarget) setSelected([]);
+                  }}
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types.includes("Files"))
+                      e.preventDefault();
+                  }}
+                  onDrop={(e) => {
                     e.preventDefault();
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const file = e.dataTransfer.files[0];
-                  if (file) void addImage(file);
-                }}
-              >
-                <div className="canvas-scaler">
-                  <div className="ruler horizontal-ruler">
-                    <span>0</span>
-                    <span>{Math.round(deck.width / 4)}</span>
-                    <span>{Math.round(deck.width / 2)}</span>
-                    <span>{Math.round((deck.width * 3) / 4)}</span>
-                    <span>{deck.width}</span>
-                  </div>
-                  <SlideCanvas
-                    deck={deck}
-                    slide={slide}
-                    scale={Math.max(0.1, scale)}
-                    selected={selected}
-                    editing={editing}
-                    select={(ids) => {
-                      if (editing) {
-                        finish();
-                        setEditing(null);
+                    const file = e.dataTransfer.files[0];
+                    if (file) void addImage(file);
+                  }}
+                >
+                  <div className="canvas-scaler">
+                    <div
+                      className="ruler horizontal-ruler"
+                      hidden={!rulerVisible}
+                    >
+                      <span>0</span>
+                      <span>{Math.round(deck.width / 4)}</span>
+                      <span>{Math.round(deck.width / 2)}</span>
+                      <span>{Math.round((deck.width * 3) / 4)}</span>
+                      <span>{deck.width}</span>
+                    </div>
+                    <SlideCanvas
+                      deck={deck}
+                      slide={slide}
+                      scale={Math.max(0.1, scale)}
+                      selected={selected}
+                      editing={editing}
+                      select={(ids) => {
+                        if (editing) {
+                          finish();
+                          setEditing(null);
+                        }
+                        setSelected(ids);
+                      }}
+                      edit={setEditing}
+                      begin={begin}
+                      finish={finish}
+                      preview={(elements) =>
+                        preview((d) => ({
+                          ...d,
+                          slides: d.slides.map((s) =>
+                            s.id === slide.id ? { ...s, elements } : s,
+                          ),
+                        }))
                       }
-                      setSelected(ids);
-                    }}
-                    edit={setEditing}
-                    begin={begin}
-                    finish={finish}
-                    preview={(elements) =>
-                      preview((d) => ({
-                        ...d,
-                        slides: d.slides.map((s) =>
-                          s.id === slide.id ? { ...s, elements } : s,
-                        ),
-                      }))
-                    }
-                    changeText={(id, text) =>
-                      preview((d) => ({
-                        ...d,
-                        slides: d.slides.map((s) =>
-                          s.id === slide.id
-                            ? {
-                                ...s,
-                                elements: s.elements.map((el) =>
-                                  el.id === id ? editText(el, text) : el,
-                                ),
-                              }
-                            : s,
-                        ),
-                      }))
-                    }
-                    showGuides={guides}
-                    grid={grid}
-                  />
+                      changeText={(id, text) =>
+                        preview((d) => ({
+                          ...d,
+                          slides: d.slides.map((s) =>
+                            s.id === slide.id
+                              ? {
+                                  ...s,
+                                  elements: s.elements.map((el) =>
+                                    el.id === id ? editText(el, text) : el,
+                                  ),
+                                }
+                              : s,
+                          ),
+                        }))
+                      }
+                      showGuides={guides}
+                      grid={grid}
+                    />
+                  </div>
                 </div>
+                <CanvasScrollbar
+                  areaRef={canvasArea}
+                  activeIndex={activeIndex}
+                  slideCount={deck.slides.length}
+                  onSelect={(index) => selectSlide(deck.slides[index].id)}
+                />
               </div>
             )}
             {notesVisible && (
@@ -1908,10 +2261,17 @@ export default function App() {
               </div>
             )}
           </section>
-          <aside className="inspector">
+          <aside className="inspector" hidden={!inspectorVisible}>
             <div className="inspector-heading">
               <Settings2 size={16} />
               <span>{selectedElement ? "개체 서식" : "슬라이드 서식"}</span>
+              <button
+                className="icon-button"
+                aria-label="서식 패널 닫기"
+                onClick={() => setInspectorVisible(false)}
+              >
+                <X size={14} />
+              </button>
               {selectedElement && (
                 <button
                   className="icon-button"

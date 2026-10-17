@@ -38,6 +38,47 @@ export function restoreLayoutXml(
     const node = names.get(el.id);
     if (!node) continue;
     if (
+      (el.shape === "line" || el.shape === "arrow") &&
+      (el.lineStart || el.lineEnd)
+    ) {
+      const line = child(child(node, "spPr"), "ln");
+      if (line) {
+        for (const [name, marker] of [
+          ["headEnd", el.lineStart],
+          ["tailEnd", el.lineEnd],
+        ] as const) {
+          if (!marker) continue;
+          child(line, name)?.remove();
+          make(
+            name,
+            { type: marker.type, w: marker.width, len: marker.length },
+            line,
+          );
+        }
+      }
+    }
+    if (el.shape === "roundRect" && el.cornerRadius !== undefined) {
+      const geometry = child(child(node, "spPr"), "prstGeom");
+      if (geometry) {
+        const adjustments =
+          child(geometry, "avLst") ?? make("avLst", {}, geometry);
+        for (const guide of Array.from(adjustments.children))
+          if (guide.getAttribute("name") === "adj") guide.remove();
+        const shortestSide = Math.min(el.width, el.height);
+        const radius = Math.max(0, Math.min(el.cornerRadius, shortestSide / 2));
+        // PptxGenJS omits a zero rectRadius; write the explicit adjustment so
+        // square corners survive a round trip instead of regaining the preset.
+        make(
+          "gd",
+          {
+            name: "adj",
+            fmla: `val ${shortestSide > 0 ? Math.round((radius / shortestSide) * 100000) : 0}`,
+          },
+          adjustments,
+        );
+      }
+    }
+    if (
       el.borders &&
       !el.borders.every(
         (b) =>
@@ -207,6 +248,7 @@ export function restoreLayoutXml(
         for (const [key, value] of [
           ["latinLnBrk", paragraph.latinLineBreak],
           ["eaLnBrk", paragraph.eastAsianLineBreak],
+          ["hangingPunct", paragraph.hangingPunctuation],
         ] as const)
           if (value !== undefined) pr.setAttribute(key, value ? "1" : "0");
         if (paragraph.lineSpacing !== undefined)

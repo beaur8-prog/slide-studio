@@ -3,6 +3,7 @@ import PptxGenJS from "pptxgenjs";
 import type {
   Deck,
   ImportResult,
+  LineEnd,
   ShapeKind,
   Slide,
   SlideElement,
@@ -320,6 +321,37 @@ export function parseDeckJson(text: string): Deck {
           for (const key of ["flipH", "flipV"] as const)
             if (source[key] !== undefined)
               el[key] = booleanValue(source[key], `${elLabel} 뒤집기`);
+          for (const key of ["lineStart", "lineEnd"] as const) {
+            if (source[key] === undefined) continue;
+            const marker = source[key];
+            if (!marker || typeof marker !== "object" || Array.isArray(marker))
+              fail(`${elLabel}: 잘못된 선 끝 모양`);
+            const value = marker as Record<string, unknown>;
+            el[key] = {
+              type: enumValue(
+                value.type,
+                [
+                  "none",
+                  "triangle",
+                  "stealth",
+                  "diamond",
+                  "oval",
+                  "arrow",
+                ] as const,
+                elLabel,
+              ),
+              width: enumValue(
+                value.width,
+                ["sm", "med", "lg"] as const,
+                elLabel,
+              ),
+              length: enumValue(
+                value.length,
+                ["sm", "med", "lg"] as const,
+                elLabel,
+              ),
+            };
+          }
           for (const key of ["crop", "textInsets"] as const) {
             if (source[key] === undefined) continue;
             if (!Array.isArray(source[key]) || source[key].length !== 4)
@@ -434,6 +466,7 @@ export function parseDeckJson(text: string): Deck {
               for (const key of [
                 "latinLineBreak",
                 "eastAsianLineBreak",
+                "hangingPunctuation",
               ] as const)
                 if (p[key] !== undefined)
                   paragraph[key] = booleanValue(p[key], elLabel);
@@ -480,6 +513,13 @@ export function parseDeckJson(text: string): Deck {
             );
           if (source.shape !== undefined)
             el.shape = enumValue(source.shape, [...SHAPES], `${elLabel} 도형`);
+          if (source.cornerRadius !== undefined)
+            el.cornerRadius = numberValue(
+              source.cornerRadius,
+              `${elLabel} 모서리 반경`,
+              0,
+              100000,
+            );
           if (source.alt !== undefined)
             el.alt = stringValue(source.alt, `${elLabel} 대체 텍스트`, 10000);
           if (el.type === "text" && el.text === undefined)
@@ -1331,7 +1371,14 @@ export async function importPptx(
     };
     const readLine = (
       nodes: (Element | undefined)[],
-    ): { color: string; width: number; opacity: number; arrow: boolean } => {
+    ): {
+      color: string;
+      width: number;
+      opacity: number;
+      arrow: boolean;
+      start?: LineEnd;
+      end?: LineEnd;
+    } => {
       for (const node of nodes) {
         const line = child(child(node, "spPr"), "ln");
         if (line) {
@@ -1340,10 +1387,29 @@ export async function importPptx(
             readColor(child(child(node, "style"), "lnRef"), theme);
           if (child(line, "noFill"))
             return { color: "transparent", width: 0, opacity: 1, arrow: false };
-          const end = child(line, "tailEnd")?.getAttribute("type") ?? "none";
-          const start = child(line, "headEnd")?.getAttribute("type") ?? "none";
-          if (start !== "none")
-            warn("시작점 화살표는 끝점 화살표로 단순화됩니다.");
+          const marker = (name: string): LineEnd => {
+            const n = child(line, name);
+            const type = n?.getAttribute("type") ?? "none";
+            const size = (key: string) => {
+              const value = n?.getAttribute(key);
+              return value === "sm" || value === "lg" ? value : "med";
+            };
+            return {
+              type: [
+                "triangle",
+                "stealth",
+                "diamond",
+                "oval",
+                "arrow",
+              ].includes(type)
+                ? (type as LineEnd["type"])
+                : "none",
+              width: size("w"),
+              length: size("len"),
+            };
+          };
+          const start = marker("headEnd"),
+            end = marker("tailEnd");
           if (
             child(line, "prstDash")?.getAttribute("val") &&
             child(line, "prstDash")?.getAttribute("val") !== "solid"
@@ -1356,7 +1422,9 @@ export async function importPptx(
                 : (color?.color ?? "transparent"),
             width: color ? attrNumber(line, "w", 12700) / EMU_PER_PX : 0,
             opacity: color?.opacity ?? 1,
-            arrow: end !== "none" || start !== "none",
+            arrow: end.type !== "none" || start.type !== "none",
+            start,
+            end,
           };
         }
       }
@@ -1414,11 +1482,6 @@ export async function importPptx(
         return;
       }
       if (
-        xfrm?.getAttribute("flipH") === "1" ||
-        xfrm?.getAttribute("flipV") === "1"
-      )
-        warn("뒤집힌 도형·텍스트는 뒤집기 없이 가져옵니다.");
-      if (
         first(properties, "effectLst")?.children.length ||
         first(properties, "scene3d") ||
         first(properties, "sp3d")
@@ -1443,16 +1506,32 @@ export async function importPptx(
             stroke: true,
           },
         ];
-      if (!paths && preset === "donut")
-        paths = [
-          {
-            d: "M 100 50 A 50 50 0 0 1 0 50 A 50 50 0 0 1 100 50 Z M 75 50 A 25 25 0 0 0 25 50 A 25 25 0 0 0 75 50 Z",
-            width: 100,
-            height: 100,
-            fill: true,
-            stroke: true,
-          },
-        ];
+      if (!paths && preset === "donut") {
+        const guide = children(
+          child(child(properties, "prstGeom"), "avLst"),
+          "gd",
+        ).find((n) => n.getAttribute("name") === "adj");
+        const value = guide
+          ?.getAttribute("fmla")
+          ?.match(/^\s*val\s+(-?\d+(?:\.\d+)?)\s*$/);
+        const adjustment = clamp(value ? Number(value[1]) : 25000, 0, 50000);
+        // Keep native EMU precision: custom path coordinates become integers
+        // on PPTX export, which would visibly round a small pixel-space ring.
+        const width = Math.max(1, attrNumber(child(xfrm, "ext"), "cx"));
+        const height = Math.max(1, attrNumber(child(xfrm, "ext"), "cy"));
+        const rx = width / 2,
+          ry = height / 2;
+        // DrawingML subtracts a fraction of the shortest side from both radii.
+        const thickness = (Math.min(width, height) * adjustment) / 100000;
+        const ix = rx - thickness,
+          iy = ry - thickness;
+        const outer = `M ${width} ${ry} A ${rx} ${ry} 0 0 1 0 ${ry} A ${rx} ${ry} 0 0 1 ${width} ${ry} Z`;
+        const inner =
+          ix > 0 && iy > 0
+            ? ` M ${rx + ix} ${ry} A ${ix} ${iy} 0 0 0 ${rx - ix} ${ry} A ${ix} ${iy} 0 0 0 ${rx + ix} ${ry} Z`
+            : "";
+        paths = [{ d: outer + inner, width, height, fill: true, stroke: true }];
+      }
       const body = child(node, "txBody");
       const text = bodyText(body);
       const isTextBox =
@@ -1474,6 +1553,31 @@ export async function importPptx(
             : "rect";
       if (paths) shape = "custom";
       if (
+        (xfrm?.getAttribute("flipH") === "1" ||
+          xfrm?.getAttribute("flipV") === "1") &&
+        !paths &&
+        shape !== "line" &&
+        shape !== "arrow"
+      )
+        warn("뒤집힌 도형·텍스트는 뒤집기 없이 가져옵니다.");
+      // The roundRect adjustment is a fraction of its shortest side, not a
+      // fixed pixel radius. Office's preset pins it between 0 and 50000.
+      let cornerRadius: number | undefined;
+      if (shape === "roundRect") {
+        const guide = children(
+          child(child(properties, "prstGeom"), "avLst"),
+          "gd",
+        ).find((n) => n.getAttribute("name") === "adj");
+        const constant = guide
+          ?.getAttribute("fmla")
+          ?.match(/^\s*val\s+(-?\d+(?:\.\d+)?)\s*$/);
+        const adjustment = constant ? Number(constant[1]) : 16667;
+        cornerRadius =
+          (Math.min(geometry.width, geometry.height) *
+            clamp(Number.isFinite(adjustment) ? adjustment : 16667, 0, 50000)) /
+          100000;
+      }
+      if (
         !paths &&
         ((!SHAPES.has(preset as ShapeKind) &&
           !["straightConnector1", "rightArrow"].includes(preset)) ||
@@ -1487,6 +1591,7 @@ export async function importPptx(
           id: uid(),
           type: "shape",
           shape,
+          ...(cornerRadius !== undefined ? { cornerRadius } : {}),
           ...(paths
             ? {
                 paths,
@@ -1495,7 +1600,11 @@ export async function importPptx(
               }
             : {}),
           ...geometry,
-          ...((shape === "line" || shape === "arrow") && geometry.height > 0
+          ...(shape === "line" || shape === "arrow"
+            ? { lineStart: line.start, lineEnd: line.end }
+            : {}),
+          ...((shape === "line" || shape === "arrow") &&
+          (geometry.height > 0 || xfrm?.getAttribute("flipH") === "1")
             ? (() => {
                 // OOXML connector extents encode two endpoints. The editor's
                 // line is horizontal within its box, so retain the diagonal as
@@ -1530,7 +1639,17 @@ export async function importPptx(
       const textElement = makeText(
         body,
         chain,
-        geometry,
+        // Round presets lay text inside their inscribed rectangle, then apply
+        // the body margins. Using the outer bounds changes Korean line breaks.
+        !pureText && (preset === "ellipse" || preset === "donut")
+          ? {
+              ...geometry,
+              x: geometry.x + (geometry.width * (1 - Math.SQRT1_2)) / 2,
+              y: geometry.y + (geometry.height * (1 - Math.SQRT1_2)) / 2,
+              width: geometry.width * Math.SQRT1_2,
+              height: geometry.height * Math.SQRT1_2,
+            }
+          : geometry,
         parent,
         undefined,
         undefined,
@@ -1775,6 +1894,16 @@ export async function importPptx(
                 .map((s) => child(s, "tcTxStyle"))
                 .filter((n): n is Element => Boolean(n)),
             );
+            // PowerPoint's default table line advance is 1.2 em. Keep it
+            // explicit so browser font metrics cannot make a fitted row taller
+            // than the same row in PowerPoint (notably with Malgun Gothic).
+            for (const paragraph of el.paragraphs ?? []) {
+              if (
+                paragraph.lineHeight === undefined &&
+                paragraph.lineSpacing === undefined
+              )
+                paragraph.lineHeight = 1.2;
+            }
             el.fill = fill?.color ?? "transparent";
             el.borders = ["T", "R", "B", "L"].map((suffix, i) => {
               const side = ["top", "right", "bottom", "left"][i];

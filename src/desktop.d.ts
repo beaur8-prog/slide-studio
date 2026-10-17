@@ -3,6 +3,9 @@ export {};
 declare global {
   interface Window {
     desktop?: {
+      readonly platform?: string;
+      loadOfficeLightFont?(): Promise<Uint8Array | null>;
+      setChromeTheme?(theme: "dark" | "light"): Promise<void>;
       saveFile(payload: {
         name: string;
         data: Uint8Array;

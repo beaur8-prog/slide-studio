@@ -2,6 +2,8 @@
 
 Mac과 Windows에서 독립적으로 실행하는 프레젠테이션 편집 앱입니다. PowerPoint의 공개 사용법에 나오는 리본, 슬라이드 목록, 개체 편집과 발표 흐름을 참고해 새로 구현했습니다. Microsoft PowerPoint 원본이나 원본 소스를 복원한 제품은 아닙니다.
 
+이 작업 사본은 실행 중인 Windows PowerPoint의 화면을 참고해 제목 표시줄·리본·작업 영역을 개선했습니다. **Ctrl+K**로 명령과 슬라이드를 검색하고, **Ctrl+F1**로 리본을 접을 수 있습니다. 오른쪽 위 **서식** 버튼으로 서식 패널을 열고, 해/달 버튼으로 편집 화면의 밝기를 바꿉니다. 분석 근거와 검증 범위는 [Windows PowerPoint 관찰 기록](POWERPOINT-ANALYSIS.md)을 참고하세요. 아래 다운로드 링크는 기존 v1.3.0 공개 릴리스이며 이 작업 사본의 변경은 아직 게시되지 않았습니다.
+
 ## 다운로드와 실행
 
 [최신 버전 다운로드](https://github.com/beaur8-prog/slide-studio/releases/latest)에서 운영체제에 맞는 ZIP을 받으세요. 앱 안에 실행 환경이 포함되어 있으므로 **PowerPoint, Node.js, 인터넷 연결 없이** 사용할 수 있습니다.
@@ -22,6 +24,10 @@ Windows에서는 EXE와 `resources`, `locales`, DLL을 함께 보관하세요. M
 3. 글자를 더블클릭해 입력합니다. 위쪽 도구에서 글꼴·크기·색을 바꾸고 **삽입**에서 도형과 이미지를 추가합니다.
 4. **파일 → 프로젝트 저장**으로 편집용 `.slide` 파일을 보관합니다. 전달용 파일은 **PPTX 내보내기** 또는 **파일 → PDF 내보내기**로 만듭니다.
 5. **발표하기**를 누르고 방향키 / Space로 이동합니다. Esc로 편집 화면에 돌아옵니다.
+
+편집 화면의 슬라이드 위에서 마우스 휠을 내리면 다음 장, 올리면 이전 장으로 이동합니다. 확대 상태에서는 먼저 화면을 스크롤한 뒤 가장자리에서 장을 넘깁니다. **Ctrl+휠**은 확대·축소하며, 왼쪽 목록은 자체적으로 스크롤됩니다.
+
+큰 슬라이드 편집 영역 오른쪽의 스크롤바는 화면에 맞춤 상태에서도 항상 표시됩니다. 손잡이를 끌어 원하는 장으로 이동하거나 아래쪽 이전/다음 장 버튼을 사용할 수 있습니다. 확대 상태에서는 슬라이드 내부 위치도 조절하며, 스크롤바에 키보드 포커스를 두면 방향키·Page Up/Down·Home/End로 이동할 수 있습니다.
 
 자동 저장은 현재 기기에만 남으며 기기 간 동기화를 하지 않습니다. 중요한 작업은 `.slide` 파일로도 저장하세요. 이전 문서는 왼쪽 위 로고 또는 **파일 → 내 프레젠테이션**에서 찾을 수 있습니다.
 
@@ -101,4 +107,4 @@ React + TypeScript 편집기, Electron 데스크톱 셸, IndexedDB 자동 저장
 - [Microsoft: 슬라이드 추가·재정렬·복제·삭제](https://support.microsoft.com/en-gb/powerpoint/training/add-rearrange-duplicate-and-delete-slides-in-powerpoint)
 - [Microsoft: Mac용 Office 패키지 배포 정보](https://learn.microsoft.com/en-us/officeupdates/update-history-office-for-mac)
 
-화면 동작은 위의 공개 문서를 참고했습니다. PowerPoint 실행 화면을 직접 관찰하거나 내부 코드를 복원한 결과가 아닙니다. 원본 설치 패키지, 다운로드한 테스트 문서, 로컬 공유 설정과 생성 결과는 저장소와 배포 앱에 포함하지 않습니다. 포함한 글꼴·디코더의 라이선스는 [public/licenses](public/licenses)에 있습니다.
+기존 구현은 위 공개 문서를 참고했고, 이번 Windows UI 변경은 [실행 화면 관찰](POWERPOINT-ANALYSIS.md)을 추가로 반영했습니다. PowerPoint 내부 코드를 복원한 결과는 아닙니다. 원본 설치 패키지, 다운로드한 테스트 문서, 로컬 공유 설정과 생성 결과는 저장소와 배포 앱에 포함하지 않습니다. 포함한 글꼴·디코더의 라이선스는 [public/licenses](public/licenses)에 있습니다.

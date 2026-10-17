@@ -2,11 +2,18 @@ import { chromium } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { createRequire } from "node:module";
 
 const root = path.resolve(import.meta.dirname, "..");
 const label = process.argv[2] || "baseline";
 const requested = process.argv.slice(3).filter((arg) => !arg.startsWith("--"));
 const roundTrip = process.argv.includes("--round-trip");
+const useOfficeFonts = process.argv.includes("--office-fonts");
+const officeLightFont = useOfficeFonts
+  ? await createRequire(import.meta.url)(
+      "../electron/office-fonts.cjs",
+    ).readOfficeArialNovaLight()
+  : null;
 const repeats = Math.max(
   1,
   Math.min(
@@ -21,7 +28,9 @@ const output = path.join(root, "qa", "results", label);
 await fs.mkdir(output, { recursive: true });
 const files = (await fs.readdir(path.join(root, "qa", "samples"))).filter(
   (name) =>
-    name.endsWith(".pptx") && (!requested.length || requested.includes(name)),
+    name.endsWith(".pptx") &&
+    !name.startsWith("~$") &&
+    (!requested.length || requested.includes(name)),
 );
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const results = [];
@@ -55,6 +64,19 @@ try {
           .querySelector(".save-indicator")
           ?.textContent.includes("저장됨"),
       );
+      if (useOfficeFonts) {
+        item.office_light_font_loaded = await page.evaluate(
+          async (bytes) => {
+            const { registerOfficeLightFont } = await import(
+              "/src/desktop-fonts.ts"
+            );
+            return registerOfficeLightFont(
+              bytes ? new Uint8Array(bytes) : null,
+            );
+          },
+          officeLightFont ? Array.from(officeLightFont) : null,
+        );
+      }
       await page.evaluate(() => {
         window.__qaTasks = [];
         new PerformanceObserver((list) =>
@@ -76,6 +98,8 @@ try {
             status: "parsed",
             import_ms: ms,
             slides: result.deck.slides.length,
+            width: result.deck.width,
+            height: result.deck.height,
             elements: result.deck.slides.reduce(
               (n, s) => n + s.elements.length,
               0,
@@ -194,7 +218,10 @@ try {
                       if (!match[0].trim()) continue;
                       const range = document.createRange();
                       range.setStart(node, match.index + match[0].search(/\S/));
-                      range.setEnd(node, match.index + match[0].trimEnd().length);
+                      range.setEnd(
+                        node,
+                        match.index + match[0].trimEnd().length,
+                      );
                       rects.push(...range.getClientRects());
                     }
                   }
@@ -314,15 +341,67 @@ try {
             ]),
           ];
           item.screenshots = [];
+          // Capture each selected slide at the viewport origin, independently
+          // of scrolling through the long print-deck. The print DOM above
+          // remains useful for layout measurements.
+          await page.emulateMedia({ media: "screen" });
+          await page.setViewportSize({
+            width: Math.max(1440, Math.ceil(stats.width)),
+            height: Math.max(1000, Math.ceil(stats.height)),
+          });
+          await page.evaluate(async () => {
+            const { default: React } = await import(
+              "/node_modules/.vite/deps/react.js"
+            );
+            const {
+              default: { createRoot },
+            } = await import("/node_modules/.vite/deps/react-dom_client.js");
+            const { SlideVisual } = await import("/src/SlideCanvas.tsx");
+            const { loadAutosave } = await import("/src/storage.ts");
+            const deck = await loadAutosave();
+            const host = document.createElement("div");
+            host.id = "qa-isolated-slide";
+            host.style.cssText = `position:fixed;left:0;top:0;width:${deck.width}px;height:${deck.height}px;z-index:2147483647;overflow:hidden;background:white`;
+            document.body.append(host);
+            const root = createRoot(host);
+            window.__qaScreenshot = {
+              render: (index) =>
+                root.render(
+                  React.createElement(SlideVisual, {
+                    slide: deck.slides[index],
+                    width: deck.width,
+                    height: deck.height,
+                  }),
+                ),
+              dispose: () => {
+                root.unmount();
+                host.remove();
+              },
+            };
+          });
           for (const index of picks) {
             const name = `${filename.replace(".pptx", "")}-slide-${String(index + 1).padStart(3, "0")}.png`;
+            await page.evaluate(async (slideIndex) => {
+              window.__qaScreenshot.render(slideIndex);
+              await new Promise((resolve) =>
+                requestAnimationFrame(() => requestAnimationFrame(resolve)),
+              );
+              await document.fonts.ready;
+              await Promise.all(
+                Array.from(
+                  document.querySelectorAll("#qa-isolated-slide img"),
+                ).map((img) => img.decode().catch(() => {})),
+              );
+            }, index);
             await page
-              .locator(".print-slide")
-              .nth(index)
+              .locator("#qa-isolated-slide")
               .screenshot({ path: path.join(output, name), timeout: 30000 });
             item.screenshots.push(name);
           }
-          await page.emulateMedia({ media: "screen" });
+          await page.evaluate(() => {
+            window.__qaScreenshot.dispose();
+            delete window.__qaScreenshot;
+          });
           if (roundTrip)
             item.round_trip = await page.evaluate(async () => {
               const { loadAutosave } = await import("/src/storage.ts");

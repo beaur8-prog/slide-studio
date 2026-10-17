@@ -28,7 +28,7 @@ test("Korean composition, mixed-language input, undo/redo and autosave survive a
   await page.reload();
   await page.getByTestId("slide-element").dblclick();
   const input = page.getByRole("textbox", { name: "슬라이드 텍스트 편집" });
-  await input.press("Meta+A");
+  await input.press("ControlOrMeta+A");
   await input.press("Backspace");
   const cdp = await context.newCDPSession(page);
   // Chromium's composition engine generates composition/input events. This does

@@ -3,6 +3,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('desktop', Object.freeze({
+  platform: process.platform,
+  loadOfficeLightFont: () => ipcRenderer.invoke('slide-studio:load-office-light-font'),
+  setChromeTheme: theme => ipcRenderer.invoke('slide-studio:set-chrome-theme', theme),
   saveFile: payload => ipcRenderer.invoke('slide-studio:save-file', payload),
   openFile: () => ipcRenderer.invoke('slide-studio:open-file'),
   exportPDF: name => ipcRenderer.invoke('slide-studio:export-pdf', name),

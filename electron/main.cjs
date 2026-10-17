@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { fileURLToPath } = require('node:url');
+const { readOfficeArialNovaLight } = require('./office-fonts.cjs');
 
 const PRODUCT_NAME = 'Slide Studio';
 const DEV_URL = 'http://127.0.0.1:5190';
@@ -12,9 +13,14 @@ const IS_DEV = !app.isPackaged && process.env.SLIDE_STUDIO_DEV === '1';
 const INDEX_PATH = path.resolve(__dirname, '..', 'dist', 'index.html');
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set(['slide', 'pptx']);
+const CHROME_THEMES = {
+  dark: { color: '#151515', symbolColor: '#f2f2f2', height: 40 },
+  light: { color: '#f3f3f3', symbolColor: '#242424', height: 40 },
+};
 
 let mainWindow = null;
 let nativeOperationPending = false;
+let officeLightFont;
 
 app.setName(PRODUCT_NAME);
 app.setPath('userData', path.join(app.getPath('appData'), PRODUCT_NAME));
@@ -146,6 +152,19 @@ function installMenu() {
 }
 
 function installIPC() {
+  ipcMain.handle('slide-studio:load-office-light-font', (event, ...args) => {
+    requireTrustedSender(event);
+    if (args.length) throw new TypeError('This font request takes no paths or arguments.');
+    officeLightFont ??= readOfficeArialNovaLight({ platform: process.platform });
+    return officeLightFont;
+  });
+
+  ipcMain.handle('slide-studio:set-chrome-theme', (event, theme) => {
+    requireTrustedSender(event);
+    if (theme !== 'dark' && theme !== 'light') throw new TypeError('Choose a dark or light window theme.');
+    if (process.platform === 'win32') mainWindow.setTitleBarOverlay(CHROME_THEMES[theme]);
+  });
+
   ipcMain.handle('slide-studio:save-file', (event, payload) => withNativeDialog(event, async () => {
     const file = decodeFilePayload(payload);
     const result = await dialog.showSaveDialog(mainWindow, {
@@ -274,9 +293,13 @@ async function createWindow() {
     minWidth: 1080,
     minHeight: 720,
     title: PRODUCT_NAME,
-    backgroundColor: '#f8f7f4',
+    backgroundColor: process.platform === 'win32' ? '#151515' : '#f8f7f4',
     show: false,
-    autoHideMenuBar: false,
+    autoHideMenuBar: process.platform === 'win32',
+    ...(process.platform === 'win32' ? {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: CHROME_THEMES.dark,
+    } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -289,6 +312,10 @@ async function createWindow() {
       spellcheck: true,
     },
   });
+
+  // Keep the native menu installed for accelerators while the renderer owns the
+  // visible ribbon. Window Controls Overlay retains Windows' native caption buttons.
+  if (process.platform === 'win32') mainWindow.setMenuBarVisibility(false);
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event, url) => {

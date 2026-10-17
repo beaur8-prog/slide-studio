@@ -1,0 +1,183 @@
+/* Shell geometry from the observed Windows PowerPoint workspace. Slide artwork
+   keeps its own document colors; the preference only changes editor chrome. */
+:root {
+  font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+  --chrome-title: #151515;
+  --chrome-ribbon: #333333;
+  --chrome-surface: #292929;
+  --chrome-canvas: #242424;
+  --chrome-field: #3d3d3d;
+  --chrome-hover: #484848;
+  --chrome-text: #f0f0f0;
+  --chrome-secondary: #c3c3c3;
+  --chrome-border: #505050;
+  --accent: #dc8b73;
+  --accent-light: #543b33;
+  --line: #505050;
+  --thumbnail-scroll-track: #202020;
+  --thumbnail-scroll-thumb: #888888;
+}
+:root[data-chrome="light"] {
+  --chrome-title: #f3f3f3;
+  --chrome-ribbon: #fafafa;
+  --chrome-surface: #f3f3f3;
+  --chrome-canvas: #e6e6e6;
+  --chrome-field: #ffffff;
+  --chrome-hover: #e4e4e4;
+  --chrome-text: #242424;
+  --chrome-secondary: #626262;
+  --chrome-border: #d2d2d2;
+  --accent: #b7472a;
+  --accent-light: #f7e5dd;
+  --line: #d2d2d2;
+  --thumbnail-scroll-track: #e2e2e2;
+  --thumbnail-scroll-thumb: #888888;
+}
+.office-shell { color: var(--chrome-text); min-width: 970px; background: var(--chrome-canvas); }
+.office-shell [hidden] { display: none !important; }
+.office-shell .topbar {
+  height: 40px; padding: 0 12px; gap: 14px; background: var(--chrome-title);
+  border: 0; position: relative; z-index: 20;
+}
+.desktop-windows .topbar { padding-right: 150px; }
+.office-shell .app-brand { font-size: 12px; gap: 8px; letter-spacing: 0; flex-shrink: 0; }
+.office-shell .brand-mark { width: 23px; height: 23px; border-radius: 3px; background: #c25436; }
+.office-shell .brand-mark svg { width: 17px; height: 17px; }
+.office-shell .brand-light { color: inherit; }
+.office-shell .top-separator { display: none; }
+.office-shell .document-title { flex: 1; min-width: 120px; max-width: 330px; flex-direction: row; align-items: center; gap: 10px; }
+.office-shell .document-title input { font-size: 12px; font-weight: 400; color: var(--chrome-text); }
+.office-shell .save-indicator { white-space: nowrap; color: var(--chrome-secondary); font-size: 10px; }
+.office-shell .save-indicator.error { color: #ffac99; }
+.office-shell .header-actions { order: -1; margin: 0; gap: 2px; }
+.office-shell .app-brand { order: -2; }
+.office-shell .document-actions { display: flex; align-items: center; gap: 5px; margin-left: auto; }
+.office-shell .document-actions .button { height: 27px; border-radius: 3px; padding: 0 10px; font-size: 11px; }
+.office-shell .button.secondary { color: var(--chrome-text); border-color: var(--chrome-border); background: var(--chrome-field); }
+.office-shell .button.primary { background: #b7472a; border-color: #b7472a; }
+.office-shell .icon-button { color: var(--chrome-secondary); border-radius: 2px; }
+.office-shell .icon-button:not(:disabled):hover { color: var(--chrome-text); background: var(--chrome-hover); }
+.office-shell .tabs { height: 34px; padding: 0 12px; gap: 0; background: var(--chrome-title); border: 0; z-index: 9; }
+.office-shell .tabs > button, .office-shell .tabs > .menu-anchor > button { padding: 0 17px; font-size: 12px; color: var(--chrome-text); }
+.office-shell .tabs .selected-tab { background: var(--chrome-ribbon); font-weight: 600; }
+.office-shell .tabs > .selected-tab::after { height: 2px; bottom: 3px; }
+.office-shell .tabs > button:hover, .office-shell .tabs .file-tab:hover { background: var(--chrome-hover); }
+.office-shell .tabs .format-pane-toggle { padding: 0 12px; margin-left: 16px; }
+.office-shell .tabs .format-pane-toggle[aria-pressed="true"] { background: var(--chrome-ribbon); }
+.office-shell .local-badge { color: var(--chrome-secondary); }
+.office-shell .local-badge > span { background: #83b995; }
+.office-shell .ribbon { height: 97px; padding: 6px 12px 5px; background: var(--chrome-ribbon); border-bottom: 1px solid var(--chrome-border); }
+.office-shell .ribbon-group { padding: 0 12px 19px; flex-shrink: 0; border-color: var(--chrome-border); }
+.office-shell .ribbon-group:first-child { padding-left: 0; }
+.office-shell .group-label { font-size: 10px; color: var(--chrome-secondary); }
+.office-shell .tool { border-radius: 2px; color: var(--chrome-text); min-width: 48px; font-size: 11px; gap: 5px; }
+.office-shell .tool:not(:disabled):hover, .office-shell .tools-stack > button:hover { background: var(--chrome-hover); }
+.office-shell .tool.active, .office-shell .tool.small.active { background: var(--chrome-hover); color: var(--chrome-text); outline: 1px solid var(--accent); }
+.office-shell .tools-stack > button { font-size: 11px; border-radius: 2px; }
+.office-shell .tools-stack label { font-size: 11px; }
+.office-shell .font-group { width: 212px; }
+.office-shell .font-row input, .office-shell .font-row select { border-radius: 2px; background: var(--chrome-field); border-color: var(--chrome-border); color: var(--chrome-text); color-scheme: dark; }
+:root[data-chrome="light"] .office-shell .font-row input, :root[data-chrome="light"] .office-shell .font-row select { color-scheme: light; }
+.office-shell .ribbon-text-action, .office-shell .ribbon-hint { color: var(--chrome-secondary); }
+.office-shell .ribbon-hint { padding-left: 20px; }
+.office-shell .arrange-group { min-width: 105px; }
+.office-shell .theme-choice.chosen { background: var(--accent-light); }
+.office-shell .theme-choice small { color: var(--chrome-secondary); }
+.office-shell .slide-sidebar { width: 238px; background: var(--chrome-surface); border-color: var(--chrome-border); }
+.office-shell .sidebar-heading { height: 31px; padding: 0 13px 0 17px; color: var(--chrome-secondary); font-size: 11px; }
+.office-shell .sidebar-heading small { color: var(--chrome-secondary); }
+.office-shell .thumbnail-list {
+  min-height: 0; overflow-x: hidden; overflow-y: scroll;
+  padding: 3px 5px 15px 6px; scrollbar-gutter: stable;
+  scrollbar-width: auto; scrollbar-color: auto;
+}
+.office-shell .thumbnail-list::-webkit-scrollbar { width: 14px; }
+.office-shell .thumbnail-list::-webkit-scrollbar-track { background: var(--thumbnail-scroll-track); }
+.office-shell .thumbnail-list::-webkit-scrollbar-thumb {
+  background: var(--thumbnail-scroll-thumb); border: 3px solid var(--thumbnail-scroll-track);
+  border-radius: 7px; min-height: 36px;
+}
+.office-shell .thumbnail-list::-webkit-scrollbar-thumb:hover { background: var(--chrome-secondary); }
+.office-shell .thumbnail-row { padding: 9px 4px 9px 25px; margin-bottom: 8px; border-radius: 0; }
+.office-shell .thumbnail-row.active { background: transparent; }
+.office-shell .slide-number, .office-shell .thumbnail-row.active .slide-number { top: 11px; left: 7px; color: var(--chrome-text); font-size: 11px; font-weight: 400; }
+.office-shell .thumbnail-button { border-radius: 0; border-color: #747474; }
+.office-shell .thumbnail-caption { display: none; }
+.office-shell .add-slide-button { margin: 5px 13px 12px 30px; border-radius: 2px; border-color: var(--chrome-border); color: var(--chrome-secondary); }
+.office-shell .add-slide-button:hover { background: var(--chrome-hover); color: var(--chrome-text); }
+.office-shell .editor-column { background: var(--chrome-canvas); }
+.office-shell .canvas-topline { height: 26px; padding: 0 22px; color: var(--chrome-secondary); }
+.office-shell .canvas-topline > span:first-child { color: var(--chrome-secondary); max-width: 70%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.office-shell .canvas-workspace { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.office-shell .canvas-area { padding: 28px 30px; min-width: 0; align-items: flex-start; justify-content: flex-start; scrollbar-width: auto; scrollbar-color: auto; }
+/* The deck scrollbar also works at Fit, when this viewport has no overflow. */
+.office-shell .canvas-area::-webkit-scrollbar { width: 0; height: 14px; }
+.office-shell .canvas-area::-webkit-scrollbar-track { background: var(--thumbnail-scroll-track); }
+.office-shell .canvas-area::-webkit-scrollbar-thumb { background: var(--thumbnail-scroll-thumb); border: 3px solid var(--thumbnail-scroll-track); border-radius: 7px; }
+.canvas-scrollbar { display: flex; flex-direction: column; flex: 0 0 18px; min-height: 0; background: var(--thumbnail-scroll-track); border-left: 1px solid var(--chrome-border); color: var(--chrome-secondary); }
+.canvas-scrollbar button { display: flex; align-items: center; justify-content: center; height: 18px; flex: 0 0 18px; padding: 0; }
+.canvas-scrollbar button svg { width: 13px; height: 13px; }
+.canvas-scrollbar button:not(:disabled):hover { background: var(--chrome-hover); color: var(--chrome-text); }
+.canvas-scrollbar button:focus-visible { outline-offset: -2px; }
+.canvas-scroll-track { position: relative; flex: 1; min-height: 24px; touch-action: none; user-select: none; }
+.canvas-scroll-track:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.canvas-scroll-thumb { position: absolute; left: 3px; right: 3px; min-height: 0; border: 1px solid var(--chrome-border); background: var(--thumbnail-scroll-thumb); border-radius: 2px; }
+.canvas-scroll-thumb:hover { background: var(--chrome-secondary); }
+.office-shell .ruler { color: var(--chrome-secondary); border-color: var(--chrome-border); }
+.office-shell .notes-pane { height: 73px; padding: 7px 20px 4px; background: var(--chrome-surface); border-color: var(--chrome-border); }
+.office-shell .notes-pane > div, .office-shell .notes-pane small { color: var(--chrome-secondary); }
+.office-shell .notes-pane textarea { height: 40px; padding-top: 5px; color: var(--chrome-text); font-size: 12px; }
+.office-shell .notes-pane textarea::placeholder { color: var(--chrome-secondary); }
+.office-shell .inspector { width: 256px; background: var(--chrome-surface); border-color: var(--chrome-border); }
+.office-shell .inspector-heading { height: 40px; }
+.office-shell .inspector-heading, .office-shell .inspector-section { border-color: var(--chrome-border); }
+.office-shell .inspector :is(h4, .inspector-heading, .color-field, .select-field, .check-field, .number-field > span, .color-input code, .object-actions button, .layers-section > button, .layers-section > p, .hint) { color: var(--chrome-secondary); }
+.office-shell .inspector :is(.number-field, .wide-select, .select-field select) { color: var(--chrome-text); background: var(--chrome-field); border-color: var(--chrome-border); color-scheme: dark; }
+:root[data-chrome="light"] .office-shell .inspector :is(.number-field, .wide-select, .select-field select) { color-scheme: light; }
+.office-shell .number-field input { color: var(--chrome-text); }
+.office-shell .color-input, .office-shell .outline-button { border-color: var(--chrome-border); color: var(--chrome-secondary); }
+.office-shell .layers-section > button.chosen { background: var(--accent-light); color: var(--chrome-text); }
+.office-shell .layers-section > button:hover, .office-shell .outline-button:hover { background: var(--chrome-hover); }
+.office-shell .popover { background: var(--chrome-surface); color: var(--chrome-text); border-color: var(--chrome-border); border-radius: 4px; box-shadow: 0 8px 24px #0006; }
+.office-shell .popover > button:hover { background: var(--chrome-hover); }
+.office-shell .popover h4, .office-shell .popover > button > span { color: var(--chrome-secondary); }
+.office-shell .slide-sorter > button { background: var(--chrome-surface); border-color: var(--chrome-border); border-radius: 2px; }
+.office-shell .slide-sorter > button > span { color: var(--chrome-text); }
+.office-shell .slide-sorter > .sorter-add { color: var(--chrome-secondary); }
+.office-shell .statusbar { height: 26px; padding: 0 12px; gap: 9px; background: var(--chrome-surface); border-color: var(--chrome-border); color: var(--chrome-secondary); font-size: 11px; }
+.office-shell .statusbar > button { color: var(--chrome-secondary); font-size: 11px; }
+.office-shell .statusbar > button:hover, .office-shell .statusbar > button.on { color: var(--chrome-text); background: var(--chrome-hover); }
+.office-shell .status-divider { background: var(--chrome-border); }
+.office-shell .statusbar input { accent-color: var(--chrome-secondary); }
+.office-shell .zoom-value { font-size: 11px; }
+
+.command-search { position: relative; width: clamp(180px, 20vw, 300px); flex-shrink: 1; -webkit-app-region: no-drag; }
+.command-trigger { width: 100%; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 9px; color: var(--chrome-secondary); background: var(--chrome-field); border: 1px solid var(--chrome-border); border-radius: 3px; font-size: 11px; white-space: nowrap; }
+.command-trigger kbd { font: inherit; font-size: 9px; margin-left: auto; opacity: .8; }
+.command-popover { position: absolute; top: 33px; left: 50%; transform: translateX(-50%); width: 400px; background: var(--chrome-surface); color: var(--chrome-text); border: 1px solid var(--chrome-border); border-radius: 5px; box-shadow: 0 10px 45px #0008; }
+.command-input-row { display: flex; align-items: center; gap: 10px; padding: 12px; border-bottom: 1px solid var(--chrome-border); }
+.command-input-row input { width: 100%; min-width: 0; border: 0; background: transparent; color: inherit; font-size: 13px; }
+.command-input-row input::placeholder { color: var(--chrome-secondary); }
+.command-input-row button { display: flex; padding: 3px; }
+.command-results { padding: 5px; max-height: 370px; overflow: auto; }
+.command-results button { display: flex; width: 100%; align-items: center; text-align: left; gap: 12px; padding: 10px; border-radius: 3px; }
+.command-results button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-results small { margin-left: auto; flex-shrink: 0; color: var(--chrome-secondary); font-size: 10px; }
+.command-results .highlighted { background: var(--chrome-hover); }
+.command-results p { padding: 12px; color: var(--chrome-secondary); }
+.command-footer { padding: 9px 12px; font-size: 10px; color: var(--chrome-secondary); border-top: 1px solid var(--chrome-border); }
+@media (max-width: 1250px) {
+  .office-shell .topbar { gap: 9px; }
+  .office-shell .app-brand > span:last-child { display: none; }
+  .office-shell .document-title { max-width: 230px; }
+  .office-shell .save-indicator > span { display: none; }
+  .office-shell .document-actions .export-button { padding: 0 7px; }
+  .office-shell .ribbon-group { padding-left: 8px; padding-right: 8px; }
+  .office-shell .ribbon-hint { font-size: 10px; padding-left: 12px; }
+}
+@media (max-width: 1080px) {
+  .office-shell .document-actions .export-button { font-size: 0; gap: 0; }
+  .office-shell .document-title { max-width: 200px; }
+  .office-shell .local-badge { display: none; }
+  .command-trigger kbd { display: none; }
+}

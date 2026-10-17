@@ -1,7 +1,158 @@
 import { memo, useRef, useLayoutEffect } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
-import type { Deck, Slide, SlideElement } from "./types";
+import type {
+  Deck,
+  Slide,
+  SlideElement,
+  TextParagraph,
+  TextRun,
+} from "./types";
 import { fontStack, paragraphLines, scriptRuns } from "./text-layout";
+import { LineShape } from "./LineShape";
+
+// Chromium does not implement CSS hanging-punctuation. Try letting the terminal
+// stop/comma hang, and keep it only when that prevents an extra line. A sentence
+// that already fits keeps its natural width, including center/right alignment.
+function TextLine({
+  line,
+  paragraph: p,
+  element: e,
+  first,
+}: {
+  line: TextRun[];
+  paragraph: TextParagraph;
+  element: SlideElement;
+  first: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const runs = line.flatMap(scriptRuns);
+  useLayoutEffect(() => {
+    const box = ref.current;
+    const stop = box?.querySelector<HTMLElement>("[data-hanging-punctuation]");
+    if (!box || !stop) return;
+    const reset = () => {
+      stop.style.display = "";
+      stop.style.width = "";
+      stop.style.whiteSpace = "";
+    };
+    let disposed = false;
+    const layout = () => {
+      if (disposed) return;
+      reset();
+      if (
+        !p.hangingPunctuation ||
+        e.wrap === false ||
+        (e.writingMode && e.writingMode !== "horizontal")
+      )
+        return;
+      const before = box.getBoundingClientRect().height;
+      stop.style.display = "inline-block";
+      stop.style.width = "0px";
+      stop.style.whiteSpace = "pre";
+      if (box.getBoundingClientRect().height >= before - 0.1) reset();
+    };
+    layout();
+    void document.fonts.ready.then(layout);
+    document.fonts.addEventListener("loadingdone", layout);
+    const observer = new ResizeObserver(layout);
+    observer.observe(box);
+    window.addEventListener("beforeprint", layout);
+    return () => {
+      disposed = true;
+      document.fonts.removeEventListener("loadingdone", layout);
+      observer.disconnect();
+      window.removeEventListener("beforeprint", layout);
+    };
+  }, [line, p, e]);
+  return (
+    <div
+      ref={ref}
+      data-text-line
+      style={{
+        fontSize: Math.max(
+          ...line.map((r) => r.fontSize ?? p.fontSize ?? e.fontSize ?? 32),
+        ),
+        minHeight: line.every((r) => !r.text) ? "1em" : undefined,
+        textIndent: first ? (p.indent ?? 0) : 0,
+      }}
+    >
+      {runs.map((r, j) => {
+        const terminal =
+          j === runs.length - 1 && p.hangingPunctuation
+            ? r.text.match(
+                /[,.\u060c\u06d4\u3001\u3002\uff0c\uff0e\ufe50\ufe51\ufe52\uff61\uff64]$/u,
+              )?.[0]
+            : undefined;
+        return (
+          <span
+            key={j}
+            lang={r.language}
+            style={{
+              letterSpacing: r.letterSpacing,
+              overflowWrap:
+                p.latinLineBreak === false &&
+                !/[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(
+                  r.text,
+                )
+                  ? "normal"
+                  : undefined,
+              fontKerning:
+                r.kerning === undefined
+                  ? "none"
+                  : (r.fontSize ?? e.fontSize ?? 32) >= r.kerning
+                    ? "normal"
+                    : "none",
+              wordBreak:
+                p.latinLineBreak &&
+                !/[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(
+                  r.text,
+                )
+                  ? "break-all"
+                  : undefined,
+              fontFamily: r.fontFamily
+                ? fontStack(r.fontFamily, r.bold ?? e.bold)
+                : undefined,
+              fontSize: r.baseline
+                ? `${(r.fontSize ?? e.fontSize ?? 32) * 0.65}px`
+                : r.fontSize,
+              fontWeight:
+                r.bold === undefined
+                  ? undefined
+                  : r.bold
+                    ? 700
+                    : /Light$/i.test(r.fontFamily ?? e.fontFamily ?? "")
+                      ? 300
+                      : 400,
+              fontStyle:
+                r.italic === undefined
+                  ? undefined
+                  : r.italic
+                    ? "italic"
+                    : "normal",
+              textDecoration:
+                r.underline === undefined
+                  ? undefined
+                  : r.underline
+                    ? "underline"
+                    : "none",
+              color: r.color,
+              verticalAlign: r.baseline ? `${r.baseline / 1000}%` : undefined,
+            }}
+          >
+            {terminal ? (
+              <>
+                {r.text.slice(0, -terminal.length)}
+                <span data-hanging-punctuation>{terminal}</span>
+              </>
+            ) : (
+              r.text
+            )}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 export function TextContent({ element: e }: { element: SlideElement }) {
   if (!e.paragraphs) return <>{e.text}</>;
@@ -26,84 +177,17 @@ export function TextContent({ element: e }: { element: SlideElement }) {
             paddingRight: p.marginRight ?? 0,
             tabSize: p.tabSize === undefined ? undefined : `${p.tabSize}px`,
             lineBreak: p.eastAsianLineBreak === false ? "auto" : "strict",
+            wordBreak: p.eastAsianLineBreak === false ? "keep-all" : "normal",
           }}
         >
           {paragraphLines(p).map((line, lineIndex) => (
-            <div
+            <TextLine
               key={lineIndex}
-              data-text-line
-              style={{
-                fontSize: Math.max(
-                  ...line.map(
-                    (r) => r.fontSize ?? p.fontSize ?? e.fontSize ?? 32,
-                  ),
-                ),
-                minHeight: line.every((r) => !r.text) ? "1em" : undefined,
-                textIndent: lineIndex === 0 ? (p.indent ?? 0) : 0,
-              }}
-            >
-              {line.flatMap(scriptRuns).map((r, j) => (
-                <span
-                  key={j}
-                  lang={r.language}
-                  style={{
-                    letterSpacing: r.letterSpacing,
-                    overflowWrap:
-                      p.latinLineBreak === false &&
-                      !/[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(
-                        r.text,
-                      )
-                        ? "normal"
-                        : undefined,
-                    fontKerning:
-                      r.kerning === undefined
-                        ? "none"
-                        : (r.fontSize ?? e.fontSize ?? 32) >= r.kerning
-                          ? "normal"
-                          : "none",
-                    wordBreak:
-                      p.latinLineBreak &&
-                      !/[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(
-                        r.text,
-                      )
-                        ? "break-all"
-                        : undefined,
-                    fontFamily: r.fontFamily
-                      ? fontStack(r.fontFamily)
-                      : undefined,
-                    fontSize: r.baseline
-                      ? `${(r.fontSize ?? e.fontSize ?? 32) * 0.65}px`
-                      : r.fontSize,
-                    fontWeight:
-                      r.bold === undefined
-                        ? undefined
-                        : r.bold
-                          ? 700
-                          : /Light$/i.test(r.fontFamily ?? e.fontFamily ?? "")
-                            ? 300
-                            : 400,
-                    fontStyle:
-                      r.italic === undefined
-                        ? undefined
-                        : r.italic
-                          ? "italic"
-                          : "normal",
-                    textDecoration:
-                      r.underline === undefined
-                        ? undefined
-                        : r.underline
-                          ? "underline"
-                          : "none",
-                    color: r.color,
-                    verticalAlign: r.baseline
-                      ? `${r.baseline / 1000}%`
-                      : undefined,
-                  }}
-                >
-                  {r.text}
-                </span>
-              ))}
-            </div>
+              line={line}
+              paragraph={p}
+              element={e}
+              first={lineIndex === 0}
+            />
           ))}
         </div>
       ))}
@@ -212,6 +296,8 @@ export function ElementVisual({ element: e }: { element: SlideElement }) {
         ))}
       </svg>
     );
+  if ((e.shape === "line" || e.shape === "arrow") && (e.lineStart || e.lineEnd))
+    return <LineShape element={e} />;
   if (e.shape === "line" || e.shape === "arrow")
     return (
       <svg
@@ -245,7 +331,11 @@ export function ElementVisual({ element: e }: { element: SlideElement }) {
         background: e.fill,
         border: `${e.strokeWidth || 0}px solid ${e.stroke || "transparent"}`,
         borderRadius:
-          e.shape === "ellipse" ? "50%" : e.shape === "roundRect" ? 22 : 0,
+          e.shape === "ellipse"
+            ? "50%"
+            : e.shape === "roundRect"
+              ? (e.cornerRadius ?? 22)
+              : 0,
         clipPath:
           e.shape === "triangle"
             ? "polygon(50% 0, 100% 100%, 0 100%)"
@@ -256,7 +346,7 @@ export function ElementVisual({ element: e }: { element: SlideElement }) {
 }
 export function textStyle(e: SlideElement): CSSProperties {
   return {
-    fontFamily: fontStack(e.fontFamily),
+    fontFamily: fontStack(e.fontFamily, e.bold),
     fontSize: e.fontSize || 32,
     letterSpacing: e.letterSpacing,
     fontKerning:
@@ -525,7 +615,11 @@ export default function SlideCanvas({
           transform: `scale(${scale})`,
         }}
         onPointerDown={(e) => {
-          if (e.target === e.currentTarget) {
+          if (
+            e.target === e.currentTarget ||
+            (e.target instanceof Element &&
+              e.target.classList.contains("slide-artwork"))
+          ) {
             select([]);
             edit(null);
           }
@@ -534,74 +628,93 @@ export default function SlideCanvas({
         onPointerUp={up}
         onPointerCancel={up}
       >
-        {showGuides && (
-          <>
-            <div className="guide vertical" style={{ left: deck.width / 2 }} />
-            <div
-              className="guide horizontal"
-              style={{ top: deck.height / 2 }}
-            />
-          </>
-        )}
-        {slide.elements.map((e) => (
-          <div
-            key={e.id}
-            data-testid="slide-element"
-            data-element-id={e.id}
-            data-type={e.type}
-            className={`slide-element ${selected.includes(e.id) ? "selected" : ""} ${e.locked ? "locked" : ""} ${editing === e.id ? "editing" : ""}`}
-            style={
-              {
-                ...elementStyle(e),
-                "--inverse-scale": 1 / scale,
-              } as CSSProperties
-            }
-            onPointerDown={(ev) => down(ev, e)}
-            onDoubleClick={(ev) => {
-              ev.stopPropagation();
-              if (e.type === "text" && !e.locked) {
-                select([e.id]);
-                begin();
-                edit(e.id);
-              }
-            }}
-          >
-            {editing === e.id ? (
-              <EditableText
-                element={e}
-                onInput={(text) => changeText(e.id, text)}
-                onDone={() => {
-                  finish();
-                  edit(null);
-                }}
+        <div className="slide-artwork">
+          {showGuides && (
+            <>
+              <div
+                className="guide vertical"
+                style={{ left: deck.width / 2 }}
               />
-            ) : (
-              <ElementVisual element={e} />
-            )}
-            {selected.includes(e.id) &&
-              !e.locked &&
-              !editing &&
-              ["nw", "n", "ne", "e", "se", "s", "sw", "w"].map((h) => (
-                <span
-                  key={h}
-                  className={`resize-handle ${h}`}
-                  data-testid={`resize-${h}`}
-                  onPointerDown={(ev) => down(ev, e, h)}
+              <div
+                className="guide horizontal"
+                style={{ top: deck.height / 2 }}
+              />
+            </>
+          )}
+          {slide.elements.map((e) => (
+            <div
+              key={e.id}
+              data-testid="slide-element"
+              data-element-id={e.id}
+              data-type={e.type}
+              className={`slide-element ${selected.includes(e.id) ? "selected" : ""} ${e.locked ? "locked" : ""} ${editing === e.id ? "editing" : ""}`}
+              style={
+                {
+                  ...elementStyle(e),
+                  "--inverse-scale": 1 / scale,
+                } as CSSProperties
+              }
+              onPointerDown={(ev) => down(ev, e)}
+              onDoubleClick={(ev) => {
+                ev.stopPropagation();
+                if (e.type === "text" && !e.locked) {
+                  select([e.id]);
+                  begin();
+                  edit(e.id);
+                }
+              }}
+            >
+              {editing === e.id ? (
+                <EditableText
+                  element={e}
+                  onInput={(text) => changeText(e.id, text)}
+                  onDone={() => {
+                    finish();
+                    edit(null);
+                  }}
                 />
-              ))}
-            {selected.includes(e.id) && (
-              <span className="element-label">
-                {e.locked
-                  ? "잠김"
-                  : e.type === "text"
-                    ? "텍스트"
-                    : e.type === "image"
-                      ? "이미지"
-                      : "도형"}
-              </span>
-            )}
-          </div>
-        ))}
+              ) : (
+                <ElementVisual element={e} />
+              )}
+            </div>
+          ))}
+        </div>
+        {slide.elements
+          .filter((e) => selected.includes(e.id))
+          .map((e) => (
+            <div
+              key={e.id}
+              className={`slide-selection ${e.locked ? "locked" : ""} ${editing === e.id ? "editing" : ""}`}
+              style={
+                {
+                  ...elementStyle(e),
+                  "--inverse-scale": 1 / scale,
+                } as CSSProperties
+              }
+            >
+              {!e.locked &&
+                !editing &&
+                ["nw", "n", "ne", "e", "se", "s", "sw", "w"].map((h) => (
+                  <span
+                    key={h}
+                    className={`resize-handle ${h}`}
+                    data-testid={`resize-${h}`}
+                    onPointerDown={(ev) => down(ev, e, h)}
+                  />
+                ))}
+              {selected.includes(e.id) && (
+                <span className="element-label">
+                  {e.locked
+                    ? "잠김"
+                    : e.type === "text"
+                      ? "텍스트"
+                      : e.type === "image"
+                        ? "이미지"
+                        : "도형"}
+                </span>
+              )}
+            </div>
+          ))}
       </div>
     </div>
   );

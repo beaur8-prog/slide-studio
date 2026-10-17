@@ -196,6 +196,9 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
       eastAsianLineBreak: !["0", "false", "off"].includes(
         firstAttribute(props, "eaLnBrk", "1"),
       ),
+      hangingPunctuation: ["1", "true", "on"].includes(
+        firstAttribute(props, "hangingPunct", "0"),
+      ),
     };
   });
   if (!paragraphs.length) paragraphs.push({ runs: [{ text: "" }] });

@@ -1,6 +1,6 @@
 import type { SlideElement, TextParagraph, TextRun } from "./types";
 
-export function fontStack(name = "Arial"): string {
+export function fontStack(name = "Arial", bold = false): string {
   const clean = name
     .replace(/\s*\((?:Headings|Body)\)\s*$/i, "")
     .replace(/["\\\n\r]/g, "");
@@ -9,7 +9,9 @@ export function fontStack(name = "Arial"): string {
     : /^Calibri$/i.test(clean)
       ? ', "Slide Studio Calibri", Carlito'
       : /^Helvetica Light$/i.test(clean)
-        ? ', "Helvetica Neue", Helvetica'
+        ? bold
+          ? ', "Helvetica Neue", Helvetica'
+          : ', "Helvetica Neue", "Slide Studio Office Arial Nova Light", Helvetica'
         : /^(?:나눔바른고딕|Nanum\s*Barun\s*Gothic)$/i.test(clean)
           ? ', "Slide Studio Nanum Barun Gothic"'
           : "";
@@ -174,6 +176,7 @@ export function scaleElement(
     letterSpacing: scaled(element.letterSpacing, sx),
     kerning: scaled(element.kerning),
     strokeWidth: scaled(element.strokeWidth),
+    cornerRadius: scaled(element.cornerRadius),
     ...(element.textInsets
       ? {
           textInsets: element.textInsets.map(

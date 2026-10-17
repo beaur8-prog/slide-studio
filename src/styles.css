@@ -735,6 +735,19 @@ button:not(:disabled):active {
   background-image: radial-gradient(#8b9b7e55 1px, transparent 1px);
   background-size: 10px 10px;
 }
+.slide-artwork {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.slide-selection {
+  position: absolute;
+  transform-origin: center center;
+  pointer-events: none;
+}
+.slide-selection .resize-handle {
+  pointer-events: auto;
+}
 .slide-visual {
   position: relative;
   overflow: hidden;
@@ -754,17 +767,17 @@ button:not(:disabled):active {
 .slide-element.locked {
   cursor: not-allowed;
 }
-.slide-element.selected:after {
+.slide-selection:after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
   outline: calc(1.5px * var(--inverse-scale)) solid var(--accent);
 }
-.slide-element.locked.selected:after {
+.slide-selection.locked:after {
   outline-style: dashed;
 }
-.slide-element.editing:after {
+.slide-selection.editing:after {
   outline-color: #cb674b;
 }
 .element-text {

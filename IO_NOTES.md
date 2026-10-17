@@ -31,15 +31,33 @@ slide/layout/master placeholders. Paragraph alignment, spacing, indentation and
 run fonts/sizes/colors/bold/italic/underline are retained. Latin/East Asian font inheritance, language, character spacing, kerning thresholds, default tabs and paragraph line-break flags survive project/PPTX round trips. Group geometry does not multiply authored text point sizes a second time. Text can overflow its
 source box unless the source explicitly clips it. East Asian vertical text uses
 upright glyphs. Diagonal straight connectors retain their endpoints through
-length and rotation.
+length and rotation. Straight lines preserve their independent start/end markers
+(none, triangle, stealth, diamond, oval or open arrow), marker width/length and
+horizontal direction through project save and PPTX round trips. Curved connectors
+remain outside this straight-line implementation.
 First/last paragraph spacing follows `spcFirstLastPara` (off by default), so
 inherited paragraph gaps do not displace single-line captions below the slide.
+
+Rounded rectangles retain their `adj` corner adjustment as a pixel radius through
+project save, canvas scaling, and PPTX export, including explicitly square corners.
+Ellipse and donut text uses the preset's inscribed rectangle before body margins,
+so labels wrap within the round shape. Donut thickness follows the source `adj`
+value and shortest side; custom paths retain native EMU precision for PPTX export.
+The editing canvas clips artwork at the slide boundary, matching the preview and
+exported page, while selection outlines and resize handles remain outside the clip.
+East Asian line-breaking flags control Korean character wrapping. The inherited
+`hangingPunct` flag survives project/PPTX round trips; the Chromium renderer allows
+a terminal stop/comma to hang when it avoids an extra line, without changing the
+text or widening its box. This fallback currently covers horizontal terminal
+punctuation, not full line-edge punctuation rules for vertical or mixed writing.
 
 Tables are flattened into editable cells, preserving supported merged-cell
 geometry, row/column styling, fills, text and edge borders. When saved row heights
 sum to less than the table frame, the extra height is allocated to multiline
 cells first. Explicit line breaks retain their own run sizes, including blank
-lines. Embedded TIFF images
+lines. Cells without an explicit paragraph line-spacing value use a 1.2 multiplier,
+matching the observed Windows PowerPoint table layout; explicit point/percentage
+spacing keeps its source value. Embedded TIFF images
 are converted locally to PNG with a 16-million-pixel decode limit. Supported
 numeric DrawingML custom paths, image crop/flip, and AlternateContent fallback
 objects are rendered. SmartArt with a saved `diagramDrawing` part is imported as
@@ -84,5 +102,6 @@ Implementation references:
 - [DrawingML first/last paragraph spacing](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.bodyproperties.useparagraphspacing?view=openxml-3.0.1)
 - [PowerPoint table row sizing](https://support.microsoft.com/en-us/powerpoint/change-the-size-of-a-table-column-or-row-in-powerpoint)
 - [Microsoft DrawingML extension specification](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/06cff208-c6e1-4db7-bb68-665135e5f0de)
+- [DrawingML preset shape definitions (ellipse and donut)](https://github.com/LibreOffice/core/blob/master/oox/source/drawingml/customshapes/presetShapeDefinitions.xml)
 
 UTIF, Carlito and Nanum Barun Gothic license texts are included in the app's `dist/licenses/` folder.

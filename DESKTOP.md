@@ -1,4 +1,6 @@
-# Slide Studio for macOS
+# Slide Studio desktop
+
+The Windows shell now uses a 40px integrated title bar with native caption buttons. Its native menu stays installed for keyboard accelerators but is hidden by default. `desktop.platform` reports the platform; `desktop.setChromeTheme('dark' | 'light')` updates Windows caption colors through sender-validated IPC. The editor theme is saved locally and does not change slide colors. See [PowerPoint observation and validation](POWERPOINT-ANALYSIS.md).
 
 The native application is generated at `release/Slide Studio.app`. Open it directly or drag it into Applications. The adjacent `Slide-Studio-mac-arm64.zip` is a portable copy for Apple Silicon Macs. The application is signed locally with an ad-hoc signature; it is not Apple notarized.
 
@@ -30,4 +32,4 @@ Electron's license and Chromium notices are included in the application bundle's
 
 ## Windows packaging
 
-`npm run package:win` downloads the official Windows x64 Electron runtime and verifies its published SHA-256. It creates `release/Slide-Studio-win-x64.zip` with the executable, runtime files, licenses and the same application ASAR used on macOS. The entire folder must be extracted before running `Slide Studio.exe`. The packager can run on macOS; cross-packaging does not verify native Windows execution. This build is unsigned, and Windows execution, keyboard IME and native printing remain untested.
+`npm run package:win` downloads the official Windows x64 Electron runtime and verifies its published SHA-256. It creates `release/Slide-Studio-win-x64.zip` with the executable, runtime files, licenses and the same application ASAR used on macOS. The entire folder must be extracted before running `Slide Studio.exe`. The packager can run on macOS; cross-packaging does not verify native Windows execution. This working copy was launched on Windows on 2026-10-17 and its native window controls and rendered editor were inspected. The packager's `nativeWindowsExecution: false` field describes packaging-only checks; it does not incorporate subsequent manual execution. This build is unsigned. Actual Windows IME settings and physical printer output remain untested.

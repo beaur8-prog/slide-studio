@@ -324,8 +324,8 @@ export default function App() {
   const presentationNumber = useRef("");
   const presentationWheel = useRef({
     delta: 0,
-    lastEvent: 0,
-    lastNavigation: -Infinity,
+    lastEvent: -Infinity,
+    navigated: false,
     direction: 0,
   });
   const [presentNotes, setPresentNotes] = useState(false);
@@ -1023,8 +1023,8 @@ export default function App() {
     setEditing(null);
     presentationWheel.current = {
       delta: 0,
-      lastEvent: 0,
-      lastNavigation: -Infinity,
+      lastEvent: -Infinity,
+      navigated: false,
       direction: 0,
     };
     presentationOrigin.current = activeId;
@@ -1140,20 +1140,19 @@ export default function App() {
       const now = performance.now(),
         direction = Math.sign(dy),
         gesture = presentationWheel.current;
-      // Presentations keep a conservative threshold and cooldown so a large
-      // delta advances just one slide, with a pause for trailing wheel events.
-      if (now - gesture.lastEvent > 220 || direction !== gesture.direction)
+      // Match editor navigation: small notches respond immediately, while a
+      // continuous momentum tail cannot skip slides, blackout or the end screen.
+      if (now - gesture.lastEvent > 80 || direction !== gesture.direction) {
         gesture.delta = 0;
+        gesture.navigated = false;
+      }
       gesture.lastEvent = now;
       gesture.direction = direction;
-      if (now - gesture.lastNavigation < 350) {
-        gesture.delta = 0;
-        return;
-      }
+      if (gesture.navigated) return;
       gesture.delta += dy;
-      if (Math.abs(gesture.delta) < 60) return;
+      if (Math.abs(gesture.delta) < 12) return;
       gesture.delta = 0;
-      if (movePresent(direction)) gesture.lastNavigation = now;
+      if (movePresent(direction)) gesture.navigated = true;
     };
     view.addEventListener("wheel", wheel, { passive: false });
     return () => view.removeEventListener("wheel", wheel);

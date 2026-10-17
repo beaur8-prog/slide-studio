@@ -2,7 +2,7 @@
 
 Mac과 Windows에서 독립적으로 실행하는 프레젠테이션 편집 앱입니다. PowerPoint의 공개 사용법에 나오는 리본, 슬라이드 목록, 개체 편집과 발표 흐름을 참고해 새로 구현했습니다. Microsoft PowerPoint 원본이나 원본 소스를 복원한 제품은 아닙니다.
 
-**1.4.2**는 편집 화면에서 작은 마우스 휠 입력을 여러 번 해야 장이 넘어가던 문제를 수정했습니다. 작은 한 칸에도 반응하고, 연속 관성 입력으로 여러 장이 넘어가지 않도록 조정했습니다. 기존 발표·문단·PPTX 보정도 포함합니다. 분석 근거는 [Windows PowerPoint 관찰 기록](POWERPOINT-ANALYSIS.md), 이번 배포 검증은 [1.4.2 검증 기록](qa/RELEASE-1.4.2.md)을 참고하세요.
+**1.4.2**는 편집 화면과 슬라이드 쇼에서 작은 마우스 휠 입력을 여러 번 해야 장이 넘어가던 문제를 수정했습니다. 작은 한 칸에도 반응하고, 연속 관성 입력으로 여러 장이 넘어가지 않도록 조정했습니다. 기존 발표·문단·PPTX 보정도 포함합니다. 분석 근거는 [Windows PowerPoint 관찰 기록](POWERPOINT-ANALYSIS.md), 이번 배포 검증은 [1.4.2 검증 기록](qa/RELEASE-1.4.2.md)을 참고하세요.
 
 **Ctrl+K**로 명령과 슬라이드를 검색하고, **Ctrl+F1**로 리본을 접을 수 있습니다. 오른쪽 위 **서식** 버튼으로 서식 패널을 열고, 해/달 버튼으로 편집 화면의 밝기를 바꿉니다.
 
@@ -14,6 +14,8 @@ Mac과 Windows에서 독립적으로 실행하는 프레젠테이션 편집 앱�
 | --- | --- | --- |
 | macOS 12 이상 · Apple Silicon(M1 이후) | [Mac ARM64 ZIP](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-mac-arm64.zip) | ZIP을 풀고 Slide Studio.app을 응용 프로그램 폴더로 옮겨 실행 |
 | Windows 10/11 · Intel/AMD 64비트 | [Windows x64 ZIP](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-win-x64.zip) | ZIP 전체를 풀고 Slide Studio.exe 실행 |
+
+이번 파일은 슬라이드 쇼 휠 수정까지 포함한 **1.4.2 보완 배포**입니다. 초기 1.4.2를 받았다면 같은 주소에서 다시 내려받아 교체하세요.
 
 다운로드 주소는 버전이 바뀌어도 동일합니다. 같은 주소를 사용하는 리토스 문서의 다운로드 버튼도 최신 공개 릴리스를 받으며, 파일 교체를 위해 공유 서버를 재시작할 필요가 없습니다.
 

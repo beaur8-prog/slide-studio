@@ -261,6 +261,72 @@ test("an all-hidden deck shows the end screen without revealing slides", async (
   );
 });
 
+async function wheelBurst(page: Page, deltas: number[], interval = 30) {
+  await page.getByTestId("presentation-view").evaluate(
+    async (element, { deltas, interval }) => {
+      for (const deltaY of deltas) {
+        element.dispatchEvent(
+          new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, interval));
+      }
+    },
+    { deltas, interval },
+  );
+}
+
+test("slideshow responds to small mouse-wheel notches without a fixed cooldown", async ({
+  page,
+}) => {
+  await openDeck(page, [], 5);
+  await page.keyboard.press("F5");
+  const view = page.getByTestId("presentation-view");
+  await view.hover();
+  for (const slide of [2, 3, 4]) {
+    await page.mouse.wheel(0, 20);
+    await expectSlide(page, slide, 5);
+    await page.waitForTimeout(120);
+  }
+  await page.mouse.wheel(0, -20);
+  await expectSlide(page, 3, 5);
+  await page.mouse.wheel(0, 20);
+  await expectSlide(page, 4, 5);
+  await view.dispatchEvent("wheel", {
+    deltaY: -1,
+    deltaMode: 1,
+    bubbles: true,
+    cancelable: true,
+  });
+  await expectSlide(page, 3, 5);
+  await page.keyboard.press("End");
+  await page.mouse.wheel(0, 20);
+  await expect(page.getByTestId("presentation-end")).toBeVisible();
+  await page.waitForTimeout(120);
+  await page.mouse.wheel(0, 20);
+  await expect(view).toBeHidden();
+  await page.keyboard.press("F5");
+  await expectSlide(page, 1, 5);
+  await view.hover();
+  await page.mouse.wheel(0, 20);
+  await expectSlide(page, 2, 5);
+});
+
+test("slideshow ignores tiny jitter and keeps a long momentum tail on one slide", async ({
+  page,
+}) => {
+  await openDeck(page, [], 5);
+  await page.keyboard.press("F5");
+  await wheelBurst(page, [2, 2, 2]);
+  await expectSlide(page, 1, 5);
+  await page.waitForTimeout(120);
+  await wheelBurst(page, [18, 15, 12, 10, 8, 6, 5, 4, 3, 2, 2, 1, 1, 1, 1], 40);
+  await expectSlide(page, 2, 5);
+  await page.waitForTimeout(120);
+  await page.getByTestId("presentation-view").hover();
+  await page.mouse.wheel(0, 20);
+  await expectSlide(page, 3, 5);
+});
+
 test("slideshow wheel skips hidden slides once per burst and follows blackout and end navigation", async ({
   page,
 }) => {
@@ -269,10 +335,8 @@ test("slideshow wheel skips hidden slides once per burst and follows blackout an
   await page.getByTestId("presentation-view").hover();
   await page.mouse.wheel(0, -120);
   await expectSlide(page, 1, 5);
-  await page.mouse.wheel(0, 120);
-  await expectSlide(page, 3, 5);
-  await page.mouse.wheel(0, 1500);
-  await page.mouse.wheel(0, 1500);
+  // Explicit timing keeps assertions from splitting one burst into separate gestures.
+  await wheelBurst(page, [120, 1500, 1500]);
   await expectSlide(page, 3, 5);
   await page.waitForTimeout(360);
   await page.mouse.wheel(0, -120);
@@ -286,9 +350,7 @@ test("slideshow wheel skips hidden slides once per burst and follows blackout an
 
   await page.keyboard.press("b");
   await expect(page.locator(".present-slide")).toBeHidden();
-  await page.mouse.wheel(0, 120);
-  await expectSlide(page, 1, 5);
-  await page.mouse.wheel(0, 120);
+  await wheelBurst(page, [120, 120, 120]);
   await expectSlide(page, 1, 5);
   await page.waitForTimeout(360);
   await page.mouse.wheel(0, 120);
@@ -296,9 +358,7 @@ test("slideshow wheel skips hidden slides once per burst and follows blackout an
 
   await page.keyboard.press("End");
   await page.waitForTimeout(360);
-  await page.mouse.wheel(0, 120);
-  await expect(page.getByTestId("presentation-end")).toBeVisible();
-  await page.mouse.wheel(0, 120);
+  await wheelBurst(page, [120, 120, 120]);
   await expect(page.getByTestId("presentation-end")).toBeVisible();
   await page.waitForTimeout(360);
   await page.mouse.wheel(0, -120);

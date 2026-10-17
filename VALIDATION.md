@@ -2,20 +2,29 @@
 
 Verified on 2026-10-18 (KST), macOS arm64.
 
-## Current release: 1.4.2
+## Current release: 1.4.2 (slideshow wheel correction)
 
-The editor now accepts small mouse-wheel notches without waiting for 60 pixels
-or a fixed 350 ms cooldown. One continuous gesture advances one slide; a quiet
-gap or direction reversal permits the next navigation. The 20 px / 120 ms
-comparison advanced on the third input in 1.4.1 and the first input in 1.4.2.
-The production build passes, and the full suite reports **90 passed, 2 skipped,
-0 failed, 0 flaky** in 143.2 seconds. New checks cover small notches, reversal,
-line-mode input, tiny jitter and a long momentum tail. Existing zoom, scrollbar,
-thumbnail and presentation checks also pass. See [1.4.2 release evidence](qa/RELEASE-1.4.2.md).
+Both the editor and slideshow now accept small mouse-wheel notches without
+waiting for 60 pixels or a fixed 350 ms cooldown. One continuous gesture performs
+one navigation; a quiet gap or direction reversal permits the next action.
+The same 20 px slideshow regression failed on the initial 1.4.2 and passes on
+this correction, including separate inputs 120 ms apart. Hidden slides,
+blackout restoration, end-screen handling and restarting a show remain covered.
 
-The prior corpus and native save/export results below are historical 1.4.1
-checks, not new 1.4.2 measurements. The release report states the current native
-and package verification scope.
+The production build passes, and the full suite reports **92 passed, 2 skipped,
+0 failed, 0 flaky** in 151.0 seconds. New checks cover small notches, reversal,
+line-mode input, tiny jitter and a long momentum tail. The actual Mac ZIP was
+signature-verified, installed and launched. Native checks covered slideshow
+wheel navigation, the end screen, reverse navigation and Esc, plus editor
+wheel navigation. The user's saved document was restored to slide 1 at 86%.
+
+Both revised ZIPs contain the same verified 1.4.2 ASAR. Windows runtime and PE
+checks pass; this Windows ZIP was not executed on Windows. Existing download
+filenames and the document URL are retained, and the release stays at 1.4.2
+in this correction. See [1.4.2 release evidence](qa/RELEASE-1.4.2.md) for hashes and scope.
+
+The corpus and native save/export results below are historical 1.4.1 checks,
+not new measurements for this wheel correction.
 
 ## Version 1.4.1
 

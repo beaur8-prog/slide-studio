@@ -6,6 +6,8 @@ declare global {
       readonly platform?: string;
       loadOfficeLightFont?(): Promise<Uint8Array | null>;
       setChromeTheme?(theme: "dark" | "light"): Promise<void>;
+      setPresentationMode?(enabled: boolean): Promise<void>;
+      onPresentationEnded?(callback: () => void): () => void;
       saveFile(payload: {
         name: string;
         data: Uint8Array;

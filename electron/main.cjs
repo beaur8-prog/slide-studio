@@ -21,6 +21,7 @@ const CHROME_THEMES = {
 let mainWindow = null;
 let nativeOperationPending = false;
 let officeLightFont;
+let presentationWindowState = null;
 
 app.setName(PRODUCT_NAME);
 app.setPath('userData', path.join(app.getPath('appData'), PRODUCT_NAME));
@@ -100,6 +101,24 @@ function sendMenuAction(action) {
   }
 }
 
+function setPresentationMode(enabled) {
+  if (enabled) {
+    // Let the OS cover the taskbar and preserve the window's normal/maximized
+    // bounds. A renderer overlay alone only fills the existing client area.
+    presentationWindowState ??= {
+      fullScreen: mainWindow.isFullScreen(),
+      menuBarVisible: mainWindow.isMenuBarVisible(),
+    };
+    mainWindow.setMenuBarVisibility(false);
+    mainWindow.setFullScreen(true);
+  } else if (presentationWindowState) {
+    const previous = presentationWindowState;
+    presentationWindowState = null;
+    mainWindow.setFullScreen(previous.fullScreen);
+    mainWindow.setMenuBarVisibility(previous.menuBarVisible);
+  }
+}
+
 async function preparePrint(contents) {
   // Font and image decoding must finish before Chromium snapshots the print layout.
   await contents.executeJavaScript(`(async () => {
@@ -152,6 +171,12 @@ function installMenu() {
 }
 
 function installIPC() {
+  ipcMain.handle('slide-studio:set-presentation-mode', (event, enabled) => {
+    requireTrustedSender(event);
+    if (typeof enabled !== 'boolean') throw new TypeError('Presentation mode must be a boolean.');
+    setPresentationMode(enabled);
+  });
+
   ipcMain.handle('slide-studio:load-office-light-font', (event, ...args) => {
     requireTrustedSender(event);
     if (args.length) throw new TypeError('This font request takes no paths or arguments.');
@@ -335,7 +360,19 @@ async function createWindow() {
     });
     if (response === 1) event.preventDefault();
   });
-  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.on('leave-full-screen', () => {
+    // Native fullscreen shortcuts must also dismiss the renderer's slideshow.
+    if (!presentationWindowState) return;
+    const previous = presentationWindowState;
+    presentationWindowState = null;
+    mainWindow.setMenuBarVisibility(previous.menuBarVisible);
+    mainWindow.webContents.send('slide-studio:presentation-ended');
+  });
+  mainWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
+    if (mainFrame && !inPlace) setPresentationMode(false);
+  });
+  mainWindow.webContents.on('render-process-gone', () => setPresentationMode(false));
+  mainWindow.on('closed', () => { presentationWindowState = null; mainWindow = null; });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
   try {

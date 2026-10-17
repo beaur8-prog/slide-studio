@@ -242,6 +242,8 @@ export default function App() {
     }
   });
   const [presenting, setPresenting] = useState(false);
+  const presentationActive = useRef(false);
+  const browserPresentationFullscreen = useRef(false);
   const [presentIndex, setPresentIndex] = useState(0);
   const [presentNotes, setPresentNotes] = useState(false);
   const [blackout, setBlackout] = useState(false);
@@ -904,6 +906,25 @@ export default function App() {
       );
     }
   };
+  const enterPresentationFullscreen = () => {
+    if (window.desktop?.setPresentationMode) {
+      void window.desktop.setPresentationMode(true).catch(() =>
+        notify("전체 화면을 사용할 수 없습니다."),
+      );
+    } else if (!document.fullscreenElement) {
+      browserPresentationFullscreen.current = true;
+      void document.documentElement.requestFullscreen().then(() => {
+        // Esc may be pressed before an asynchronous fullscreen request finishes.
+        if (!presentationActive.current && document.fullscreenElement) {
+          browserPresentationFullscreen.current = false;
+          void document.exitFullscreen().catch(() => {});
+        }
+      }).catch(() => {
+        browserPresentationFullscreen.current = false;
+        notify("전체 화면을 사용할 수 없습니다.");
+      });
+    }
+  };
   const startPresent = (fromBeginning = false) => {
     finish();
     setEditing(null);
@@ -911,12 +932,41 @@ export default function App() {
     setBlackout(false);
     setPresenting(true);
     setMenu(null);
+    presentationActive.current = true;
+    enterPresentationFullscreen();
   };
   const stopPresent = () => {
+    presentationActive.current = false;
     setPresenting(false);
     setBlackout(false);
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    if (window.desktop?.setPresentationMode) {
+      void window.desktop.setPresentationMode(false).catch(() =>
+        notify("전체 화면을 종료할 수 없습니다."),
+      );
+    } else if (browserPresentationFullscreen.current && document.fullscreenElement) {
+      browserPresentationFullscreen.current = false;
+      void document.exitFullscreen().catch(() => {});
+    }
   };
+  useEffect(() => {
+    const ended = () => {
+      presentationActive.current = false;
+      setPresenting(false);
+      setBlackout(false);
+    };
+    const fullscreenChanged = () => {
+      if (browserPresentationFullscreen.current && !document.fullscreenElement) {
+        browserPresentationFullscreen.current = false;
+        ended();
+      }
+    };
+    const unsubscribe = window.desktop?.onPresentationEnded?.(ended);
+    document.addEventListener("fullscreenchange", fullscreenChanged);
+    return () => {
+      unsubscribe?.();
+      document.removeEventListener("fullscreenchange", fullscreenChanged);
+    };
+  }, []);
   const movePresent = (direction: number) =>
     setPresentIndex((i) =>
       Math.max(0, Math.min(deck.slides.length - 1, i + direction)),
@@ -2955,18 +3005,12 @@ export default function App() {
             >
               <StickyNote size={17} />
             </button>
-            <button
+            {!window.desktop?.setPresentationMode && <button
               aria-label="전체 화면"
-              onClick={() => {
-                if (document.fullscreenElement) void document.exitFullscreen();
-                else
-                  document.documentElement
-                    .requestFullscreen()
-                    .catch(() => notify("전체 화면을 사용할 수 없습니다."));
-              }}
+              onClick={enterPresentationFullscreen}
             >
               <Maximize size={17} />
-            </button>
+            </button>}
           </div>
           {presentNotes && (
             <div className="present-notes" onClick={(e) => e.stopPropagation()}>

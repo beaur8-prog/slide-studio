@@ -6,6 +6,13 @@ contextBridge.exposeInMainWorld('desktop', Object.freeze({
   platform: process.platform,
   loadOfficeLightFont: () => ipcRenderer.invoke('slide-studio:load-office-light-font'),
   setChromeTheme: theme => ipcRenderer.invoke('slide-studio:set-chrome-theme', theme),
+  setPresentationMode: enabled => ipcRenderer.invoke('slide-studio:set-presentation-mode', enabled),
+  onPresentationEnded: callback => {
+    if (typeof callback !== 'function') throw new TypeError('A presentation callback is required.');
+    const listener = () => callback();
+    ipcRenderer.on('slide-studio:presentation-ended', listener);
+    return () => ipcRenderer.removeListener('slide-studio:presentation-ended', listener);
+  },
   saveFile: payload => ipcRenderer.invoke('slide-studio:save-file', payload),
   openFile: () => ipcRenderer.invoke('slide-studio:open-file'),
   exportPDF: name => ipcRenderer.invoke('slide-studio:export-pdf', name),

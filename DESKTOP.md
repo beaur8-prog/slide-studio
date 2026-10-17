@@ -2,6 +2,8 @@
 
 The Windows shell now uses a 40px integrated title bar with native caption buttons. Its native menu stays installed for keyboard accelerators but is hidden by default. `desktop.platform` reports the platform; `desktop.setChromeTheme('dark' | 'light')` updates Windows caption colors through sender-validated IPC. The editor theme is saved locally and does not change slide colors. See [PowerPoint observation and validation](POWERPOINT-ANALYSIS.md).
 
+Starting a slideshow (F5, Shift+F5, or a presentation button) automatically enters native fullscreen, covering the Windows taskbar. Esc or the presentation exit button restores the previous normal, maximized, or fullscreen editor state. `desktop.setPresentationMode(boolean)` validates the sender and argument; `onPresentationEnded` synchronizes native fullscreen exits with the renderer. Browser builds use the browser Fullscreen API. `tests/presentation-fullscreen.spec.ts` checks the real Windows window against the monitor bounds using an isolated profile, plus browser entry and exit.
+
 The native application is generated at `release/Slide Studio.app`. Open it directly or drag it into Applications. The adjacent `Slide-Studio-mac-arm64.zip` is a portable copy for Apple Silicon Macs. The application is signed locally with an ad-hoc signature; it is not Apple notarized.
 
 On Macs where Documents is managed by a File Provider, Finder may add metadata that causes strict signature verification of the copied `.app` to fail. The ZIP is created from the verified bundle before that copy; extract it into Applications for a clean install. Packaging also retains its verified temporary bundle, whose exact path is written to `release/BUILD.json` and printed by the build command.

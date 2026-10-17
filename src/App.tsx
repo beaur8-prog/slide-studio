@@ -188,6 +188,79 @@ function ColorField({
   );
 }
 
+function LibraryContents({
+  deck,
+  onOpen,
+  onNew,
+  notify,
+}: {
+  deck: Deck;
+  onOpen: (deck: Deck) => void;
+  onNew: () => void;
+  notify: (message: string) => void;
+}) {
+  // Saved decks can contain large image payloads. Only the mounted library
+  // owns them, so every dismissal path releases the list with its component.
+  const [documents, setDocuments] = useState<Deck[] | null>(null);
+  useEffect(() => {
+    let disposed = false;
+    const load = async () => {
+      try {
+        await saveAutosave(deck);
+        if (disposed) return;
+        const saved = await listAutosaves();
+        if (!disposed) setDocuments(saved);
+      } catch {
+        if (!disposed) {
+          setDocuments([]);
+          notify("저장된 문서를 불러오지 못했습니다.");
+        }
+      }
+    };
+    void load();
+    return () => {
+      disposed = true;
+    };
+  }, [deck, notify]);
+  return (
+    <>
+      <div className="dialog-eyebrow">YOUR WORKSPACE</div>
+      <h2>내 프레젠테이션</h2>
+      <p>이 기기에 자동 저장한 문서입니다.</p>
+      {documents === null && (
+        <p role="status">저장한 문서를 불러오고 있습니다.</p>
+      )}
+      <div className="library-grid">
+        <button className="library-new" onClick={onNew}>
+          <Plus size={27} />
+          <strong>새 프레젠테이션</strong>
+        </button>
+        {documents?.map((d) => (
+          <button key={d.id} onClick={() => onOpen(d)}>
+            <div
+              style={{
+                position: "relative",
+                width: 230,
+                height: (230 * d.height) / d.width,
+                overflow: "hidden",
+              }}
+            >
+              <SlideVisual
+                slide={d.slides[0]}
+                width={d.width}
+                height={d.height}
+                scale={230 / d.width}
+              />
+            </div>
+            <strong>{d.name}</strong>
+            <small>{d.slides.length}개의 슬라이드</small>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
 export default function App() {
   const [history, setHistory] = useState<History>(() => ({
     past: [],
@@ -219,7 +292,6 @@ export default function App() {
   const printing = useRef(false);
   const [modal, setModal] = useState<Modal>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [library, setLibrary] = useState<Deck[]>([]);
   const [menu, setMenu] = useState<"file" | "layout" | "shape" | null>(null);
   const [layout, setLayout] = useState("title");
   const [zoom, setZoom] = useState<number | null>(null);
@@ -897,15 +969,9 @@ export default function App() {
       );
     }
   };
-  const showLibrary = async () => {
-    try {
-      await saveAutosave(deck);
-      setLibrary(await listAutosaves());
-      setModal("library");
-      setMenu(null);
-    } catch {
-      notify("저장된 문서를 불러오지 못했습니다.");
-    }
+  const showLibrary = () => {
+    setModal("library");
+    setMenu(null);
   };
   const createDocument = async (isSample = false) => {
     try {
@@ -3027,46 +3093,14 @@ export default function App() {
                 </div>
               </>
             ) : modal === "library" ? (
-              <>
-                <div className="dialog-eyebrow">YOUR WORKSPACE</div>
-                <h2>내 프레젠테이션</h2>
-                <p>이 기기에 자동 저장한 문서입니다.</p>
-                <div className="library-grid">
-                  <button
-                    className="library-new"
-                    onClick={() => setModal("new")}
-                  >
-                    <Plus size={27} />
-                    <strong>새 프레젠테이션</strong>
-                  </button>
-                  {library.map((d) => (
-                    <button
-                      key={d.id}
-                      onClick={() =>
-                        replaceDeck(parseDeckJson(JSON.stringify(d)))
-                      }
-                    >
-                      <div
-                        style={{
-                          position: "relative",
-                          width: 230,
-                          height: (230 * d.height) / d.width,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <SlideVisual
-                          slide={d.slides[0]}
-                          width={d.width}
-                          height={d.height}
-                          scale={230 / d.width}
-                        />
-                      </div>
-                      <strong>{d.name}</strong>
-                      <small>{d.slides.length}개의 슬라이드</small>
-                    </button>
-                  ))}
-                </div>
-              </>
+              <LibraryContents
+                deck={deck}
+                notify={notify}
+                onNew={() => setModal("new")}
+                onOpen={(saved) =>
+                  replaceDeck(parseDeckJson(JSON.stringify(saved)))
+                }
+              />
             ) : modal === "shortcuts" ? (
               <>
                 <div className="dialog-eyebrow">MAKE IT FLOW</div>

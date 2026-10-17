@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+// macOS Cmd+Home/End scroll the view without collapsing the selected text.
+// Use the platform's caret movement so typing appends instead of replacing it.
+const textStartKey =
+  process.platform === "darwin" ? "Meta+ArrowUp" : "Control+Home";
+const textEndKey =
+  process.platform === "darwin" ? "Meta+ArrowDown" : "Control+End";
+
 test("typing at the list body starts with body formatting while marker edits keep marker formatting", async ({
   page,
 }) => {
@@ -133,7 +140,7 @@ test("Shift+Enter and multiline paste retain exact lines across styled spans", a
     await page.reload();
     await page.getByTestId("slide-element").dblclick();
     const input = page.getByRole("textbox", { name: "슬라이드 텍스트 편집" });
-    if (scenario.position === "end") await input.press("ControlOrMeta+End");
+    if (scenario.position === "end") await input.press(textEndKey);
     else
       await input.evaluate((node, position) => {
         const text = node.querySelector("span")!.firstChild!;
@@ -238,7 +245,7 @@ test("editing imported lists retains blank lines, soft breaks and label separato
   const before = await positions();
   await page.getByTestId("slide-element").dblclick();
   const input = page.getByRole("textbox", { name: "슬라이드 텍스트 편집" });
-  await input.press("ControlOrMeta+End");
+  await input.press(textEndKey);
   await input.pressSequentially("!");
   await page.getByRole("textbox", { name: "발표자 노트", exact: true }).click();
   await expect(page.locator(".save-indicator")).toHaveText("저장됨");
@@ -272,7 +279,7 @@ test("editing imported lists retains blank lines, soft breaks and label separato
     });
   }
   await page.getByTestId("slide-element").dblclick();
-  await input.press("ControlOrMeta+End");
+  await input.press(textEndKey);
   await input.press("Enter");
   await input.press("Enter");
   await input.pressSequentially("Added");
@@ -286,7 +293,7 @@ test("editing imported lists retains blank lines, soft breaks and label separato
     ),
   ).toBe("1. First\nContinuation\n\n2. Next!\n\nAdded");
   await page.getByTestId("slide-element").dblclick();
-  await input.press("ControlOrMeta+Home");
+  await input.press(textStartKey);
   await input.press("Delete");
   await page.getByRole("textbox", { name: "발표자 노트", exact: true }).click();
   await expect(page.locator(".save-indicator")).toHaveText("저장됨");

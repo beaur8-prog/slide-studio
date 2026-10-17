@@ -1,8 +1,35 @@
 # Verification record
 
-Verified on 2026-10-17, macOS arm64.
+Verified on 2026-10-18 (KST), macOS arm64.
 
-## Current release: 1.4.0
+## Current release: 1.4.1
+
+Includes the PC changes through `16c80d8`: presentation navigation and command
+isolation, paragraph editing and import fidelity, and saved-library memory
+release. The production build passes. The full automated suite reports
+**88 passed, 2 skipped, 0 failed, 0 flaky** in 136.3 seconds. The skips require
+Windows native geometry and an actual Office font cache. The only test change
+uses Cmd+Up/Down on macOS to collapse text selection at the document boundaries;
+Cmd+Home/End scroll without moving the caret. Application behavior was not
+changed to satisfy those tests.
+
+The actual Mac ZIP was extracted, signature-verified, installed and launched.
+Native checks covered Korean/English multiline paste and a blank paragraph,
+hidden-slide navigation and numeric jumps, blackout restoration with English
+input, command isolation, end screen and Esc, project save, PPTX export/reopen,
+and four-page PDF export. All PDF pages were rendered and visually checked.
+The original user document was restored afterward.
+
+All five public PPTX decks / 465 slides passed open/export/reimport checks,
+including the 201 MB file. A 13.77 MiB saved-library image fixture was released
+after each of five close paths and a late asynchronous completion. This measures
+JavaScript heap retention, not total OS memory. Both ZIPs pass CRC32 checks and
+contain the same 1.4.1 ASAR; its production assets and Electron shell match the
+working copy. Windows runtime and PE checks pass, but this new Windows ZIP was
+not executed on Windows in this Mac session. Real OS IME composition and
+physical printing remain unverified. See [1.4.1 release evidence](qa/RELEASE-1.4.1.md).
+
+## Version 1.4.0
 
 The PC changes through `3b15e73` are included in both packages. TypeScript and
 the production build pass; the full automated suite reports **58 passed,

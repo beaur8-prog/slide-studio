@@ -17,6 +17,9 @@ Pixels are converted at 96 px/in;
 font sizes and stroke widths are converted to points at 0.75 pt/px. Fonts are
 referenced by name, not embedded. A recipient may need the same fonts for matching
 line wrapping. The exported PPTX does not contain a hidden proprietary project.
+Hidden-slide flags survive both project and PPTX round trips. Normal slideshow
+navigation skips them; starting at the selected slide or entering its number can
+still show a hidden slide explicitly.
 
 PPTX import reads the presentation relationship list for slide order, not file
 name sorting. It reads slide size, text, supported shapes, embedded raster images,
@@ -37,6 +40,20 @@ horizontal direction through project save and PPTX round trips. Curved connector
 remain outside this straight-line implementation.
 First/last paragraph spacing follows `spcFirstLastPara` (off by default), so
 inherited paragraph gaps do not displace single-line captions below the slide.
+Absent paragraph line spacing uses the same 1.2 baseline as explicit 100%, with
+normal-autofit reduction applied. This matches the measured Windows samples;
+it is not a reconstruction of PowerPoint's font-dependent layout engine. Blank
+paragraphs and explicit blank lines retain the full computed line advance,
+including fixed point spacing and the size of each individual blank line.
+
+Automatic list numbers count nonempty list items by level. Paragraph-level
+`startAt` restarts a sequence, while an inherited start initializes it. The
+current importer resolves labels into editable text and approximates non-Arabic
+numbering formats as decimal labels. Imported hanging labels reserve the indent
+without inserting an extra visible space. Project files preserve the label
+metadata; PPTX exports these resolved labels as literal bullets, so automatic
+renumbering after edits in PowerPoint is not preserved. Editing away a label in
+Slide Studio returns that paragraph to ordinary text layout.
 
 Rounded rectangles retain their `adj` corner adjustment as a pixel radius through
 project save, canvas scaling, and PPTX export, including explicitly square corners.
@@ -99,6 +116,7 @@ Implementation references:
 - [UTIF TIFF decoder](https://github.com/photopea/UTIF.js)
 - [Carlito font and license](https://github.com/googlefonts/carlito)
 - [DrawingML normal autofit](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.normalautofit?view=openxml-3.0.1)
+- [DrawingML automatic numbering and list levels](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.autonumberedbullet?view=openxml-3.0.1)
 - [DrawingML first/last paragraph spacing](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.bodyproperties.useparagraphspacing?view=openxml-3.0.1)
 - [PowerPoint table row sizing](https://support.microsoft.com/en-us/powerpoint/change-the-size-of-a-table-column-or-row-in-powerpoint)
 - [Microsoft DrawingML extension specification](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/06cff208-c6e1-4db7-bb68-665135e5f0de)

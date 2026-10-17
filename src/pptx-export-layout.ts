@@ -1,4 +1,5 @@
 import type { SlideElement, TextParagraph, TextRun } from "./types";
+import { paragraphBullet } from "./text-layout";
 const A = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const P = "http://schemas.openxmlformats.org/presentationml/2006/main";
 const child = (n: Element | undefined, name: string) =>
@@ -269,8 +270,14 @@ export function restoreLayoutXml(
         ] as const)
           if (value !== undefined)
             make("spcPts", { val: Math.round(value * 75) }, make(key, {}, pr));
-        make("buNone", {}, pr);
-        for (const run of paragraph.runs) {
+        const bullet = paragraphBullet(paragraph);
+        // Labels are already resolved in the editable model. Export a literal
+        // bullet so PowerPoint preserves its hanging indent without a fake space.
+        if (bullet) {
+          make("buChar", { char: bullet.label }, pr);
+          runProps(pr, paragraph.runs[0], "defRPr");
+        } else make("buNone", {}, pr);
+        for (const run of bullet?.runs ?? paragraph.runs) {
           const lines = run.text.split("\n");
           lines.forEach((text, index) => {
             if (index) runProps(make("br", {}, p), run);

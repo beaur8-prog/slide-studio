@@ -216,6 +216,9 @@ export function parseDeckJson(text: string): Deck {
       const elementIds = new Set<string>();
       return {
         id,
+        ...(slide.hidden !== undefined
+          ? { hidden: booleanValue(slide.hidden, `${label} 숨김`) }
+          : {}),
         background: colorValue(slide.background, `${label} 배경`),
         notes: stringValue(slide.notes, `${label} 발표 노트`, 500000),
         transition: enumValue(
@@ -444,6 +447,13 @@ export function parseDeckJson(text: string): Deck {
                   p.align,
                   ["left", "center", "right"] as const,
                   elLabel,
+                );
+              if (p.bulletPrefix !== undefined)
+                paragraph.bulletPrefix = stringValue(
+                  p.bulletPrefix,
+                  elLabel,
+                  200,
+                  false,
                 );
               for (const key of [
                 "fontSize",
@@ -698,6 +708,8 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
     const path = `ppt/slides/slide${index + 1}.xml`;
     let xml = await zip.file(path)!.async("string");
     const doc = xmlDocument(xml, path);
+    if (slide.hidden) doc.documentElement.setAttribute("show", "0");
+    else doc.documentElement.removeAttribute("show");
     restoreLayoutXml(doc, slide.elements);
     xml = new XMLSerializer().serializeToString(doc);
     zip.file(
@@ -1290,6 +1302,11 @@ export async function importPptx(
       );
     const slide: Slide = {
       id: uid(),
+      ...(["0", "false"].includes(
+        doc.documentElement.getAttribute("show") ?? "",
+      )
+        ? { hidden: true }
+        : {}),
       background: bgColor?.color ?? "#FFFFFF",
       notes: "",
       transition: "none",

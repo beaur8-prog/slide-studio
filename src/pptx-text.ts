@@ -61,6 +61,10 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
     firstAttribute(bodyProps, "spcFirstLastPara", "0"),
   );
   const sourceParagraphs = children(body, "p");
+  // DrawingML numbering follows list levels, not the text body's paragraph
+  // index. Blank paragraphs do not consume a number. An inherited startAt
+  // initializes a sequence; a paragraph's own startAt explicitly restarts it.
+  const numbering = new Map<number, { type: string; value: number }>();
   const paragraphs: TextParagraph[] = sourceParagraphs.map((p, index) => {
     const pPr = child(p, "pPr"),
       level = Math.min(8, Math.max(0, num([pPr], "lvl", 0))) + 1;
@@ -137,16 +141,28 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
     const bulletNode = props
       .flatMap((n) => Array.from(n?.children ?? []))
       .find((n) => ["buNone", "buChar", "buAutoNum"].includes(n.localName));
+    let bulletPrefix: string | undefined;
     if (
       bulletNode?.localName !== "buNone" &&
       bulletNode &&
       runs.some((r) => r.text.trim())
     ) {
-      const prefix =
-        bulletNode.localName === "buChar"
-          ? (bulletNode.getAttribute("char") ?? "•")
-          : `${num([bulletNode], "startAt", 1) + index}.`;
-      runs.unshift({ ...runs[0], text: prefix + " " });
+      let prefix = bulletNode.getAttribute("char") ?? "•";
+      if (bulletNode.localName === "buAutoNum") {
+        const type = bulletNode.getAttribute("type") ?? "arabicPeriod";
+        const previous = numbering.get(level);
+        const explicitStart = child(pPr, "buAutoNum")?.hasAttribute("startAt");
+        const value =
+          explicitStart || !previous || previous.type !== type
+            ? num([bulletNode], "startAt", 1)
+            : previous.value + 1;
+        numbering.set(level, { type, value });
+        for (const nested of numbering.keys())
+          if (nested > level) numbering.delete(nested);
+        prefix = `${value}.`;
+      }
+      bulletPrefix = prefix + " ";
+      runs.unshift({ ...runs[0], text: bulletPrefix });
     }
     const size = runs[0].fontSize ?? 32;
     const spacing = (name: string) => {
@@ -165,6 +181,7 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
     const align = firstAttribute(props, "algn", "l");
     return {
       runs,
+      ...(bulletPrefix ? { bulletPrefix } : {}),
       align: align === "ctr" ? "center" : align === "r" ? "right" : "left",
       fontSize: size,
       ...(linePt
@@ -172,15 +189,15 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
             lineSpacing:
               (num([linePt], "val", 0) / 75) * Math.abs(ctx.sy) * scale,
           }
-        : linePct
-          ? {
-              lineHeight:
-                Math.max(
-                  0.01,
-                  num([linePct], "val", 100000) / 100000 - lineReduction,
-                ) * 1.2,
-            }
-          : {}),
+        : {
+            // Missing lnSpc uses the same single-line baseline as 100%.
+            // CSS normal depends on the fallback font's metrics instead.
+            lineHeight:
+              Math.max(
+                0.01,
+                num([linePct], "val", 100000) / 100000 - lineReduction,
+              ) * 1.2,
+          }),
       spaceBefore: index === 0 && !edgeSpacing ? 0 : spacing("spcBef"),
       spaceAfter:
         index === sourceParagraphs.length - 1 && !edgeSpacing

@@ -7,7 +7,12 @@ import type {
   TextParagraph,
   TextRun,
 } from "./types";
-import { fontStack, paragraphLines, scriptRuns } from "./text-layout";
+import {
+  fontStack,
+  paragraphBullet,
+  paragraphLines,
+  scriptRuns,
+} from "./text-layout";
 import { LineShape } from "./LineShape";
 
 // Chromium does not implement CSS hanging-punctuation. Try letting the terminal
@@ -25,7 +30,10 @@ function TextLine({
   first: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const runs = line.flatMap(scriptRuns);
+  const bullet = first ? paragraphBullet({ ...p, runs: line }) : undefined;
+  const runs = bullet
+    ? [{ ...line[0], text: bullet.label }, ...bullet.runs.flatMap(scriptRuns)]
+    : line.flatMap(scriptRuns);
   useLayoutEffect(() => {
     const box = ref.current;
     const stop = box?.querySelector<HTMLElement>("[data-hanging-punctuation]");
@@ -71,8 +79,11 @@ function TextLine({
       style={{
         fontSize: Math.max(
           ...line.map((r) => r.fontSize ?? p.fontSize ?? e.fontSize ?? 32),
+          ...(line.length ? [] : [p.fontSize ?? e.fontSize ?? 32]),
         ),
-        minHeight: line.every((r) => !r.text) ? "1em" : undefined,
+        // An empty line has no inline box, but still occupies its full line
+        // advance (including fixed spacing and the font size of this line).
+        minBlockSize: line.every((r) => !r.text) ? "1lh" : undefined,
         textIndent: first ? (p.indent ?? 0) : 0,
       }}
     >
@@ -87,7 +98,15 @@ function TextLine({
           <span
             key={j}
             lang={r.language}
+            data-bullet={bullet && j === 0 ? "" : undefined}
             style={{
+              ...(bullet && j === 0
+                ? {
+                    display: "inline-block",
+                    minWidth: Math.max(0, -(p.indent ?? 0)),
+                    textIndent: 0,
+                  }
+                : {}),
               letterSpacing: r.letterSpacing,
               overflowWrap:
                 p.latinLineBreak === false &&
@@ -164,13 +183,12 @@ export function TextContent({ element: e }: { element: SlideElement }) {
           data-text-paragraph
           style={{
             flexShrink: 0,
-            minHeight: p.runs.every((r) => !r.text) ? "1em" : undefined,
             fontSize: p.fontSize ?? e.fontSize,
             textAlign: p.align ?? e.align,
             lineHeight:
               p.lineSpacing !== undefined
                 ? `${p.lineSpacing}px`
-                : (p.lineHeight ?? "normal"),
+                : (p.lineHeight ?? 1.2),
             marginTop: p.spaceBefore ?? 0,
             marginBottom: p.spaceAfter ?? 0,
             paddingLeft: p.marginLeft ?? 0,

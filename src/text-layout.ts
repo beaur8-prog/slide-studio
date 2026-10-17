@@ -40,6 +40,31 @@ export function paragraphText(paragraphs: TextParagraph[]): string {
   return paragraphs.map((p) => p.runs.map((r) => r.text).join("")).join("\n");
 }
 
+// A user can edit or delete a generated label. Only treat it as a bullet while
+// the editable text still has that exact prefix, including across styled runs.
+export function paragraphBullet(paragraph: TextParagraph) {
+  const prefix = paragraph.bulletPrefix;
+  if (
+    !prefix ||
+    !prefix.trim() ||
+    (paragraph.indent ?? 0) >= 0 ||
+    !paragraph.runs
+      .map((r) => r.text)
+      .join("")
+      .startsWith(prefix)
+  )
+    return undefined;
+  let remaining = prefix.length;
+  const runs = paragraph.runs.flatMap((run) => {
+    const skip = Math.min(remaining, run.text.length);
+    remaining -= skip;
+    return skip === run.text.length
+      ? []
+      : [{ ...run, text: run.text.slice(skip) }];
+  });
+  return { label: prefix.trimEnd(), runs };
+}
+
 // Each explicit line break carries its own font metrics. A large first run
 // must not impose its minimum line height on later, smaller blank lines.
 export function paragraphLines(paragraph: TextParagraph): TextRun[][] {

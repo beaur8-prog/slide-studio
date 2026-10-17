@@ -22,6 +22,7 @@ import {
   Circle,
   Copy,
   Download,
+  EyeOff,
   File,
   FolderOpen,
   Grid2X2,
@@ -244,6 +245,10 @@ export default function App() {
   const presentationActive = useRef(false);
   const browserPresentationFullscreen = useRef(false);
   const [presentIndex, setPresentIndex] = useState(0);
+  const [presentEnded, setPresentEnded] = useState(false);
+  const presentationPosition = useRef({ index: 0, ended: false });
+  const presentationOrigin = useRef(activeId);
+  const presentationNumber = useRef("");
   const [presentNotes, setPresentNotes] = useState(false);
   const [blackout, setBlackout] = useState(false);
   const [windowSize, setWindowSize] = useState({
@@ -907,69 +912,126 @@ export default function App() {
   };
   const enterPresentationFullscreen = () => {
     if (window.desktop?.setPresentationMode) {
-      void window.desktop.setPresentationMode(true).catch(() =>
-        notify("전체 화면을 사용할 수 없습니다."),
-      );
+      void window.desktop
+        .setPresentationMode(true)
+        .catch(() => notify("전체 화면을 사용할 수 없습니다."));
     } else if (!document.fullscreenElement) {
       browserPresentationFullscreen.current = true;
-      void document.documentElement.requestFullscreen().then(() => {
-        // Esc may be pressed before an asynchronous fullscreen request finishes.
-        if (!presentationActive.current && document.fullscreenElement) {
+      void document.documentElement
+        .requestFullscreen()
+        .then(() => {
+          // Esc may be pressed before an asynchronous fullscreen request finishes.
+          if (!presentationActive.current && document.fullscreenElement) {
+            browserPresentationFullscreen.current = false;
+            void document.exitFullscreen().catch(() => {});
+          }
+        })
+        .catch(() => {
           browserPresentationFullscreen.current = false;
-          void document.exitFullscreen().catch(() => {});
-        }
-      }).catch(() => {
-        browserPresentationFullscreen.current = false;
-        notify("전체 화면을 사용할 수 없습니다.");
-      });
+          notify("전체 화면을 사용할 수 없습니다.");
+        });
     }
+  };
+  const showPresentationSlide = (index: number, ended = false) => {
+    presentationPosition.current = { index, ended };
+    setPresentIndex(index);
+    setPresentEnded(ended);
+    setBlackout(false);
+    presentationNumber.current = "";
   };
   const startPresent = (fromBeginning = false) => {
     finish();
     setEditing(null);
-    setPresentIndex(fromBeginning ? 0 : activeIndex);
-    setBlackout(false);
+    presentationOrigin.current = activeId;
+    // Starting from the selected slide is an explicit request, including a
+    // hidden slide. A normal show starts at the first visible slide.
+    const first = fromBeginning
+      ? deck.slides.findIndex((s) => !s.hidden)
+      : activeIndex;
+    showPresentationSlide(Math.max(0, first), first < 0);
     setPresenting(true);
     setMenu(null);
     presentationActive.current = true;
     enterPresentationFullscreen();
   };
-  const stopPresent = () => {
+  const leavePresentation = useCallback(() => {
+    if (!presentationActive.current) return;
     presentationActive.current = false;
+    const position = presentationPosition.current;
+    // Completing the show restores the starting selection; interrupting it
+    // selects the slide being presented. Native/browser exits use this too.
+    const id = position.ended
+      ? presentationOrigin.current
+      : deckRef.current.slides[position.index]?.id;
+    if (id) setActiveId(id);
+    setSelected([]);
+    setEditing(null);
     setPresenting(false);
     setBlackout(false);
+    setPresentEnded(false);
+    presentationNumber.current = "";
+  }, []);
+  const stopPresent = () => {
+    leavePresentation();
     if (window.desktop?.setPresentationMode) {
-      void window.desktop.setPresentationMode(false).catch(() =>
-        notify("전체 화면을 종료할 수 없습니다."),
-      );
-    } else if (browserPresentationFullscreen.current && document.fullscreenElement) {
+      void window.desktop
+        .setPresentationMode(false)
+        .catch(() => notify("전체 화면을 종료할 수 없습니다."));
+    } else if (
+      browserPresentationFullscreen.current &&
+      document.fullscreenElement
+    ) {
       browserPresentationFullscreen.current = false;
       void document.exitFullscreen().catch(() => {});
     }
   };
   useEffect(() => {
-    const ended = () => {
-      presentationActive.current = false;
-      setPresenting(false);
-      setBlackout(false);
-    };
     const fullscreenChanged = () => {
-      if (browserPresentationFullscreen.current && !document.fullscreenElement) {
+      if (
+        browserPresentationFullscreen.current &&
+        !document.fullscreenElement
+      ) {
         browserPresentationFullscreen.current = false;
-        ended();
+        leavePresentation();
       }
     };
-    const unsubscribe = window.desktop?.onPresentationEnded?.(ended);
+    const unsubscribe =
+      window.desktop?.onPresentationEnded?.(leavePresentation);
     document.addEventListener("fullscreenchange", fullscreenChanged);
     return () => {
       unsubscribe?.();
       document.removeEventListener("fullscreenchange", fullscreenChanged);
     };
-  }, []);
-  const movePresent = (direction: number) =>
-    setPresentIndex((i) =>
-      Math.max(0, Math.min(deck.slides.length - 1, i + direction)),
-    );
+  }, [leavePresentation]);
+  const restorePresentation = () => {
+    presentationNumber.current = "";
+    if (!blackout) return false;
+    setBlackout(false);
+    return true;
+  };
+  const movePresent = (direction: number) => {
+    if (restorePresentation()) return;
+    const position = presentationPosition.current;
+    if (position.ended && direction > 0) {
+      stopPresent();
+      return;
+    }
+    let next = position.ended
+      ? deck.slides.length - 1
+      : position.index + direction;
+    while (next >= 0 && next < deck.slides.length && deck.slides[next].hidden)
+      next += direction;
+    if (next >= deck.slides.length) showPresentationSlide(position.index, true);
+    else if (next >= 0) showPresentationSlide(next);
+  };
+  const jumpPresentationEdge = (last: boolean) => {
+    if (restorePresentation()) return;
+    let next = last ? deck.slides.length - 1 : 0;
+    while (next >= 0 && next < deck.slides.length && deck.slides[next].hidden)
+      next += last ? -1 : 1;
+    const ended = next < 0 || next >= deck.slides.length;
+    showPresentationSlide(ended ? 0 : next, ended);
+  };
   const applyTheme = (id: string) => {
     const from = THEMES.find((t) => t.id === deck.theme) || THEMES[0],
       to = THEMES.find((t) => t.id === id)!;
@@ -1032,6 +1094,8 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (presenting) {
+        // Modifier shortcuts must not become slide numbers or navigation.
+        if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
         if (e.key === "Escape") {
           e.preventDefault();
           stopPresent();
@@ -1045,11 +1109,34 @@ export default function App() {
           movePresent(-1);
         } else if (e.key === "Home") {
           e.preventDefault();
-          setPresentIndex(0);
+          jumpPresentationEdge(false);
         } else if (e.key === "End") {
           e.preventDefault();
-          setPresentIndex(deck.slides.length - 1);
-        } else if (e.key.toLowerCase() === "b") setBlackout((b) => !b);
+          jumpPresentationEdge(true);
+        } else if (/^[0-9]$/.test(e.key)) {
+          e.preventDefault();
+          // Decks contain at most 500 slides. Keep oversized input invalid.
+          if (presentationNumber.current.length < 6)
+            presentationNumber.current += e.key;
+        } else if (e.key === "Backspace") {
+          e.preventDefault();
+          presentationNumber.current = presentationNumber.current.slice(0, -1);
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          const digits = presentationNumber.current;
+          presentationNumber.current = "";
+          if (!digits) movePresent(1);
+          else {
+            const index = Number(digits) - 1;
+            // A direct number jump may intentionally show a hidden slide.
+            if (index >= 0 && index < deck.slides.length)
+              showPresentationSlide(index);
+          }
+        } else if (e.key.toLowerCase() === "b" && !presentEnded) {
+          e.preventDefault();
+          presentationNumber.current = "";
+          setBlackout((b) => !b);
+        }
         return;
       }
       const cmd = e.metaKey || e.ctrlKey;
@@ -2066,6 +2153,16 @@ export default function App() {
                 >
                   발표자 노트
                 </Tool>
+                <Tool
+                  icon={<EyeOff size={25} />}
+                  active={!!slide.hidden}
+                  title={slide.hidden ? "숨김 해제" : "슬라이드 숨기기"}
+                  onClick={() =>
+                    changeSlide((s) => ({ ...s, hidden: !s.hidden }))
+                  }
+                >
+                  {slide.hidden ? "숨김 해제" : "슬라이드 숨기기"}
+                </Tool>
                 <span className="group-label">발표 준비</span>
               </div>
               <div className="ribbon-hint">
@@ -2073,7 +2170,7 @@ export default function App() {
                 <span>
                   방향키 / Space로 다음 슬라이드 · B로 검은 화면
                   <br />
-                  Esc를 누르면 편집 화면으로 돌아옵니다.
+                  숫자 + Enter로 이동 · Esc로 편집 화면 복귀
                 </span>
               </div>
             </>
@@ -2097,7 +2194,7 @@ export default function App() {
               {deck.slides.map((s, i) => (
                 <div
                   key={s.id}
-                  className={`thumbnail-row ${s.id === slide.id ? "active" : ""} ${dropSlide === i ? "drop-before" : ""}`}
+                  className={`thumbnail-row ${s.id === slide.id ? "active" : ""} ${s.hidden ? "hidden-slide" : ""} ${dropSlide === i ? "drop-before" : ""}`}
                   draggable
                   onDragStart={(e) => {
                     setDragSlide(i);
@@ -2123,10 +2220,15 @@ export default function App() {
                     setDropSlide(null);
                   }}
                 >
-                  <span className="slide-number">{i + 1}</span>
+                  <span
+                    className="slide-number"
+                    title={s.hidden ? "발표에서 숨김" : undefined}
+                  >
+                    {i + 1}
+                  </span>
                   <button
                     className="thumbnail-button"
-                    aria-label={`슬라이드 ${i + 1}: ${slideTitle(s)}`}
+                    aria-label={`슬라이드 ${i + 1}: ${slideTitle(s)}${s.hidden ? " (숨김)" : ""}`}
                     aria-current={s.id === slide.id ? "true" : undefined}
                     onClick={() => selectSlide(s.id)}
                   >
@@ -2188,6 +2290,7 @@ export default function App() {
                     </div>
                     <span>
                       {i + 1}. {slideTitle(s)}
+                      {s.hidden ? " (숨김)" : ""}
                     </span>
                   </button>
                 ))}
@@ -2909,6 +3012,7 @@ export default function App() {
                     ["처음부터 / 현재부터 발표", "F5 / Shift + F5"],
                     ["발표 중 이동 / 종료", "방향키 / Esc"],
                     ["발표 중 검은 화면", "B"],
+                    ["발표 중 슬라이드 번호로 이동", "숫자 + Enter"],
                   ].map(([label, key]) => (
                     <div key={label}>
                       <span>{label}</span>
@@ -2943,38 +3047,48 @@ export default function App() {
           className={`presentation-view ${blackout ? "blackout" : ""}`}
           data-testid="presentation-view"
           role="region"
-          aria-label={`발표 슬라이드 ${presentIndex + 1} / ${deck.slides.length}`}
+          aria-label={
+            presentEnded
+              ? "슬라이드 쇼 종료 안내"
+              : `발표 슬라이드 ${presentIndex + 1} / ${deck.slides.length}`
+          }
           onClick={() => movePresent(1)}
         >
-          <div
-            key={presentIndex}
-            className={`present-slide ${deck.slides[presentIndex].transition === "fade" ? "fade-in" : ""}`}
-            style={{
-              width:
-                deck.width *
-                Math.min(
+          {presentEnded ? (
+            <p className="presentation-end" data-testid="presentation-end">
+              슬라이드 쇼가 끝났습니다. 클릭하거나 Esc 키를 눌러 종료하세요.
+            </p>
+          ) : (
+            <div
+              key={presentIndex}
+              className={`present-slide ${deck.slides[presentIndex].transition === "fade" ? "fade-in" : ""}`}
+              style={{
+                width:
+                  deck.width *
+                  Math.min(
+                    windowSize.w / deck.width,
+                    (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
+                  ),
+                height:
+                  deck.height *
+                  Math.min(
+                    windowSize.w / deck.width,
+                    (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
+                  ),
+              }}
+            >
+              <SlideVisual
+                slide={deck.slides[presentIndex]}
+                width={deck.width}
+                height={deck.height}
+                scale={Math.min(
                   windowSize.w / deck.width,
                   (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
-                ),
-              height:
-                deck.height *
-                Math.min(
-                  windowSize.w / deck.width,
-                  (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
-                ),
-            }}
-          >
-            <SlideVisual
-              slide={deck.slides[presentIndex]}
-              width={deck.width}
-              height={deck.height}
-              scale={Math.min(
-                windowSize.w / deck.width,
-                (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
-              )}
-            />
-          </div>
-          {presentNotes && (
+                )}
+              />
+            </div>
+          )}
+          {presentNotes && !presentEnded && (
             <div className="present-notes" onClick={(e) => e.stopPropagation()}>
               <strong>발표자 노트</strong>
               <p>

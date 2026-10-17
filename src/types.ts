@@ -22,6 +22,9 @@ export interface TextRun {
 }
 export interface TextParagraph {
   runs: TextRun[];
+  // Imported list label, including its plain-text separator. Keep editable
+  // text intact while painting the label in the paragraph's hanging indent.
+  bulletPrefix?: string;
   align?: "left" | "center" | "right";
   fontSize?: number;
   lineHeight?: number;
@@ -97,6 +100,7 @@ export interface SlideElement {
 }
 export interface Slide {
   id: string;
+  hidden?: boolean;
   background: string;
   notes: string;
   elements: SlideElement[];

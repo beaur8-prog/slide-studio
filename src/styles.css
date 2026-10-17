@@ -622,6 +622,12 @@ button:not(:disabled):active {
   color: var(--accent);
   font-weight: 650;
 }
+.hidden-slide .slide-number {
+  text-decoration: line-through;
+}
+.hidden-slide .thumbnail-preview {
+  opacity: 0.55;
+}
 .thumbnail-button {
   display: block;
   padding: 0;
@@ -1604,6 +1610,16 @@ button:not(:disabled):active {
 }
 .presentation-view.blackout .present-slide {
   visibility: hidden;
+}
+.presentation-end {
+  position: absolute;
+  top: 12px;
+  left: 20px;
+  right: 20px;
+  margin: 0;
+  color: white;
+  text-align: center;
+  font-size: 14px;
 }
 .present-notes {
   height: 160px;

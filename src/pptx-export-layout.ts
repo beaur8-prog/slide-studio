@@ -274,8 +274,39 @@ export function restoreLayoutXml(
         // Labels are already resolved in the editable model. Export a literal
         // bullet so PowerPoint preserves its hanging indent without a fake space.
         if (bullet) {
+          const marker = paragraph.runs[0];
+          // The marker run stores its resolved size/face/color separately from
+          // the body. A defRPr alone would resize the body on reimport.
+          make(
+            "srgbClr",
+            { val: (marker.color ?? el.color ?? "#172033").slice(1) },
+            make("buClr", {}, pr),
+          );
+          make(
+            "buSzPts",
+            {
+              val: Math.round(
+                (marker.fontSize ?? paragraph.fontSize ?? el.fontSize ?? 32) *
+                  75,
+              ),
+            },
+            pr,
+          );
+          make(
+            "buFont",
+            { typeface: marker.fontFamily ?? el.fontFamily ?? "Arial" },
+            pr,
+          );
           make("buChar", { char: bullet.label }, pr);
-          runProps(pr, paragraph.runs[0], "defRPr");
+          runProps(
+            pr,
+            {
+              ...(bullet.runs[0] ?? marker),
+              fontSize: paragraph.fontSize ?? bullet.runs[0]?.fontSize,
+              text: "",
+            },
+            "defRPr",
+          );
         } else make("buNone", {}, pr);
         for (const run of bullet?.runs ?? paragraph.runs) {
           const lines = run.text.split("\n");

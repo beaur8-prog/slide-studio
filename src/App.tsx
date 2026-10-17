@@ -243,12 +243,19 @@ export default function App() {
   });
   const [presenting, setPresenting] = useState(false);
   const presentationActive = useRef(false);
+  const presentationView = useRef<HTMLDivElement>(null);
   const browserPresentationFullscreen = useRef(false);
   const [presentIndex, setPresentIndex] = useState(0);
   const [presentEnded, setPresentEnded] = useState(false);
   const presentationPosition = useRef({ index: 0, ended: false });
   const presentationOrigin = useRef(activeId);
   const presentationNumber = useRef("");
+  const presentationWheel = useRef({
+    delta: 0,
+    lastEvent: 0,
+    lastNavigation: -Infinity,
+    direction: 0,
+  });
   const [presentNotes, setPresentNotes] = useState(false);
   const [blackout, setBlackout] = useState(false);
   const [windowSize, setWindowSize] = useState({
@@ -370,6 +377,9 @@ export default function App() {
     setMenu(null);
   };
   const replaceDeck = (next: Deck) => {
+    // A file dialog/import started in the editor can finish after a show starts.
+    // Leave the old deck's presentation before its slide indexes become invalid.
+    if (presentationActive.current) stopPresent();
     setHistory({ past: [], present: next, future: [] });
     setActiveId(next.slides[0].id);
     setSelected([]);
@@ -940,8 +950,15 @@ export default function App() {
     presentationNumber.current = "";
   };
   const startPresent = (fromBeginning = false) => {
+    if (presentationActive.current || modal || busy) return;
     finish();
     setEditing(null);
+    presentationWheel.current = {
+      delta: 0,
+      lastEvent: 0,
+      lastNavigation: -Infinity,
+      direction: 0,
+    };
     presentationOrigin.current = activeId;
     // Starting from the selected slide is an explicit request, including a
     // hidden slide. A normal show starts at the first visible slide.
@@ -986,11 +1003,13 @@ export default function App() {
     }
   };
   useEffect(() => {
+    if (presenting) presentationView.current?.focus({ preventScroll: true });
+  }, [presenting]);
+  useEffect(() => {
     const fullscreenChanged = () => {
-      if (
-        browserPresentationFullscreen.current &&
-        !document.fullscreenElement
-      ) {
+      // Observe exits even if the editor was fullscreen before the show began.
+      // Ownership only controls whether stopping the show exits fullscreen.
+      if (!document.fullscreenElement) {
         browserPresentationFullscreen.current = false;
         leavePresentation();
       }
@@ -1010,11 +1029,11 @@ export default function App() {
     return true;
   };
   const movePresent = (direction: number) => {
-    if (restorePresentation()) return;
+    if (restorePresentation()) return true;
     const position = presentationPosition.current;
     if (position.ended && direction > 0) {
       stopPresent();
-      return;
+      return true;
     }
     let next = position.ended
       ? deck.slides.length - 1
@@ -1023,7 +1042,54 @@ export default function App() {
       next += direction;
     if (next >= deck.slides.length) showPresentationSlide(position.index, true);
     else if (next >= 0) showPresentationSlide(next);
+    else return false;
+    return true;
   };
+  useEffect(() => {
+    const view = presentationView.current;
+    if (!presenting || !view) return;
+    const wheel = (event: WheelEvent) => {
+      if (
+        event.buttons ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.shiftKey ||
+        !event.deltaY ||
+        Math.abs(event.deltaX) > Math.abs(event.deltaY) ||
+        (event.target instanceof Element &&
+          event.target.closest(".present-notes"))
+      )
+        return;
+      event.preventDefault();
+      const dy =
+        event.deltaY *
+        (event.deltaMode === 1
+          ? 40
+          : event.deltaMode === 2
+            ? view.clientHeight
+            : 1);
+      const now = performance.now(),
+        direction = Math.sign(dy),
+        gesture = presentationWheel.current;
+      // Match the editor's wheel threshold and cooldown: a large delta still
+      // advances just one slide, with a cooldown for trailing wheel events.
+      if (now - gesture.lastEvent > 220 || direction !== gesture.direction)
+        gesture.delta = 0;
+      gesture.lastEvent = now;
+      gesture.direction = direction;
+      if (now - gesture.lastNavigation < 350) {
+        gesture.delta = 0;
+        return;
+      }
+      gesture.delta += dy;
+      if (Math.abs(gesture.delta) < 60) return;
+      gesture.delta = 0;
+      if (movePresent(direction)) gesture.lastNavigation = now;
+    };
+    view.addEventListener("wheel", wheel, { passive: false });
+    return () => view.removeEventListener("wheel", wheel);
+  });
   const jumpPresentationEdge = (last: boolean) => {
     if (restorePresentation()) return;
     let next = last ? deck.slides.length - 1 : 0;
@@ -1251,6 +1317,10 @@ export default function App() {
   });
   useEffect(() => {
     const paste = (e: ClipboardEvent) => {
+      if (presentationActive.current) {
+        e.preventDefault();
+        return;
+      }
       if (editingTarget(e.target)) return;
       const file = Array.from(e.clipboardData?.items || [])
         .find((i) => i.type.startsWith("image/"))
@@ -1265,6 +1335,10 @@ export default function App() {
   });
   useEffect(() =>
     window.desktop?.onMenu((action) => {
+      if (presentationActive.current) {
+        if (action === "present") movePresent(1);
+        return;
+      }
       if (action === "new") setModal("new");
       if (action === "open") void openProject();
       if (action === "save") void saveProject();
@@ -1283,7 +1357,7 @@ export default function App() {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
         event.preventDefault();
         event.stopPropagation();
-        if (!event.repeat) void printDeck();
+        if (!event.repeat && !presentationActive.current) void printDeck();
       }
     };
     window.addEventListener("keydown", onPrintKey, true);
@@ -1435,6 +1509,7 @@ export default function App() {
     <>
       <div
         className={`app-shell office-shell ${window.desktop?.platform === "win32" ? "desktop-windows" : ""}`}
+        inert={presenting}
       >
         <header className="topbar">
           <button
@@ -3045,6 +3120,8 @@ export default function App() {
       {presenting && (
         <div
           className={`presentation-view ${blackout ? "blackout" : ""}`}
+          ref={presentationView}
+          tabIndex={-1}
           data-testid="presentation-view"
           role="region"
           aria-label={

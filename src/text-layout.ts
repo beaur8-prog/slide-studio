@@ -40,6 +40,55 @@ export function paragraphText(paragraphs: TextParagraph[]): string {
   return paragraphs.map((p) => p.runs.map((r) => r.text).join("")).join("\n");
 }
 
+// innerText drops empty block lines and derives extra breaks from block layout.
+// Read the editable structure instead so imported blank paragraphs remain text.
+// Inline wrappers do not decide whether a trailing break is a caret placeholder;
+// its position within the complete block/line does.
+export function editableText(root: HTMLElement): string {
+  const isBlock = (node: Node) =>
+    node instanceof HTMLElement && /^(DIV|P|LI)$/.test(node.tagName);
+  const inlineNodes = (node: Node): Node[] =>
+    Array.from(node.childNodes).flatMap((child) =>
+      child instanceof HTMLElement &&
+      !isBlock(child) &&
+      !(child instanceof HTMLBRElement)
+        ? inlineNodes(child)
+        : [child],
+    );
+  const read = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+    if (!(node instanceof HTMLElement)) return "";
+    const children = inlineNodes(node);
+    let text = "",
+      previousBlock = false,
+      hasContent = false;
+    for (const [index, child] of children.entries()) {
+      const block = isBlock(child);
+      if (child instanceof HTMLBRElement) {
+        if (index < children.length - 1) text += "\n";
+        continue;
+      }
+      let value = read(child);
+      // A rendered source line never contains a newline character. Chromium
+      // adds one terminal caret newline when Shift+Enter edits that line.
+      if (
+        node.hasAttribute("data-text-line") &&
+        index === children.length - 1 &&
+        child.nodeType === Node.TEXT_NODE &&
+        value.endsWith("\n")
+      )
+        value = value.slice(0, -1);
+      if (!block && !value) continue;
+      if ((block || previousBlock) && hasContent) text += "\n";
+      text += value;
+      previousBlock = block;
+      hasContent ||= block || value.length > 0;
+    }
+    return text;
+  };
+  return read(root);
+}
+
 // A user can edit or delete a generated label. Only treat it as a bullet while
 // the editable text still has that exact prefix, including across styled runs.
 export function paragraphBullet(paragraph: TextParagraph) {
@@ -101,19 +150,34 @@ export function editText(element: SlideElement, text: string): SlideElement {
   )
     end++;
   const styles: TextRun[] = [],
-    paragraphAt: TextParagraph[] = [];
+    paragraphAt: TextParagraph[] = [],
+    paragraphBreaks: boolean[] = [];
+  const paragraphStarts = new Map<TextParagraph, number>();
   for (const [i, p] of element.paragraphs.entries()) {
     if (i) {
-      styles.push({ text: "\n" });
+      styles.push(p.runs[0] ?? { text: "" });
       paragraphAt.push(p);
+      paragraphBreaks.push(true);
     }
+    paragraphStarts.set(p, styles.length);
     for (const run of p.runs)
       for (let c = 0; c < run.text.length; c++) {
         styles.push(run);
         paragraphAt.push(p);
+        paragraphBreaks.push(false);
       }
   }
-  const insertedStyle = styles[Math.max(0, start - 1)] ??
+  const paragraph = paragraphAt[start];
+  const prefix = paragraph?.bulletPrefix;
+  const atListBodyStart =
+    prefix &&
+    start === paragraphStarts.get(paragraph)! + prefix.length &&
+    old.slice(start - prefix.length, start) === prefix &&
+    !paragraphBreaks[start];
+  // The editable marker can have its own smaller font/color. Typing at the
+  // start of the body must inherit the body run, not the marker's separator.
+  const insertedStyle = (atListBodyStart ? styles[start] : undefined) ??
+    styles[Math.max(0, start - 1)] ??
     styles[start] ?? { text: "" };
   const insertedParagraph =
     paragraphAt[Math.max(0, start - 1)] ?? element.paragraphs[0];
@@ -127,10 +191,30 @@ export function editText(element: SlideElement, text: string): SlideElement {
     ...Array(text.length - start - end).fill(insertedParagraph),
     ...paragraphAt.slice(old.length - end),
   ];
+  // Both DrawingML <a:br> and paragraph boundaries appear as newlines in the
+  // editor's plain text. Keep unchanged soft breaks inside their original
+  // paragraph so typing cannot duplicate paragraph spacing or hanging indents.
+  // Newly inserted newlines retain the editor's existing paragraph semantics.
+  const nextBreaks = [
+    ...paragraphBreaks.slice(0, start),
+    ...Array(text.length - start - end).fill(true),
+    ...paragraphBreaks.slice(old.length - end),
+  ];
+  const paragraphs: TextParagraph[] = [];
   let offset = 0;
-  const paragraphs = text.split("\n").map((line) => {
+  for (let boundary = 0; boundary <= text.length; boundary++) {
+    if (
+      boundary < text.length &&
+      (text[boundary] !== "\n" || !nextBreaks[boundary])
+    )
+      continue;
+    const line = text.slice(offset, boundary);
+    const sourceParagraph =
+      (offset > 0 && nextBreaks[offset - 1]
+        ? nextParagraphs[offset - 1]
+        : nextParagraphs[offset]) ?? insertedParagraph;
     const p: TextParagraph = {
-      ...(nextParagraphs[offset] ?? insertedParagraph),
+      ...sourceParagraph,
       runs: [],
     };
     let previous: TextRun | undefined;
@@ -142,10 +226,11 @@ export function editText(element: SlideElement, text: string): SlideElement {
         previous = style;
       }
     }
-    if (!p.runs.length) p.runs = [{ ...insertedStyle, text: "" }];
-    offset += line.length + 1;
-    return p;
-  });
+    if (!p.runs.length)
+      p.runs = [{ ...(sourceParagraph.runs[0] ?? insertedStyle), text: "" }];
+    paragraphs.push(p);
+    offset = boundary + 1;
+  }
   return { ...element, text, paragraphs };
 }
 

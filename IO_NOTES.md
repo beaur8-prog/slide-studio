@@ -24,7 +24,10 @@ still show a hidden slide explicitly.
 PPTX import reads the presentation relationship list for slide order, not file
 name sorting. It reads slide size, text, supported shapes, embedded raster images,
 speaker notes, theme colors/fonts, basic placeholder inheritance from layouts and
-masters, and axis-aligned group transforms. Master/layout decorative artwork uses
+masters, and group scale/translation, rotation, and reflection. Nested groups are
+flattened from the inside out; rotated groups under a nonuniform parent scale
+can require shear that the editable element model cannot represent and produce
+a warning. Master/layout decorative artwork uses
 its own image relationships and respects the slide's master-artwork visibility.
 Simple text within a shape is split into a separate editable shape and text box.
 Text box insets are folded into plain text geometry, or retained as padding for
@@ -54,6 +57,16 @@ without inserting an extra visible space. Project files preserve the label
 metadata; PPTX exports these resolved labels as literal bullets, so automatic
 renumbering after edits in PowerPoint is not preserved. Editing away a label in
 Slide Studio returns that paragraph to ordinary text layout.
+Bullet point/percentage sizes, fonts, and colors are resolved independently from
+the body text, including explicit follow-text overrides. The resolved marker
+style survives JSON and PPTX export; changing the body font size later does not
+reapply the original relative bullet-size percentage. Non-placeholder text boxes
+use presentation defaults before the master's otherStyle, while title/body
+placeholders retain their separate layout/master inheritance.
+Editing preserves existing soft line breaks and hard paragraph boundaries,
+including empty paragraphs and their font/spacing. The editable DOM reader keeps
+list separators and empty blocks without depending on Chromium's innerText,
+which can omit them. New Enter breaks retain the editor's paragraph semantics.
 
 Rounded rectangles retain their `adj` corner adjustment as a pixel radius through
 project save, canvas scaling, and PPTX export, including explicitly square corners.
@@ -118,6 +131,8 @@ Implementation references:
 - [DrawingML normal autofit](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.normalautofit?view=openxml-3.0.1)
 - [DrawingML automatic numbering and list levels](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.autonumberedbullet?view=openxml-3.0.1)
 - [DrawingML first/last paragraph spacing](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.bodyproperties.useparagraphspacing?view=openxml-3.0.1)
+- [DrawingML bullet size percentage](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.bulletsizepercentage?view=openxml-3.0.1)
+- [DrawingML bullet font](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.bulletfont?view=openxml-3.0.1)
 - [PowerPoint table row sizing](https://support.microsoft.com/en-us/powerpoint/change-the-size-of-a-table-column-or-row-in-powerpoint)
 - [Microsoft DrawingML extension specification](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/06cff208-c6e1-4db7-bb68-665135e5f0de)
 - [DrawingML preset shape definitions (ellipse and donut)](https://github.com/LibreOffice/core/blob/master/oox/source/drawingml/customshapes/presetShapeDefinitions.xml)

@@ -260,3 +260,53 @@ test("an all-hidden deck shows the end screen without revealing slides", async (
     "true",
   );
 });
+
+test("slideshow wheel skips hidden slides once per burst and follows blackout and end navigation", async ({
+  page,
+}) => {
+  await openDeck(page, [2, 4], 5);
+  await page.keyboard.press("F5");
+  await page.getByTestId("presentation-view").hover();
+  await page.mouse.wheel(0, -120);
+  await expectSlide(page, 1, 5);
+  await page.mouse.wheel(0, 120);
+  await expectSlide(page, 3, 5);
+  await page.mouse.wheel(0, 1500);
+  await page.mouse.wheel(0, 1500);
+  await expectSlide(page, 3, 5);
+  await page.waitForTimeout(360);
+  await page.mouse.wheel(0, -120);
+  await expectSlide(page, 1, 5);
+  await page.waitForTimeout(360);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, 120);
+  await page.keyboard.up("Control");
+  await page.mouse.wheel(1500, 0);
+  await expectSlide(page, 1, 5);
+
+  await page.keyboard.press("b");
+  await expect(page.locator(".present-slide")).toBeHidden();
+  await page.mouse.wheel(0, 120);
+  await expectSlide(page, 1, 5);
+  await page.mouse.wheel(0, 120);
+  await expectSlide(page, 1, 5);
+  await page.waitForTimeout(360);
+  await page.mouse.wheel(0, 120);
+  await expectSlide(page, 3, 5);
+
+  await page.keyboard.press("End");
+  await page.waitForTimeout(360);
+  await page.mouse.wheel(0, 120);
+  await expect(page.getByTestId("presentation-end")).toBeVisible();
+  await page.mouse.wheel(0, 120);
+  await expect(page.getByTestId("presentation-end")).toBeVisible();
+  await page.waitForTimeout(360);
+  await page.mouse.wheel(0, -120);
+  await expectSlide(page, 5, 5);
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("presentation-view")).toBeHidden();
+  await expect(page.locator(".thumbnail-button").last()).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+});

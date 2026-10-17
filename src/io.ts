@@ -1024,6 +1024,41 @@ function transformGeometry(
     rotation: attrNumber(node, "rot") / 60000 + parent.rotation,
   };
 }
+function transformGroupedElement(
+  element: SlideElement,
+  cx: number,
+  cy: number,
+  rotation: number,
+  flipH: boolean,
+  flipV: boolean,
+): SlideElement {
+  const angle = (rotation * Math.PI) / 180;
+  const dx = (element.x + element.width / 2 - cx) * (flipH ? -1 : 1);
+  const dy = (element.y + element.height / 2 - cy) * (flipV ? -1 : 1);
+  const mirrored = flipH !== flipV;
+  let orientation =
+    rotation + (mirrored ? -element.rotation : element.rotation);
+  const line =
+    element.type === "shape" &&
+    (element.shape === "line" || element.shape === "arrow");
+  // A connector's rotation encodes its directed endpoints, including markers.
+  // Images/custom paths instead keep reflection in their local flip flags.
+  if (line && flipH) orientation += 180;
+  else if (element.type === "shape" && element.shape === "triangle" && flipV)
+    orientation += 180;
+  return {
+    ...element,
+    x: cx + dx * Math.cos(angle) - dy * Math.sin(angle) - element.width / 2,
+    y: cy + dx * Math.sin(angle) + dy * Math.cos(angle) - element.height / 2,
+    rotation: orientation,
+    ...(element.type === "image" || element.paths
+      ? {
+          flipH: Boolean(element.flipH) !== flipH,
+          flipV: Boolean(element.flipV) !== flipV,
+        }
+      : {}),
+  };
+}
 function placeholder(
   node: Element,
 ): { type: string; index: string } | undefined {
@@ -1464,10 +1499,14 @@ export async function importPptx(
           : ph
             ? "bodyStyle"
             : "otherStyle";
+      const masterTextStyle = child(first(master, "txStyles"), styleName);
+      const presentationTextStyle = first(presentation, "defaultTextStyle");
       return readTextBody(body, {
         nodes: chain,
-        masterStyle: child(first(master, "txStyles"), styleName),
-        defaultStyle: first(presentation, "defaultTextStyle"),
+        // Free text boxes use the presentation's default text style before the
+        // master's otherStyle. Placeholder title/body inheritance is separate.
+        masterStyle: ph ? masterTextStyle : presentationTextStyle,
+        defaultStyle: ph ? presentationTextStyle : masterTextStyle,
         font: formatFont,
         defaultFont:
           styleName === "titleStyle" ? theme.majorFont : theme.minorFont,
@@ -2052,13 +2091,18 @@ export async function importPptx(
             attrNumber(ext, "cx", 1) / (attrNumber(chExt, "cx", 1) || 1);
           const sy =
             attrNumber(ext, "cy", 1) / (attrNumber(chExt, "cy", 1) || 1);
+          const rotation = attrNumber(xf, "rot") / 60000;
+          const flipH = ["1", "true"].includes(xf?.getAttribute("flipH") ?? "");
+          const flipV = ["1", "true"].includes(xf?.getAttribute("flipV") ?? "");
           if (
-            attrNumber(xf, "rot") ||
-            xf?.getAttribute("flipH") === "1" ||
-            xf?.getAttribute("flipV") === "1"
+            rotation &&
+            Math.abs(Math.abs(parent.sx) - Math.abs(parent.sy)) > 1e-6
           )
-            warn("회전·뒤집기 그룹은 그룹 변환 일부가 생략될 수 있습니다.");
+            warn(
+              "비균일 배율 안의 회전 그룹은 기울임 변환 일부가 생략될 수 있습니다.",
+            );
           warn("그룹은 개별 편집 가능한 개체로 해제됩니다.");
+          const firstElement = slide.elements.length;
           await walk(
             node,
             {
@@ -2080,6 +2124,30 @@ export async function importPptx(
             sourceRelationships,
             decorationsOnly,
           );
+          if (rotation || flipH || flipV) {
+            // Child coordinates are already translated/scaled into slide
+            // space. Reflect and rotate their centers around this group's
+            // center, after nested groups have applied their own transforms.
+            const cx =
+              parent.x +
+              ((attrNumber(off, "x") + attrNumber(ext, "cx") / 2) /
+                EMU_PER_PX) *
+                parent.sx;
+            const cy =
+              parent.y +
+              ((attrNumber(off, "y") + attrNumber(ext, "cy") / 2) /
+                EMU_PER_PX) *
+                parent.sy;
+            for (let i = firstElement; i < slide.elements.length; i++)
+              slide.elements[i] = transformGroupedElement(
+                slide.elements[i],
+                cx,
+                cy,
+                rotation,
+                flipH,
+                flipV,
+              );
+          }
         } else if (node.localName === "graphicFrame") {
           if (first(node, "tbl")) parseTable(node, parent);
           else if (first(node, "chart"))

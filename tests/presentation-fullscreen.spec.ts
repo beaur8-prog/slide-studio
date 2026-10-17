@@ -73,7 +73,15 @@ test("Windows slideshow covers the display and restores normal, maximized, and f
     await page.screenshot({
       path: testInfo.outputPath("native-fullscreen.png"),
     });
-    await page.keyboard.press("ArrowRight");
+    // Exercise Electron's actual menu -> preload -> renderer route. Ctrl+Enter
+    // starts the show in the editor, then advances without restarting it.
+    await app.evaluate(({ BrowserWindow, Menu }) => {
+      const item = Menu.getApplicationMenu()
+        ?.items.flatMap((entry) => entry.submenu?.items ?? [])
+        .find((entry) => entry.accelerator === "CmdOrCtrl+Enter");
+      if (!item) throw new Error("Presentation menu item is missing");
+      item.click(item, BrowserWindow.getAllWindows()[0], {} as any);
+    });
     await expect(page.getByTestId("presentation-view")).toHaveAttribute(
       "aria-label",
       /^발표 슬라이드 2 \//,
@@ -174,4 +182,30 @@ test("browser slideshow enters fullscreen automatically and follows native fulls
   await expect
     .poll(() => page.evaluate(() => !!document.fullscreenElement))
     .toBe(false);
+});
+
+test("browser slideshow preserves existing fullscreen on Esc but stops when that fullscreen exits", async ({
+  page,
+}) => {
+  await page.goto("http://127.0.0.1:5190");
+  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await page.evaluate(() => document.documentElement.requestFullscreen());
+  await page.keyboard.press("F5");
+  await expect(page.getByTestId("presentation-view")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("presentation-view")).toBeHidden();
+  expect(await page.evaluate(() => !!document.fullscreenElement)).toBe(true);
+
+  await page.keyboard.press("F5");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByTestId("presentation-view")).toHaveAttribute(
+    "aria-label",
+    /^발표 슬라이드 2 \//,
+  );
+  await page.evaluate(() => document.exitFullscreen());
+  await expect(page.getByTestId("presentation-view")).toBeHidden();
+  await expect(page.locator(".thumbnail-button").nth(1)).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
 });

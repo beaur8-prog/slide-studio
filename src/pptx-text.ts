@@ -138,6 +138,9 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
       return [];
     });
     if (!runs.length) runs.push(style(child(p, "endParaRPr"), ""));
+    // Bullet formatting is independent of the paragraph's body text. Resolve
+    // the body metrics before inserting the synthetic, editable list label.
+    const size = runs[0].fontSize ?? 32;
     const bulletNode = props
       .flatMap((n) => Array.from(n?.children ?? []))
       .find((n) => ["buNone", "buChar", "buAutoNum"].includes(n.localName));
@@ -162,9 +165,53 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
         prefix = `${value}.`;
       }
       bulletPrefix = prefix + " ";
-      runs.unshift({ ...runs[0], text: bulletPrefix });
+      const bulletProperty = (...names: string[]) =>
+        props
+          .flatMap((n) => Array.from(n?.children ?? []))
+          .find((n) => names.includes(n.localName));
+      const bulletSize = bulletProperty("buSzPct", "buSzPts", "buSzTx");
+      const bulletFont = bulletProperty("buFont", "buFontTx");
+      const family =
+        bulletFont?.localName === "buFont"
+          ? ctx.font(
+              bulletFont.getAttribute("typeface") || ctx.defaultFont,
+              prefix,
+            )
+          : undefined;
+      const bulletColor = bulletProperty("buClr", "buClrTx");
+      runs.unshift({
+        ...runs[0],
+        text: bulletPrefix,
+        fontSize:
+          bulletSize?.localName === "buSzPct"
+            ? Math.max(
+                1,
+                Math.min(
+                  1000,
+                  size *
+                    Math.max(
+                      0.25,
+                      Math.min(4, num([bulletSize], "val", 100000) / 100000),
+                    ),
+                ),
+              )
+            : bulletSize?.localName === "buSzPts"
+              ? Math.max(
+                  1,
+                  Math.min(
+                    1000,
+                    (num([bulletSize], "val", size * 75) / 75) *
+                      Math.abs(ctx.sy) *
+                      scale,
+                  ),
+                )
+              : size,
+        ...(family ? { fontFamily: family, fontFamilyEastAsian: family } : {}),
+        ...(bulletColor?.localName === "buClr" && ctx.color(bulletColor)
+          ? { color: ctx.color(bulletColor)!.color }
+          : {}),
+      });
     }
-    const size = runs[0].fontSize ?? 32;
     const spacing = (name: string) => {
       const node = firstChild(props, name),
         pt = child(node, "spcPts"),
@@ -219,7 +266,9 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
     };
   });
   if (!paragraphs.length) paragraphs.push({ runs: [{ text: "" }] });
-  const first = paragraphs[0].runs[0];
+  const first =
+    paragraphs[0].runs[paragraphs[0].bulletPrefix ? 1 : 0] ??
+    paragraphs[0].runs[0];
   const cp = ctx.cellProperties;
   const insets: [number, number, number, number] = cp
     ? [

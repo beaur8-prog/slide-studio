@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import {
   fontStack,
+  editableText,
   paragraphBullet,
   paragraphLines,
   scriptRuns,
@@ -23,11 +24,13 @@ function TextLine({
   paragraph: p,
   element: e,
   first,
+  editing = false,
 }: {
   line: TextRun[];
   paragraph: TextParagraph;
   element: SlideElement;
   first: boolean;
+  editing?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const bullet = first ? paragraphBullet({ ...p, runs: line }) : undefined;
@@ -166,6 +169,11 @@ function TextLine({
             ) : (
               r.text
             )}
+            {editing && bullet && j === 0 ? (
+              <span style={{ fontSize: 0 }}>
+                {p.bulletPrefix!.slice(bullet.label.length)}
+              </span>
+            ) : null}
           </span>
         );
       })}
@@ -173,7 +181,13 @@ function TextLine({
   );
 }
 
-export function TextContent({ element: e }: { element: SlideElement }) {
+export function TextContent({
+  element: e,
+  editing = false,
+}: {
+  element: SlideElement;
+  editing?: boolean;
+}) {
   if (!e.paragraphs) return <>{e.text}</>;
   return (
     <>
@@ -205,6 +219,7 @@ export function TextContent({ element: e }: { element: SlideElement }) {
               paragraph={p}
               element={e}
               first={lineIndex === 0}
+              editing={editing}
             />
           ))}
         </div>
@@ -457,7 +472,7 @@ function EditableText({
   onDone: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const initial = useRef(<TextContent element={element} />);
+  const initial = useRef(<TextContent element={element} editing />);
   useLayoutEffect(() => {
     if (!ref.current) return;
     ref.current.focus();
@@ -479,7 +494,7 @@ function EditableText({
       style={textStyle(element)}
       onPointerDown={(e) => e.stopPropagation()}
       onBlur={onDone}
-      onInput={(e) => onInput(e.currentTarget.innerText)}
+      onInput={(e) => onInput(editableText(e.currentTarget))}
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === "Escape") {

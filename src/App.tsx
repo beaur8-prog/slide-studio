@@ -81,7 +81,13 @@ import {
 } from "lucide-react";
 import CommandSearch from "./CommandSearch";
 import CanvasScrollbar from "./CanvasScrollbar";
-import type { Deck, ShapeKind, Slide, SlideElement } from "./types";
+import type {
+  Deck,
+  ShapeKind,
+  Slide,
+  SlideElement,
+  TableCellFormat,
+} from "./types";
 import { editText, patchText, scaleElement } from "./text-layout";
 import {
   blankDeck,
@@ -98,7 +104,9 @@ import SlideCanvas, { SlideVisual } from "./SlideCanvas";
 import { exportPptx, importPptx, parseDeckJson, serializeDeck } from "./io";
 import { listAutosaves, loadAutosave, saveAutosave } from "./storage";
 import TableEditor from "./TableEditor";
-import { createTableElement } from "./table";
+import { createTableElement, tableCellStyle, validateTable } from "./table";
+import type { TableCellRange } from "./table";
+import { selectionRange, type TableCellSelection } from "./table-selection";
 import { InsertContentDialog } from "./InsertContentDialog";
 import type { InsertContentKind } from "./insert-content";
 import {
@@ -139,6 +147,16 @@ const contentDialogs: InsertContentKind[] = [
 const LIMIT = 60;
 const clone = <T,>(value: T): T => structuredClone(value);
 const round = (n: number) => Math.round(n * 10) / 10;
+const tableClipboardText = (cells: string[][]) =>
+  cells
+    .map((row) =>
+      row
+        .map((value) =>
+          /[\t\n\r"]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value,
+        )
+        .join("\t"),
+    )
+    .join("\n");
 const editingTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
@@ -326,6 +344,37 @@ export default function App() {
   const [selected, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const selectedElement = slide.elements.find((e) => e.id === selected[0]);
+  const [tableSelection, setTableSelection] =
+    useState<TableCellSelection | null>(null);
+  const activeTableSelection =
+    selected.length === 1 &&
+    selectedElement?.type === "table" &&
+    !selectedElement.locked &&
+    tableSelection?.elementId === selectedElement.id
+      ? tableSelection
+      : null;
+  const tableRange = activeTableSelection
+    ? selectionRange(activeTableSelection)
+    : undefined;
+  useEffect(() => {
+    if (!activeTableSelection || !selectedElement?.table) {
+      if (tableSelection) setTableSelection(null);
+      return;
+    }
+    const clamp = (cell: { row: number; column: number }) => ({
+      row: Math.min(cell.row, selectedElement.table!.cells.length - 1),
+      column: Math.min(cell.column, selectedElement.table!.cells[0].length - 1),
+    });
+    const anchor = clamp(activeTableSelection.anchor),
+      focus = clamp(activeTableSelection.focus);
+    if (
+      anchor.row !== activeTableSelection.anchor.row ||
+      anchor.column !== activeTableSelection.anchor.column ||
+      focus.row !== activeTableSelection.focus.row ||
+      focus.column !== activeTableSelection.focus.column
+    )
+      setTableSelection({ ...activeTableSelection, anchor, focus });
+  }, [selected, selectedElement, activeId, tableSelection]);
   const [tab, setTab] = useState<Tab>("home");
   const [ready, setReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">(
@@ -345,6 +394,7 @@ export default function App() {
     modalInstance.current++;
   }, [modal]);
   const [tableEditId, setTableEditId] = useState<string | null>(null);
+  const [tableEditRange, setTableEditRange] = useState<TableCellRange>();
   const [footerInitial, setFooterInitial] = useState<
     "footer" | "date" | "number"
   >("footer");
@@ -404,7 +454,12 @@ export default function App() {
   const imageInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const transaction = useRef<Deck | null>(null);
-  const clipboard = useRef<{ elements?: SlideElement[]; slide?: Slide }>({});
+  const clipboard = useRef<{
+    elements?: SlideElement[];
+    slide?: Slide;
+    cells?: string[][];
+    cellStyles?: TableCellFormat[][];
+  }>({});
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -774,12 +829,18 @@ export default function App() {
       notify((err as Error).message);
     }
   };
-  const openTable = (id: string | null = null) => {
+  const openTable = (id: string | null = null, range?: TableCellRange) => {
     if (editing) {
       finish();
       setEditing(null);
     }
     setTableEditId(id);
+    setTableEditRange(
+      id
+        ? (range ??
+            (activeTableSelection?.elementId === id ? tableRange : undefined))
+        : undefined,
+    );
     setModal("table");
     setMenu(null);
   };
@@ -789,6 +850,10 @@ export default function App() {
     setMenu(null);
   };
   const removeSelected = () => {
+    if (activeTableSelection) {
+      clearSelectedTableCells();
+      return;
+    }
     if (selected.length) {
       changeSlide((s) => ({
         ...s,
@@ -798,6 +863,45 @@ export default function App() {
       }));
       setSelected([]);
     } else removeSlide();
+  };
+  const clearSelectedTableCells = () => {
+    if (!activeTableSelection || !tableRange) return;
+    const { startRow, endRow, startColumn, endColumn } = tableRange;
+    commit((deck) => {
+      let changed = false;
+      const slides = deck.slides.map((current) => {
+        if (current.id !== activeId) return current;
+        const elements = current.elements.map((element) => {
+          if (
+            element.id !== activeTableSelection.elementId ||
+            !element.table ||
+            element.locked
+          )
+            return element;
+          let cleared = false;
+          const cells = element.table.cells.map((row, r) =>
+            row.map((text, c) => {
+              if (
+                text &&
+                r >= startRow &&
+                r <= endRow &&
+                c >= startColumn &&
+                c <= endColumn
+              ) {
+                cleared = true;
+                return "";
+              }
+              return text;
+            }),
+          );
+          if (!cleared) return element;
+          changed = true;
+          return { ...element, table: { ...element.table, cells } };
+        });
+        return changed ? { ...current, elements } : current;
+      });
+      return changed ? { ...deck, slides } : deck;
+    });
   };
   const duplicateSelected = () => {
     if (!selected.length) {
@@ -816,7 +920,38 @@ export default function App() {
     changeSlide((s) => ({ ...s, elements: [...s.elements, ...copies] }));
     setSelected(copies.map((e) => e.id));
   };
+  const copySelectedTableCells = (nativeClipboard?: DataTransfer | null) => {
+    if (!activeTableSelection || !tableRange || !selectedElement?.table)
+      return false;
+    const table = selectedElement.table;
+    const cells = table.cells
+      .slice(tableRange.startRow, tableRange.endRow + 1)
+      .map((row) =>
+        row.slice(tableRange.startColumn, tableRange.endColumn + 1),
+      );
+    const cellStyles = cells.map((row, r) =>
+      row.map((_, c) =>
+        tableCellStyle(
+          table,
+          tableRange.startRow + r,
+          tableRange.startColumn + c,
+        ),
+      ),
+    );
+    // Keep the app copy even when the OS clipboard is unavailable or denied.
+    clipboard.current = { cells, cellStyles };
+    const text = tableClipboardText(cells);
+    try {
+      if (nativeClipboard) nativeClipboard.setData("text/plain", text);
+      else void navigator.clipboard?.writeText(text).catch(() => {});
+    } catch {
+      /* Internal paste remains available. */
+    }
+    notify(`${cells.length * cells[0].length}개 셀을 복사했습니다.`);
+    return true;
+  };
   const copySelection = () => {
+    if (copySelectedTableCells()) return;
     clipboard.current = selected.length
       ? {
           elements: clone(
@@ -829,7 +964,84 @@ export default function App() {
     );
   };
   const pasteSelection = () => {
-    if (clipboard.current.elements) {
+    if (clipboard.current.cells) {
+      if (
+        !activeTableSelection ||
+        !tableRange ||
+        !selectedElement?.table ||
+        selectedElement.locked
+      ) {
+        notify("붙여넣을 표의 시작 셀을 선택해 주세요.");
+        return;
+      }
+      const source = clipboard.current.cells;
+      const sourceStyles = clipboard.current.cellStyles;
+      const target = selectedElement;
+      const table = target.table!;
+      const rowStart = tableRange.startRow,
+        columnStart = tableRange.startColumn;
+      const rows = Math.min(source.length, table.cells.length - rowStart);
+      const columns = Math.min(
+        source[0].length,
+        table.cells[0].length - columnStart,
+      );
+      if (rows < 1 || columns < 1) return;
+      try {
+        const next = validateTable({
+          ...table,
+          cells: table.cells.map((row, r) =>
+            row.map((text, c) =>
+              r >= rowStart &&
+              r < rowStart + rows &&
+              c >= columnStart &&
+              c < columnStart + columns
+                ? source[r - rowStart][c - columnStart]
+                : text,
+            ),
+          ),
+          ...(sourceStyles
+            ? {
+                cellStyles: table.cells.map((row, r) =>
+                  row.map((_, c) =>
+                    r >= rowStart &&
+                    r < rowStart + rows &&
+                    c >= columnStart &&
+                    c < columnStart + columns
+                      ? { ...sourceStyles[r - rowStart][c - columnStart] }
+                      : (table.cellStyles?.[r]?.[c] ?? null),
+                  ),
+                ),
+              }
+            : {}),
+        });
+        changeSlide((slide) => ({
+          ...slide,
+          elements: slide.elements.map((element) =>
+            element.id === target.id && !element.locked
+              ? { ...element, table: next }
+              : element,
+          ),
+        }));
+        setTableSelection({
+          elementId: target.id,
+          anchor: { row: rowStart, column: columnStart },
+          focus: {
+            row: rowStart + rows - 1,
+            column: columnStart + columns - 1,
+          },
+        });
+        const omitted = source.length * source[0].length - rows * columns;
+        notify(
+          omitted
+            ? `${rows * columns}개 셀을 붙여넣었습니다. 표 경계를 벗어난 ${omitted}개 셀은 제외했습니다.`
+            : `${rows * columns}개 셀을 붙여넣었습니다.`,
+        );
+      } catch (error) {
+        notify(
+          error instanceof Error ? error.message : "셀을 붙여넣지 못했습니다.",
+        );
+      }
+    } else if (clipboard.current.elements) {
       const copies = clipboard.current.elements.map((e) => ({
         ...clone(e),
         id: uid(),
@@ -1397,6 +1609,11 @@ export default function App() {
         return;
       }
       if (e.key === "Escape") {
+        if (activeTableSelection && !modal) {
+          e.preventDefault();
+          setTableSelection(null);
+          return;
+        }
         setMenu(null);
         setModal(null);
         setSelected([]);
@@ -1404,6 +1621,61 @@ export default function App() {
         return;
       }
       if (editingTarget(e.target) || modal) return;
+      if (activeTableSelection && selectedElement?.table) {
+        const table = selectedElement.table;
+        if (cmd && ["c", "x"].includes(e.key.toLowerCase())) {
+          e.preventDefault();
+          copySelection();
+          if (e.key.toLowerCase() === "x") removeSelected();
+          return;
+        }
+        if (e.key === "Delete" || e.key === "Backspace") {
+          e.preventDefault();
+          clearSelectedTableCells();
+          return;
+        }
+        if (cmd && e.key.toLowerCase() === "a") {
+          e.preventDefault();
+          setTableSelection({
+            elementId: selectedElement.id,
+            anchor: { row: 0, column: 0 },
+            focus: {
+              row: table.cells.length - 1,
+              column: table.cells[0].length - 1,
+            },
+          });
+          return;
+        }
+        if (
+          ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)
+        ) {
+          e.preventDefault();
+          const focus = {
+            row: Math.max(
+              0,
+              Math.min(
+                table.cells.length - 1,
+                activeTableSelection.focus.row +
+                  (e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0),
+              ),
+            ),
+            column: Math.max(
+              0,
+              Math.min(
+                table.cells[0].length - 1,
+                activeTableSelection.focus.column +
+                  (e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0),
+              ),
+            ),
+          };
+          setTableSelection({
+            ...activeTableSelection,
+            anchor: e.shiftKey ? activeTableSelection.anchor : focus,
+            focus,
+          });
+          return;
+        }
+      }
       if (
         e.key === "Enter" &&
         selectedElement?.type === "table" &&
@@ -1431,7 +1703,11 @@ export default function App() {
         copySelection();
         if (selected.length) removeSelected();
       } else if (cmd && e.key.toLowerCase() === "v") {
-        if (clipboard.current.elements || clipboard.current.slide) {
+        if (
+          clipboard.current.cells ||
+          clipboard.current.elements ||
+          clipboard.current.slide
+        ) {
           e.preventDefault();
           pasteSelection();
         }
@@ -1498,12 +1774,39 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   });
   useEffect(() => {
+    const copyCells = (event: ClipboardEvent) => {
+      if (
+        !tableRange ||
+        !selectedElement?.table ||
+        modal ||
+        presentationActive.current ||
+        editingTarget(event.target) ||
+        event.defaultPrevented
+      )
+        return;
+      event.preventDefault();
+      copySelectedTableCells(event.clipboardData);
+      if (event.type === "cut") removeSelected();
+    };
+    window.addEventListener("copy", copyCells);
+    window.addEventListener("cut", copyCells);
+    return () => {
+      window.removeEventListener("copy", copyCells);
+      window.removeEventListener("cut", copyCells);
+    };
+  });
+  useEffect(() => {
     const paste = (e: ClipboardEvent) => {
       if (presentationActive.current) {
         e.preventDefault();
         return;
       }
-      if (editingTarget(e.target)) return;
+      if (editingTarget(e.target) || modal) return;
+      if (clipboard.current.cells && activeTableSelection) {
+        e.preventDefault();
+        pasteSelection();
+        return;
+      }
       const file = Array.from(e.clipboardData?.items || [])
         .find((i) => i.type.startsWith("image/"))
         ?.getAsFile();
@@ -2096,7 +2399,9 @@ export default function App() {
                   <Tool
                     icon={<ClipboardPaste size={25} />}
                     disabled={
-                      !clipboard.current.elements && !clipboard.current.slide
+                      !clipboard.current.cells &&
+                      !clipboard.current.elements &&
+                      !clipboard.current.slide
                     }
                     onClick={pasteSelection}
                   >
@@ -2701,9 +3006,11 @@ export default function App() {
             <div className="canvas-topline">
               <span>{sorter ? "모든 슬라이드" : slideTitle(slide)}</span>
               <span>
-                {selected.length
-                  ? `${selected.length}개 개체 선택됨`
-                  : `${activeIndex + 1} / ${deck.slides.length}`}
+                {tableRange
+                  ? `${(tableRange.endRow - tableRange.startRow + 1) * (tableRange.endColumn - tableRange.startColumn + 1)}개 셀 선택`
+                  : selected.length
+                    ? `${selected.length}개 개체 선택됨`
+                    : `${activeIndex + 1} / ${deck.slides.length}`}
               </span>
             </div>
             {sorter ? (
@@ -2778,6 +3085,8 @@ export default function App() {
                       slide={slide}
                       scale={Math.max(0.1, scale)}
                       selected={selected}
+                      tableSelection={activeTableSelection}
+                      selectTableCells={setTableSelection}
                       editing={editing}
                       select={(ids) => {
                         if (editing) {
@@ -2787,7 +3096,7 @@ export default function App() {
                         setSelected(ids);
                       }}
                       edit={setEditing}
-                      editTable={(id) => openTable(id)}
+                      editTable={(id, range) => openTable(id, range)}
                       begin={begin}
                       finish={finish}
                       preview={(elements) =>
@@ -3325,6 +3634,7 @@ export default function App() {
       />
       {modal === "table" && (
         <TableEditor
+          initialRange={tableEditRange}
           slideWidth={deck.width}
           slideHeight={deck.height}
           elementSize={

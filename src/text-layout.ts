@@ -301,6 +301,43 @@ export function scaleElement(
               0,
               Math.min(12, element.table.borderWidth * scale),
             ),
+            ...(element.table.cellStyles
+              ? {
+                  cellStyles: element.table.cellStyles.map((row) =>
+                    row.map((style) =>
+                      style === null
+                        ? null
+                        : {
+                            ...style,
+                            ...(style.fontSize === undefined
+                              ? {}
+                              : {
+                                  fontSize: Math.max(
+                                    6,
+                                    Math.min(144, style.fontSize * scale),
+                                  ),
+                                }),
+                            ...(style.padding === undefined
+                              ? {}
+                              : {
+                                  padding: Math.max(
+                                    0,
+                                    Math.min(60, style.padding * scale),
+                                  ),
+                                }),
+                            ...(style.borderWidth === undefined
+                              ? {}
+                              : {
+                                  borderWidth: Math.max(
+                                    0,
+                                    Math.min(12, style.borderWidth * scale),
+                                  ),
+                                }),
+                          },
+                    ),
+                  ),
+                }
+              : {}),
           },
         }
       : {}),

@@ -104,6 +104,7 @@ test("dense new tables fit readable defaults and respect explicit formatting", a
   await table.screenshot({ path: testInfo.outputPath("dense-table.png") });
   await table.dblclick();
   const edit = page.getByRole("dialog", { name: "표 편집", exact: true });
+  await edit.getByLabel("서식 적용 대상").selectOption("table");
   await edit.getByLabel("표 글자 크기").fill("28");
   await edit.getByLabel("셀 안쪽 여백").fill("8");
   await edit.getByLabel("표 행 수").fill("19");
@@ -180,10 +181,15 @@ test("table dialog applies one undo step and supports cells, geometry, cancel, r
       h: el.style.height,
     }));
   const original = await geometry();
-  const bounds = (await table.boundingBox())!;
-  await page.mouse.move(bounds.x + 35, bounds.y + 30);
+  await table.click();
+  const moveHandle = (await page
+    .getByTestId("table-move-handle")
+    .boundingBox())!;
+  const moveX = moveHandle.x + moveHandle.width / 2;
+  const moveY = moveHandle.y + moveHandle.height / 2;
+  await page.mouse.move(moveX, moveY);
   await page.mouse.down();
-  await page.mouse.move(bounds.x + 65, bounds.y + 50, { steps: 4 });
+  await page.mouse.move(moveX + 30, moveY + 20, { steps: 4 });
   await page.mouse.up();
   expect((await geometry()).x).not.toBe(original.x);
   await page.getByRole("button", { name: "실행 취소", exact: true }).click();

@@ -753,14 +753,26 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
         const table = el.table;
         slide.addTable(
           table.cells.map((row, r) =>
-            row.map((text) => {
-              const style = tableCellStyle(table, r);
+            row.map((text, c) => {
+              const style = tableCellStyle(table, r, c);
               return {
                 text,
                 options: {
                   fill: { color: hex(style.fill, "FFFFFF"), transparency },
                   color: hex(style.color, "233D35"),
                   bold: style.bold,
+                  fontFace: style.fontFamily,
+                  fontSize: style.fontSize * 0.75,
+                  align: style.align,
+                  valign: style.verticalAlign,
+                  margin: style.padding * 0.75,
+                  border: {
+                    type: style.borderWidth
+                      ? ("solid" as const)
+                      : ("none" as const),
+                    color: hex(style.borderColor, "AABCB3"),
+                    pt: style.borderWidth * 0.75,
+                  },
                   ...(hyperlink ? { hyperlink } : {}),
                 },
               };
@@ -2016,7 +2028,7 @@ export async function importPptx(
       // geometry always come from DrawingML. Modified/complex cell formatting
       // falls back to the existing fidelity-preserving per-cell importer.
       const marker = node.getElementsByTagNameNS(TABLE_NS, "table")[0];
-      if (marker && (marker.textContent?.length ?? 0) <= 16000) {
+      if (marker && (marker.textContent?.length ?? 0) <= 256 * 1024) {
         try {
           const metadata = JSON.parse(marker.textContent ?? "");
           if (metadata.version !== 1) throw new Error("Unknown table version");
@@ -2065,22 +2077,22 @@ export async function importPptx(
             a !== undefined && Math.abs(a - b) < 0.05;
           const compatible = texts.every((cells, r) =>
             cells.every((el, c) => {
-              const style = tableCellStyle(data, r);
+              const style = tableCellStyle(data, r, c);
               const props = child(cellElements[r][c], "tcPr");
               const fill = readColor(child(props, "solidFill"), theme);
               return (
                 fill?.color === style.fill &&
-                el.verticalAlign === data.verticalAlign &&
-                (el.textInsets ?? []).every((n) => close(n, data.padding)) &&
+                el.verticalAlign === style.verticalAlign &&
+                (el.textInsets ?? []).every((n) => close(n, style.padding)) &&
                 (el.paragraphs ?? []).every(
                   (p) =>
-                    (p.align ?? el.align) === data.align &&
+                    (p.align ?? el.align) === style.align &&
                     p.runs.every(
                       (run) =>
                         !run.text ||
                         ((run.fontFamily ?? el.fontFamily) ===
-                          data.fontFamily &&
-                          close(run.fontSize ?? el.fontSize, data.fontSize) &&
+                          style.fontFamily &&
+                          close(run.fontSize ?? el.fontSize, style.fontSize) &&
                           (run.color ?? el.color) === style.color &&
                           (run.bold ?? el.bold ?? false) === style.bold &&
                           !run.italic &&
@@ -2090,14 +2102,14 @@ export async function importPptx(
                 ) &&
                 ["T", "R", "B", "L"].every((side) => {
                   const line = child(props, "ln" + side);
-                  return data.borderWidth === 0
+                  return style.borderWidth === 0
                     ? !!child(line, "noFill")
                     : close(
                         attrNumber(line, "w") / EMU_PER_PX,
-                        data.borderWidth,
+                        style.borderWidth,
                       ) &&
                         readColor(child(line, "solidFill"), theme)?.color ===
-                          data.borderColor;
+                          style.borderColor;
                 })
               );
             }),

@@ -59,8 +59,21 @@ export interface ElementLink {
   url?: string;
   slideId?: string;
 }
+export interface TableCellFormat {
+  fill?: string;
+  color?: string;
+  bold?: boolean;
+  fontFamily?: string;
+  fontSize?: number;
+  padding?: number;
+  borderColor?: string;
+  borderWidth?: number;
+  align?: "left" | "center" | "right";
+  verticalAlign?: "top" | "middle" | "bottom";
+}
 export interface TableData {
   cells: string[][];
+  cellStyles?: (TableCellFormat | null)[][];
   header: boolean;
   striped: boolean;
   headerFill: string;

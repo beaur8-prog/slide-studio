@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import type { SlideElement, TableData } from "./types";
+import type {
+  ClipboardEvent as ReactClipboardEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
+import type { SlideElement, TableCellFormat, TableData } from "./types";
 import { fontStack } from "./text-layout";
 import {
   changeTableAxis,
+  applyTableCellFormat,
   createTable,
   fitTableText,
   MAX_CELL_TEXT,
@@ -14,9 +19,16 @@ import {
   tableSizes,
   validateTable,
 } from "./table";
+import type { TableCellRange } from "./table";
 import "./table.css";
 
-export function TableVisual({ element }: { element: SlideElement }) {
+export function TableVisual({
+  element,
+  selection,
+}: {
+  element: SlideElement;
+  selection?: TableCellRange;
+}) {
   const table = element.table;
   if (!table) return null;
   const widths = tableSizes(table.columnWidths, table.cells[0].length, 100);
@@ -43,10 +55,24 @@ export function TableVisual({ element }: { element: SlideElement }) {
       {table.cells.map((row, r) => (
         <div role="row" key={r} style={{ display: "contents" }}>
           {row.map((text, c) => {
-            const style = tableCellStyle(table, r);
+            const style = tableCellStyle(table, r, c);
+            const overrides = table.cellStyles?.[r]?.[c];
+            const borderOverride =
+              overrides &&
+              (overrides.borderColor !== undefined ||
+                overrides.borderWidth !== undefined);
+            const selected =
+              selection &&
+              r >= selection.startRow &&
+              r <= selection.endRow &&
+              c >= selection.startColumn &&
+              c <= selection.endColumn;
             return (
               <div
                 key={c}
+                data-row={r}
+                data-column={c}
+                className={selected ? "table-cell-selected" : undefined}
                 role={table.header && r === 0 ? "columnheader" : "cell"}
                 style={{
                   boxSizing: "border-box",
@@ -56,21 +82,35 @@ export function TableVisual({ element }: { element: SlideElement }) {
                   display: "flex",
                   flexDirection: "column",
                   justifyContent:
-                    table.verticalAlign === "middle"
+                    style.verticalAlign === "middle"
                       ? "center"
-                      : table.verticalAlign === "bottom"
+                      : style.verticalAlign === "bottom"
                         ? "flex-end"
                         : "flex-start",
-                  padding: table.padding,
+                  padding:
+                    style.padding + (borderOverride ? style.borderWidth : 0),
+                  fontSize: style.fontSize,
+                  fontFamily: fontStack(style.fontFamily),
                   background: style.fill,
                   color: style.color,
                   fontWeight: style.bold ? 700 : 400,
-                  textAlign: table.align,
-                  borderColor: table.borderColor,
+                  textAlign: style.align,
+                  borderColor: style.borderColor,
                   borderStyle: "solid",
-                  borderWidth: `${r === 0 ? table.borderWidth : 0}px ${table.borderWidth}px ${table.borderWidth}px ${c === 0 ? table.borderWidth : 0}px`,
+                  borderWidth: borderOverride
+                    ? 0
+                    : `${r === 0 ? style.borderWidth : 0}px ${style.borderWidth}px ${style.borderWidth}px ${c === 0 ? style.borderWidth : 0}px`,
                 }}
               >
+                {borderOverride && (
+                  <span
+                    aria-hidden="true"
+                    className="table-cell-border-override"
+                    style={{
+                      border: `${style.borderWidth}px solid ${style.borderColor}`,
+                    }}
+                  />
+                )}
                 <div
                   style={{
                     minHeight: 0,
@@ -92,6 +132,7 @@ export function TableVisual({ element }: { element: SlideElement }) {
 
 export default function TableEditor({
   initial,
+  initialRange,
   slideWidth = 1280,
   slideHeight = 720,
   elementSize,
@@ -99,6 +140,7 @@ export default function TableEditor({
   onCancel,
 }: {
   initial?: TableData;
+  initialRange?: TableCellRange;
   slideWidth?: number;
   slideHeight?: number;
   elementSize?: { width: number; height: number };
@@ -111,7 +153,30 @@ export default function TableEditor({
     const size = tableElementSize(table.cells.length, slideWidth, slideHeight);
     return fitTableText(table, size.width, size.height);
   });
-  const [selected, setSelected] = useState({ row: 0, column: 0 });
+  const [anchor, setAnchor] = useState({
+    row: initialRange?.startRow ?? 0,
+    column: initialRange?.startColumn ?? 0,
+  });
+  const [selected, setSelected] = useState({
+    row: initialRange?.endRow ?? 0,
+    column: initialRange?.endColumn ?? 0,
+  });
+  const [formatTarget, setFormatTarget] = useState<"table" | "selection">(
+    initialRange ? "selection" : "table",
+  );
+  const range = {
+    startRow: Math.min(anchor.row, selected.row),
+    endRow: Math.max(anchor.row, selected.row),
+    startColumn: Math.min(anchor.column, selected.column),
+    endColumn: Math.max(anchor.column, selected.column),
+  };
+  const selectionCount =
+    (range.endRow - range.startRow + 1) *
+    (range.endColumn - range.startColumn + 1);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const dragCleanup = useRef<(() => void) | null>(null);
+  const preserveFocusSelection = useRef(false);
   const [error, setError] = useState("");
   const [autoSizing, setAutoSizing] = useState(!initial);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -121,8 +186,15 @@ export default function TableEditor({
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    dialogRef.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+    preserveFocusSelection.current = true;
+    dialogRef.current
+      ?.querySelector<HTMLTextAreaElement>(
+        `textarea[data-row="${initialRange?.startRow ?? 0}"][data-column="${initialRange?.startColumn ?? 0}"]`,
+      )
+      ?.focus();
+    preserveFocusSelection.current = false;
     return () => {
+      dragCleanup.current?.();
       if (previous?.isConnected) previous.focus({ preventScroll: true });
     };
   }, []);
@@ -146,6 +218,158 @@ export default function TableEditor({
   };
   const patch = (value: Partial<TableData>) =>
     setDraft((table) => ({ ...table, ...value }));
+  const format = tableCellStyle(draft, selected.row, selected.column);
+  const patchFormat = (value: TableCellFormat) =>
+    setDraft((table) => {
+      if (formatTarget === "selection")
+        return applyTableCellFormat(table, range, value);
+      const keys = Object.keys(value) as (keyof TableCellFormat)[];
+      const cellStyles = table.cellStyles?.map((row) =>
+        row.map((style) => {
+          if (!style) return null;
+          const next = { ...style };
+          keys.forEach((key) => delete next[key]);
+          return Object.keys(next).length ? next : null;
+        }),
+      );
+      return { ...table, ...value, ...(cellStyles ? { cellStyles } : {}) };
+    });
+  const clearCells = () =>
+    setDraft((table) => ({
+      ...table,
+      cells: table.cells.map((row, r) =>
+        row.map((text, c) =>
+          r >= range.startRow &&
+          r <= range.endRow &&
+          c >= range.startColumn &&
+          c <= range.endColumn
+            ? ""
+            : text,
+        ),
+      ),
+    }));
+  const copyCells = (event: ReactClipboardEvent) => {
+    if (selectionCount < 2 || composing.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const quote = (text: string) =>
+      /[\t\n\r"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    event.clipboardData.setData(
+      "text/plain",
+      draft.cells
+        .slice(range.startRow, range.endRow + 1)
+        .map((row) =>
+          row
+            .slice(range.startColumn, range.endColumn + 1)
+            .map(quote)
+            .join("\t"),
+        )
+        .join("\n"),
+    );
+    if (event.type === "cut") clearCells();
+  };
+  const selectCell = (row: number, column: number) => {
+    setAnchor({ row, column });
+    setSelected({ row, column });
+  };
+  const startSelection = (
+    event: ReactPointerEvent<HTMLTextAreaElement>,
+    row: number,
+    column: number,
+  ) => {
+    if (event.button !== 0 || composing.current) return;
+    dragCleanup.current?.();
+    const start = event.shiftKey ? anchor : { row, column };
+    if (!event.shiftKey) selectCell(row, column);
+    else {
+      event.preventDefault();
+      setSelected({ row, column });
+      setFormatTarget("selection");
+    }
+    let multiple = event.shiftKey;
+    let clientX = event.clientX,
+      clientY = event.clientY,
+      frame = 0;
+    const pointer = event.pointerId;
+    const hit = () => {
+      const viewport = scrollRef.current?.getBoundingClientRect();
+      if (!viewport) return;
+      const x = Math.max(
+        viewport.left + 3,
+        Math.min(viewport.right - 3, clientX),
+      );
+      const y = Math.max(
+        viewport.top + 3,
+        Math.min(viewport.bottom - 3, clientY),
+      );
+      const cell = document
+        .elementFromPoint(x, y)
+        ?.closest<HTMLTextAreaElement>("textarea[data-row][data-column]");
+      if (!cell || !gridRef.current?.contains(cell)) return;
+      const next = {
+        row: Number(cell.dataset.row),
+        column: Number(cell.dataset.column),
+      };
+      if (multiple || next.row !== start.row || next.column !== start.column) {
+        multiple = true;
+        setAnchor(start);
+        setSelected(next);
+        setFormatTarget("selection");
+        gridRef.current?.classList.add("selecting-cells");
+        if (document.activeElement instanceof HTMLTextAreaElement) {
+          const input = document.activeElement;
+          input.setSelectionRange(input.selectionStart, input.selectionStart);
+        }
+      }
+    };
+    const scroll = () => {
+      const viewport = scrollRef.current;
+      if (!viewport || !multiple) {
+        frame = requestAnimationFrame(scroll);
+        return;
+      }
+      const rect = viewport.getBoundingClientRect();
+      const speed = (position: number, low: number, high: number) =>
+        position < low + 24 ? -12 : position > high - 24 ? 12 : 0;
+      const dx = speed(clientX, rect.left, rect.right),
+        dy = speed(clientY, rect.top, rect.bottom);
+      if (dx || dy) {
+        viewport.scrollBy(dx, dy);
+        hit();
+      }
+      frame = requestAnimationFrame(scroll);
+    };
+    const move = (e: PointerEvent) => {
+      if (e.pointerId !== pointer) return;
+      clientX = e.clientX;
+      clientY = e.clientY;
+      hit();
+      if (multiple) e.preventDefault();
+    };
+    const stop = () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", up, true);
+      window.removeEventListener("blur", stop);
+      scrollRef.current?.removeEventListener("scroll", hit);
+      gridRef.current?.classList.remove("selecting-cells");
+      dragCleanup.current = null;
+    };
+    const up = (e: PointerEvent) => {
+      if (e.pointerId === pointer) stop();
+    };
+    dragCleanup.current = stop;
+    window.addEventListener("pointermove", move, {
+      capture: true,
+      passive: false,
+    });
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", up, true);
+    window.addEventListener("blur", stop);
+    scrollRef.current?.addEventListener("scroll", hit);
+    frame = requestAnimationFrame(scroll);
+  };
   const resize = (rowCount: number, columnCount: number) => {
     if (
       !Number.isInteger(rowCount) ||
@@ -163,6 +387,11 @@ export default function TableEditor({
       row: Math.min(row, rowCount - 1),
       column: Math.min(column, columnCount - 1),
     }));
+    setAnchor(({ row, column }) => ({
+      row: Math.min(row, rowCount - 1),
+      column: Math.min(column, columnCount - 1),
+    }));
+    dragCleanup.current?.();
   };
   const changeAxis = (axis: "row" | "column", remove = false) => {
     const index = axis === "row" ? selected.row : selected.column;
@@ -171,16 +400,18 @@ export default function TableEditor({
         changeTableAxis(table, axis, index + (remove ? 0 : 1), remove),
       ),
     );
-    setSelected((cell) => ({
+    const nextCell = {
       row:
         axis === "row"
           ? Math.min(remove ? index : index + 1, rows + (remove ? -2 : 0))
-          : cell.row,
+          : selected.row,
       column:
         axis === "column"
           ? Math.min(remove ? index : index + 1, columns + (remove ? -2 : 0))
-          : cell.column,
-    }));
+          : selected.column,
+    };
+    selectCell(nextCell.row, nextCell.column);
+    dragCleanup.current?.();
   };
   const apply = () => {
     try {
@@ -299,25 +530,73 @@ export default function TableEditor({
           >
             열 삭제
           </button>
+          <button
+            onClick={() => {
+              setAnchor({ row: 0, column: 0 });
+              setSelected({ row: rows - 1, column: columns - 1 });
+              setFormatTarget("selection");
+            }}
+          >
+            전체 셀 선택
+          </button>
+          <button onClick={clearCells}>선택한 셀 내용 지우기</button>
+        </div>
+        <div
+          className="table-selection-status"
+          role="status"
+          aria-live="polite"
+        >
+          {selectionCount}개 셀 선택 · {range.startRow + 1}행{" "}
+          {range.startColumn + 1}열–{range.endRow + 1}행 {range.endColumn + 1}열
         </div>
         <div className="table-editor-body">
-          <div className="table-editor-grid-scroll">
+          <div className="table-editor-grid-scroll" ref={scrollRef}>
             <div
+              ref={gridRef}
               className="table-editor-grid"
+              onKeyDown={(event) => {
+                if (
+                  composing.current ||
+                  event.nativeEvent.isComposing ||
+                  event.keyCode === 229 ||
+                  selectionCount < 2
+                )
+                  return;
+                if (event.key === "Delete" || event.key === "Backspace") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  clearCells();
+                } else if (
+                  (event.ctrlKey || event.metaKey) &&
+                  event.key.toLowerCase() === "a"
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setAnchor({ row: 0, column: 0 });
+                  setSelected({ row: rows - 1, column: columns - 1 });
+                }
+              }}
+              onCopy={copyCells}
+              onCut={copyCells}
               style={{
                 gridTemplateColumns: `repeat(${columns}, minmax(120px, 1fr))`,
               }}
             >
               {draft.cells.map((row, r) =>
                 row.map((text, c) => {
-                  const style = tableCellStyle(draft, r);
+                  const style = tableCellStyle(draft, r, c);
                   return (
                     <textarea
                       key={`${r}-${c}`}
+                      data-row={r}
+                      data-column={c}
                       aria-label={`${r + 1}행 ${c + 1}열`}
                       maxLength={MAX_CELL_TEXT}
                       className={
-                        selected.row === r && selected.column === c
+                        r >= range.startRow &&
+                        r <= range.endRow &&
+                        c >= range.startColumn &&
+                        c <= range.endColumn
                           ? "selected-cell"
                           : ""
                       }
@@ -325,12 +604,21 @@ export default function TableEditor({
                         background: style.fill,
                         color: style.color,
                         fontWeight: style.bold ? 700 : 400,
-                        textAlign: draft.align,
-                        borderColor: draft.borderColor,
+                        textAlign: style.align,
+                        borderColor: style.borderColor,
+                        fontFamily: fontStack(style.fontFamily),
                       }}
                       value={text}
-                      onFocus={() => setSelected({ row: r, column: c })}
+                      onPointerDown={(event) => startSelection(event, r, c)}
+                      onFocus={() => {
+                        if (
+                          !dragCleanup.current &&
+                          !preserveFocusSelection.current
+                        )
+                          selectCell(r, c);
+                      }}
                       onChange={(e) => {
+                        if (selectionCount > 1) selectCell(r, c);
                         const value = e.target.value;
                         setDraft((table) => ({
                           ...table,
@@ -350,6 +638,19 @@ export default function TableEditor({
             </div>
           </div>
           <div className="table-editor-options">
+            <label>
+              서식 적용 대상
+              <select
+                aria-label="서식 적용 대상"
+                value={formatTarget}
+                onChange={(event) =>
+                  setFormatTarget(event.target.value as "table" | "selection")
+                }
+              >
+                <option value="table">표 전체</option>
+                <option value="selection">선택한 셀</option>
+              </select>
+            </label>
             <label className="table-option-check">
               <input
                 type="checkbox"
@@ -381,8 +682,17 @@ export default function TableEditor({
                 <input
                   aria-label={label}
                   type="color"
-                  value={draft[key]}
-                  onChange={(e) => patch({ [key]: e.target.value })}
+                  value={
+                    formatTarget === "selection" &&
+                    (key === "fill" || key === "color" || key === "borderColor")
+                      ? format[key]
+                      : draft[key]
+                  }
+                  onChange={(e) =>
+                    key === "fill" || key === "color" || key === "borderColor"
+                      ? patchFormat({ [key]: e.target.value })
+                      : patch({ [key]: e.target.value })
+                  }
                 />
               </label>
             ))}
@@ -390,12 +700,17 @@ export default function TableEditor({
               글꼴
               <select
                 aria-label="표 글꼴"
-                value={draft.fontFamily}
-                onChange={(e) => patch({ fontFamily: e.target.value })}
+                value={
+                  formatTarget === "selection"
+                    ? format.fontFamily
+                    : draft.fontFamily
+                }
+                onChange={(e) => patchFormat({ fontFamily: e.target.value })}
               >
                 {[
                   ...new Set([
                     draft.fontFamily,
+                    format.fontFamily,
                     "Arial",
                     "Calibri",
                     "맑은 고딕",
@@ -421,7 +736,9 @@ export default function TableEditor({
                   type="number"
                   min={min}
                   max={max}
-                  value={draft[key]}
+                  value={
+                    formatTarget === "selection" ? format[key] : draft[key]
+                  }
                   onChange={(e) => {
                     const value = Number(e.target.value);
                     if (
@@ -431,7 +748,7 @@ export default function TableEditor({
                     ) {
                       if (key === "fontSize" || key === "padding")
                         setAutoSizing(false);
-                      patch({ [key]: value });
+                      patchFormat({ [key]: value });
                     }
                   }}
                 />
@@ -439,6 +756,7 @@ export default function TableEditor({
             ))}
             <button
               type="button"
+              title="표 전체의 글자와 여백을 셀 크기에 맞춥니다"
               onClick={() => {
                 setAutoSizing(false);
                 setDraft((table) =>
@@ -452,9 +770,11 @@ export default function TableEditor({
               가로 정렬
               <select
                 aria-label="표 가로 정렬"
-                value={draft.align}
+                value={
+                  formatTarget === "selection" ? format.align : draft.align
+                }
                 onChange={(e) =>
-                  patch({ align: e.target.value as TableData["align"] })
+                  patchFormat({ align: e.target.value as TableData["align"] })
                 }
               >
                 <option value="left">왼쪽</option>
@@ -466,9 +786,13 @@ export default function TableEditor({
               세로 정렬
               <select
                 aria-label="표 세로 정렬"
-                value={draft.verticalAlign}
+                value={
+                  formatTarget === "selection"
+                    ? format.verticalAlign
+                    : draft.verticalAlign
+                }
                 onChange={(e) =>
-                  patch({
+                  patchFormat({
                     verticalAlign: e.target.value as TableData["verticalAlign"],
                   })
                 }
@@ -481,7 +805,9 @@ export default function TableEditor({
           </div>
         </div>
         <p className="table-editor-hint">
-          셀을 선택해 내용을 입력하세요. 행·열 추가는 선택한 셀 뒤에 적용됩니다.
+          다른 셀까지 드래그하거나 Shift+클릭으로 여러 셀을 선택하세요. 한 셀
+          안에서는 글자를 선택할 수 있습니다. 행·열 추가는 선택한 마지막 셀 뒤에
+          적용됩니다. 머리글·줄무늬와 셀에 맞게 줄이기는 표 전체에 적용됩니다.
           {!initial &&
             autoSizing &&
             " 새 표의 기본 글자 크기와 여백은 행·열 수에 맞춰 조정됩니다."}

@@ -1,4 +1,4 @@
-import { memo, useRef, useLayoutEffect } from "react";
+import { memo, useRef, useLayoutEffect, useEffect } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type {
   Deck,
@@ -16,6 +16,8 @@ import {
 } from "./text-layout";
 import { LineShape } from "./LineShape";
 import { TableVisual } from "./TableEditor";
+import type { TableCellRange } from "./table";
+import { selectionRange, type TableCellSelection } from "./table-selection";
 
 // Chromium does not implement CSS hanging-punctuation. Try letting the terminal
 // stop/comma hang, and keep it only when that prevents an extra line. A sentence
@@ -547,15 +549,54 @@ type Drag = {
   handle?: string;
   moved: boolean;
 };
+type CellDrag = {
+  pointer: number;
+  host: HTMLElement;
+  viewport: HTMLElement | null;
+  selection: TableCellSelection;
+  clientX: number;
+  clientY: number;
+  frame: number;
+};
+
+function cellAtPoint(host: HTMLElement, x: number, y: number) {
+  const cell = document
+    .elementFromPoint(x, y)
+    ?.closest<HTMLElement>("[data-row][data-column]");
+  const coordinates = (node: HTMLElement) => ({
+    row: Number(node.dataset.row),
+    column: Number(node.dataset.column),
+  });
+  if (cell && host.contains(cell)) return coordinates(cell);
+  // Pointer capture retargets events to the initial cell. Actual DOM rectangles
+  // also account for scrolling, custom row/column sizes, zoom and rotation.
+  let nearest: HTMLElement | null = null,
+    distance = Infinity;
+  for (const candidate of host.querySelectorAll<HTMLElement>(
+    "[data-row][data-column]",
+  )) {
+    const rect = candidate.getBoundingClientRect();
+    const dx = Math.max(rect.left - x, 0, x - rect.right);
+    const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+    const next = dx * dx + dy * dy;
+    if (next < distance) {
+      nearest = candidate;
+      distance = next;
+    }
+  }
+  return nearest ? coordinates(nearest) : null;
+}
 interface Props {
   deck: Deck;
   slide: Slide;
   scale: number;
   selected: string[];
+  tableSelection: TableCellSelection | null;
+  selectTableCells: (selection: TableCellSelection | null) => void;
   editing: string | null;
   select: (ids: string[]) => void;
   edit: (id: string | null) => void;
-  editTable?: (id: string) => void;
+  editTable?: (id: string, range?: TableCellRange) => void;
   begin: () => void;
   preview: (elements: SlideElement[]) => void;
   finish: () => void;
@@ -568,6 +609,8 @@ export default function SlideCanvas({
   slide,
   scale,
   selected,
+  tableSelection,
+  selectTableCells,
   editing,
   select,
   edit,
@@ -580,9 +623,164 @@ export default function SlideCanvas({
   grid,
 }: Props) {
   const drag = useRef<Drag | null>(null);
+  const cellDrag = useRef<CellDrag | null>(null);
+  const tableSelectionRef = useRef(tableSelection);
+  tableSelectionRef.current = tableSelection;
+  const selectCellsRef = useRef(selectTableCells);
+  selectCellsRef.current = selectTableCells;
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
+  const stopCellDrag = () => {
+    const current = cellDrag.current;
+    cellDrag.current = null;
+    if (!current) return;
+    cancelAnimationFrame(current.frame);
+    if (current.host.hasPointerCapture(current.pointer))
+      current.host.releasePointerCapture(current.pointer);
+  };
+  const updateCellDrag = () => {
+    const current = cellDrag.current;
+    if (!current) return;
+    const focus = cellAtPoint(current.host, current.clientX, current.clientY);
+    if (
+      !focus ||
+      (focus.row === current.selection.focus.row &&
+        focus.column === current.selection.focus.column)
+    )
+      return;
+    current.selection = { ...current.selection, focus };
+    tableSelectionRef.current = current.selection;
+    selectCellsRef.current(current.selection);
+  };
+  const scrollCellDrag = () => {
+    const current = cellDrag.current;
+    if (!current) return;
+    if (!current.host.isConnected) {
+      stopCellDrag();
+      return;
+    }
+    const viewport = current.viewport;
+    if (viewport) {
+      const bounds = viewport.getBoundingClientRect();
+      const speed = (position: number, start: number, end: number) =>
+        position < start + 24
+          ? -Math.min(18, (start + 24 - position) / 2)
+          : position > end - 24
+            ? Math.min(18, (position - end + 24) / 2)
+            : 0;
+      const left = viewport.scrollLeft,
+        top = viewport.scrollTop;
+      viewport.scrollLeft += speed(current.clientX, bounds.left, bounds.right);
+      viewport.scrollTop += speed(current.clientY, bounds.top, bounds.bottom);
+      if (left !== viewport.scrollLeft || top !== viewport.scrollTop)
+        updateCellDrag();
+    }
+    current.frame = requestAnimationFrame(scrollCellDrag);
+  };
+  useEffect(() => {
+    const pointerEnded = (event: PointerEvent) => {
+      if (cellDrag.current?.pointer === event.pointerId) stopCellDrag();
+    };
+    const blur = () => {
+      stopCellDrag();
+      if (drag.current) {
+        drag.current = null;
+        finishRef.current();
+      }
+    };
+    window.addEventListener("pointerup", pointerEnded);
+    window.addEventListener("pointercancel", pointerEnded);
+    window.addEventListener("blur", blur);
+    document.addEventListener("scroll", updateCellDrag, true);
+    return () => {
+      stopCellDrag();
+      window.removeEventListener("pointerup", pointerEnded);
+      window.removeEventListener("pointercancel", pointerEnded);
+      window.removeEventListener("blur", blur);
+      document.removeEventListener("scroll", updateCellDrag, true);
+    };
+  }, []);
+  useEffect(() => {
+    stopCellDrag();
+  }, [slide.id]);
+  useEffect(() => {
+    if (
+      cellDrag.current &&
+      tableSelection?.elementId !== cellDrag.current.selection.elementId
+    )
+      stopCellDrag();
+  }, [tableSelection]);
   const down = (ev: ReactPointerEvent, el: SlideElement, handle?: string) => {
     if (ev.button !== 0 || editing === el.id) return;
     ev.stopPropagation();
+    if (!handle && el.type === "table" && el.table && !el.locked) {
+      const host = ev.currentTarget as HTMLElement;
+      const cell =
+        ev.target instanceof Element
+          ? ev.target.closest<HTMLElement>("[data-row][data-column]")
+          : null;
+      if (cell && host.contains(cell)) {
+        const rect = host.getBoundingClientRect(),
+          angle = (el.rotation * Math.PI) / 180;
+        const dx = ev.clientX - (rect.left + rect.width / 2),
+          dy = ev.clientY - (rect.top + rect.height / 2);
+        const x =
+          (dx * Math.cos(angle) + dy * Math.sin(angle)) / scale + el.width / 2;
+        const y =
+          (-dx * Math.sin(angle) + dy * Math.cos(angle)) / scale +
+          el.height / 2;
+        const onEdge =
+          x < 4 / scale ||
+          y < 4 / scale ||
+          el.width - x < 4 / scale ||
+          el.height - y < 4 / scale;
+        if (!onEdge) {
+          ev.preventDefault();
+          stopCellDrag();
+          host.focus({ preventScroll: true });
+          const focus = {
+            row: Number(cell.dataset.row),
+            column: Number(cell.dataset.column),
+          };
+          const previous = tableSelectionRef.current;
+          const anchor =
+            ev.shiftKey && previous?.elementId === el.id
+              ? {
+                  row: Math.max(
+                    0,
+                    Math.min(el.table.cells.length - 1, previous.anchor.row),
+                  ),
+                  column: Math.max(
+                    0,
+                    Math.min(
+                      el.table.cells[0].length - 1,
+                      previous.anchor.column,
+                    ),
+                  ),
+                }
+              : focus;
+          const selection = { elementId: el.id, anchor, focus };
+          select([el.id]);
+          edit(null);
+          tableSelectionRef.current = selection;
+          selectTableCells(selection);
+          host.setPointerCapture(ev.pointerId);
+          cellDrag.current = {
+            pointer: ev.pointerId,
+            host,
+            viewport: host.closest<HTMLElement>(".canvas-area"),
+            selection,
+            clientX: ev.clientX,
+            clientY: ev.clientY,
+            frame: requestAnimationFrame(scrollCellDrag),
+          };
+          return;
+        }
+      }
+    }
+    stopCellDrag();
+    tableSelectionRef.current = null;
+    selectTableCells(null);
     let ids = selected.includes(el.id) ? selected : [el.id];
     if (ev.shiftKey && !handle) {
       ids = selected.includes(el.id)
@@ -606,6 +804,12 @@ export default function SlideCanvas({
     };
   };
   const move = (ev: ReactPointerEvent) => {
+    if (cellDrag.current?.pointer === ev.pointerId) {
+      cellDrag.current.clientX = ev.clientX;
+      cellDrag.current.clientY = ev.clientY;
+      updateCellDrag();
+      return;
+    }
     const d = drag.current;
     if (!d || ev.pointerId !== d.pointer) return;
     let dx = (ev.clientX - d.startX) / scale,
@@ -655,6 +859,7 @@ export default function SlideCanvas({
     );
   };
   const up = (ev: ReactPointerEvent) => {
+    if (cellDrag.current?.pointer === ev.pointerId) stopCellDrag();
     if (drag.current?.pointer === ev.pointerId) {
       finish();
       drag.current = null;
@@ -681,6 +886,9 @@ export default function SlideCanvas({
             (e.target instanceof Element &&
               e.target.classList.contains("slide-artwork"))
           ) {
+            stopCellDrag();
+            tableSelectionRef.current = null;
+            selectTableCells(null);
             select([]);
             edit(null);
           }
@@ -688,6 +896,10 @@ export default function SlideCanvas({
         onPointerMove={move}
         onPointerUp={up}
         onPointerCancel={up}
+        onLostPointerCapture={up}
+        onWheelCapture={(event) => {
+          if (cellDrag.current) event.stopPropagation();
+        }}
       >
         <div className="slide-artwork">
           {showGuides && (
@@ -708,6 +920,7 @@ export default function SlideCanvas({
               data-testid="slide-element"
               data-element-id={e.id}
               data-type={e.type}
+              tabIndex={e.type === "table" ? -1 : undefined}
               className={`slide-element ${selected.includes(e.id) ? "selected" : ""} ${e.locked ? "locked" : ""} ${editing === e.id ? "editing" : ""}`}
               style={
                 {
@@ -720,7 +933,13 @@ export default function SlideCanvas({
                 ev.stopPropagation();
                 if (e.type === "table" && !e.locked) {
                   select([e.id]);
-                  editTable?.(e.id);
+                  const selection = tableSelectionRef.current;
+                  editTable?.(
+                    e.id,
+                    selection?.elementId === e.id
+                      ? selectionRange(selection)
+                      : undefined,
+                  );
                 }
                 if (e.type === "text" && !e.locked) {
                   select([e.id]);
@@ -737,6 +956,15 @@ export default function SlideCanvas({
                     finish();
                     edit(null);
                   }}
+                />
+              ) : e.type === "table" ? (
+                <TableVisual
+                  element={e}
+                  selection={
+                    tableSelection?.elementId === e.id
+                      ? selectionRange(tableSelection)
+                      : undefined
+                  }
                 />
               ) : (
                 <ElementVisual element={e} />
@@ -757,6 +985,55 @@ export default function SlideCanvas({
                 } as CSSProperties
               }
             >
+              {e.type === "table" && !e.locked && !editing && (
+                <>
+                  <div
+                    className="table-canvas-toolbar"
+                    style={{ pointerEvents: "auto" }}
+                  >
+                    <button
+                      type="button"
+                      className="table-move-handle"
+                      data-testid="table-move-handle"
+                      aria-label="표 이동"
+                      title="드래그하여 표 전체 이동"
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        down(event, e);
+                      }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        selectTableCells(null);
+                        select([e.id]);
+                      }}
+                    >
+                      표 이동
+                    </button>
+                    {tableSelection?.elementId === e.id && (
+                      <button
+                        type="button"
+                        data-testid="table-edit-selection"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          editTable?.(e.id, selectionRange(tableSelection));
+                        }}
+                      >
+                        선택 셀 편집
+                      </button>
+                    )}
+                  </div>
+                  {(["n", "e", "s", "w"] as const).map((side) => (
+                    <div
+                      key={side}
+                      className={`table-move-edge ${side}`}
+                      data-testid={`table-move-edge-${side}`}
+                      style={{ pointerEvents: "auto" }}
+                      onPointerDown={(event) => down(event, e)}
+                    />
+                  ))}
+                </>
+              )}
               {!e.locked &&
                 !editing &&
                 ["nw", "n", "ne", "e", "se", "s", "sw", "w"].map((h) => (
@@ -776,7 +1053,7 @@ export default function SlideCanvas({
                       : e.type === "image"
                         ? "이미지"
                         : e.type === "table"
-                          ? "표 · 더블클릭하여 편집"
+                          ? "표 · 셀을 드래그하여 선택"
                           : "도형"}
                 </span>
               )}

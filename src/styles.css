@@ -1605,46 +1605,6 @@ button:not(:disabled):active {
 .presentation-view.blackout .present-slide {
   visibility: hidden;
 }
-.present-controls {
-  position: absolute;
-  left: 50%;
-  bottom: 23px;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 9px;
-  border-radius: 9px;
-  background: #14200fe6;
-  color: #e3eddb;
-  opacity: 0;
-  transition: opacity 0.2s;
-  box-shadow: 0 2px 20px #0003;
-}
-.presentation-view:hover .present-controls,
-.present-controls:focus-within {
-  opacity: 1;
-}
-.present-controls > button {
-  padding: 6px;
-  display: flex;
-  border-radius: 4px;
-  color: #e3eddb;
-}
-.present-controls > button:hover {
-  background: #ffffff1f;
-}
-.present-controls > span {
-  height: 18px;
-  width: 1px;
-  background: #ffffff2a;
-  margin: 0 3px;
-}
-.present-controls > small {
-  font-size: 11px;
-  min-width: 40px;
-  text-align: center;
-}
 .present-notes {
   height: 160px;
   width: 100%;

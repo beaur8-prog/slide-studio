@@ -18,7 +18,6 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Circle,
   Copy,
@@ -2943,6 +2942,8 @@ export default function App() {
         <div
           className={`presentation-view ${blackout ? "blackout" : ""}`}
           data-testid="presentation-view"
+          role="region"
+          aria-label={`발표 슬라이드 ${presentIndex + 1} / ${deck.slides.length}`}
           onClick={() => movePresent(1)}
         >
           <div
@@ -2972,45 +2973,6 @@ export default function App() {
                 (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
               )}
             />
-          </div>
-          <div
-            className="present-controls"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button aria-label="발표 종료" onClick={stopPresent}>
-              <X size={18} />
-            </button>
-            <span />
-            <button
-              aria-label="이전 슬라이드"
-              onClick={() => movePresent(-1)}
-              disabled={presentIndex === 0}
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <small>
-              {presentIndex + 1} / {deck.slides.length}
-            </small>
-            <button
-              aria-label="다음 슬라이드"
-              onClick={() => movePresent(1)}
-              disabled={presentIndex === deck.slides.length - 1}
-            >
-              <ChevronRight size={20} />
-            </button>
-            <span />
-            <button
-              aria-label="발표 노트 보기"
-              onClick={() => setPresentNotes((v) => !v)}
-            >
-              <StickyNote size={17} />
-            </button>
-            {!window.desktop?.setPresentationMode && <button
-              aria-label="전체 화면"
-              onClick={enterPresentationFullscreen}
-            >
-              <Maximize size={17} />
-            </button>}
           </div>
           {presentNotes && (
             <div className="present-notes" onClick={(e) => e.stopPropagation()}>

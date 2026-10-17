@@ -34,6 +34,7 @@ test("Windows slideshow covers the display and restores normal, maximized, and f
       }).toEqual((await windowState()).display);
       const display = (await windowState()).display;
       await expect(page.getByTestId("presentation-view")).toBeVisible();
+      await expect(page.getByTestId("presentation-view").getByRole("button")).toHaveCount(0);
       await expect.poll(() => page.getByTestId("presentation-view").boundingBox()).toEqual({
         x: 0, y: 0, width: display.width, height: display.height,
       });
@@ -48,7 +49,7 @@ test("Windows slideshow covers the display and restores normal, maximized, and f
     await expectFullscreen();
     await page.screenshot({ path: testInfo.outputPath("native-fullscreen.png") });
     await page.keyboard.press("ArrowRight");
-    await expect(page.locator(".present-controls small")).toContainText("2 /");
+    await expect(page.getByTestId("presentation-view")).toHaveAttribute("aria-label", /^발표 슬라이드 2 \//);
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("presentation-view")).toBeHidden();
     await expect.poll(async () => (await windowState()).fullscreen).toBe(false);
@@ -60,8 +61,8 @@ test("Windows slideshow covers the display and restores normal, maximized, and f
     await page.getByRole("button", { name: "슬라이드 쇼", exact: true }).click();
     await page.getByRole("button", { name: "현재 슬라이드부터", exact: true }).click();
     await expectFullscreen();
-    await expect(page.locator(".present-controls small")).toContainText("2 /");
-    await page.getByRole("button", { name: "발표 종료", exact: true }).click();
+    await expect(page.getByTestId("presentation-view")).toHaveAttribute("aria-label", /^발표 슬라이드 2 \//);
+    await page.keyboard.press("Escape");
     await expect(page.getByTestId("presentation-view")).toBeHidden();
     await expect.poll(async () => (await windowState()).fullscreen).toBe(false);
     expect((await windowState()).maximized).toBe(true);
@@ -91,6 +92,11 @@ test("browser slideshow enters fullscreen automatically and follows native fulls
   await page.keyboard.press("F5");
   await expect(page.getByTestId("presentation-view")).toBeVisible();
   await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(true);
+  await expect(page.getByTestId("presentation-view").getByRole("button")).toHaveCount(0);
+  await page.getByTestId("presentation-view").click();
+  await expect(page.getByTestId("presentation-view")).toHaveAttribute("aria-label", /^발표 슬라이드 2 \//);
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByTestId("presentation-view")).toHaveAttribute("aria-label", /^발표 슬라이드 1 \//);
   await page.evaluate(() => document.exitFullscreen());
   await expect(page.getByTestId("presentation-view")).toBeHidden();
   await page.keyboard.press("Shift+F5");

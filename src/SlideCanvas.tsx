@@ -15,6 +15,7 @@ import {
   paragraphLines,
   scriptRuns,
 } from "./text-layout";
+import { editableColorRanges, type TextColorRange } from "./text-color";
 import type { TextMenuSelection } from "./text-selection";
 import { LineShape } from "./LineShape";
 import { TableVisual } from "./TableEditor";
@@ -499,7 +500,7 @@ function EditableText({
   onDone,
 }: {
   element: SlideElement;
-  onInput: (text: string) => void;
+  onInput: (text: string, colors?: TextColorRange[]) => void;
   onDone: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -533,12 +534,24 @@ function EditableText({
       onBlur={(e) => {
         if (
           e.relatedTarget instanceof Element &&
-          e.relatedTarget.closest(".object-context-menu")
+          e.relatedTarget.closest(
+            ".object-context-menu, .text-color-palette, [data-text-format-trigger], [data-text-selection-control]",
+          )
         )
           return;
         onDone();
       }}
-      onInput={(e) => onInput(editableText(e.currentTarget))}
+      onInput={(e) => {
+        const host = e.currentTarget;
+        const type = (e.nativeEvent as InputEvent).inputType || "";
+        if (type.startsWith("format")) host.dataset.colorFormatting = "true";
+        onInput(
+          editableText(host),
+          host.dataset.colorFormatting || type.startsWith("history")
+            ? editableColorRanges(host)
+            : undefined,
+        );
+      }}
       onKeyDown={(e) => {
         // Let the object wrapper handle the context-menu keyboard shortcut,
         // including while this contenteditable owns the selection.
@@ -627,7 +640,7 @@ interface Props {
   begin: () => void;
   preview: (elements: SlideElement[]) => void;
   finish: () => void;
-  changeText: (id: string, text: string) => void;
+  changeText: (id: string, text: string, colors?: TextColorRange[]) => void;
   showGuides: boolean;
   grid: boolean;
 }
@@ -1033,7 +1046,7 @@ export default function SlideCanvas({
               {editing === e.id ? (
                 <EditableText
                   element={e}
-                  onInput={(text) => changeText(e.id, text)}
+                  onInput={(text, colors) => changeText(e.id, text, colors)}
                   onDone={() => {
                     finish();
                     edit(null);

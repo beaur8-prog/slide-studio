@@ -80,6 +80,9 @@ import {
   Camera,
 } from "lucide-react";
 import CommandSearch from "./CommandSearch";
+import TextColorPalette from "./TextColorPalette";
+import { applyTextColorRanges, cssColorHex } from "./text-color";
+import { captureTextSelection, restoreTextSelection } from "./text-selection";
 import TextContextMenu from "./TextContextMenu";
 import type { TextMenuSelection } from "./text-selection";
 import ObjectContextMenu, { type ObjectMenuAction } from "./ObjectContextMenu";
@@ -412,6 +415,16 @@ export default function App() {
     y: number;
     selection: TextMenuSelection;
   } | null>(null);
+  const [colorPalette, setColorPalette] = useState<{
+    x: number;
+    y: number;
+    color: string;
+    selection?: TextMenuSelection;
+    partial: boolean;
+    ids: string[];
+    slideId: string;
+  } | null>(null);
+  const colorSelection = useRef<TextMenuSelection | undefined>(undefined);
   const closeObjectMenu = useCallback(() => setObjectMenu(null), []);
   const [layout, setLayout] = useState("title");
   const [zoom, setZoom] = useState<number | null>(null);
@@ -437,6 +450,7 @@ export default function App() {
   useEffect(() => {
     setObjectMenu(null);
     setTextMenu(null);
+    setColorPalette(null);
   }, [activeId, deck.id, modal, presenting, sorter]);
   const presentationActive = useRef(false);
   const presentationView = useRef<HTMLDivElement>(null);
@@ -1626,7 +1640,7 @@ export default function App() {
         }
         return;
       }
-      if (objectMenu || textMenu) return;
+      if (objectMenu || textMenu || colorPalette) return;
       const cmd = e.metaKey || e.ctrlKey;
       if (cmd && e.key === "F1") {
         e.preventDefault();
@@ -1891,6 +1905,107 @@ export default function App() {
     return () => window.removeEventListener("keydown", onPrintKey, true);
   });
 
+  const openTextColor = (
+    selection?: TextMenuSelection,
+    point?: { x: number; y: number },
+  ) => {
+    if (selectedElement?.type !== "text" || selectedElement.locked) return;
+    const host = document.querySelector<HTMLElement>(".editing-text");
+    const retained =
+      selection ??
+      (host ? captureTextSelection(host) : undefined) ??
+      (colorSelection.current?.host.isConnected
+        ? colorSelection.current
+        : undefined);
+    colorSelection.current = undefined;
+    const trigger = document
+      .querySelector("[data-text-format-trigger]")
+      ?.getBoundingClientRect();
+    let anchor = retained?.range.startContainer;
+    if (retained && !retained.range.collapsed) {
+      const walker = document.createTreeWalker(
+        retained.host,
+        NodeFilter.SHOW_TEXT,
+      );
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        if (!node.textContent || !retained.range.intersectsNode(node)) continue;
+        if (
+          node === retained.range.startContainer &&
+          retained.range.startOffset >= node.textContent.length
+        )
+          continue;
+        if (
+          node === retained.range.endContainer &&
+          retained.range.endOffset === 0
+        )
+          continue;
+        anchor = node;
+        break;
+      }
+    }
+    const parent = anchor instanceof Element ? anchor : anchor?.parentElement;
+    setColorPalette({
+      x:
+        point?.x ??
+        trigger?.left ??
+        retained?.range.getBoundingClientRect().left ??
+        300,
+      y:
+        point?.y ??
+        (trigger ? trigger.bottom + 7 : undefined) ??
+        retained?.range.getBoundingClientRect().bottom ??
+        180,
+      color:
+        (parent ? cssColorHex(getComputedStyle(parent).color) : undefined) ??
+        selectedElement.color ??
+        "#233D35",
+      selection: retained,
+      partial: !!host || !!selection,
+      ids: [...selected],
+      slideId: activeId,
+    });
+  };
+  const closeTextColor = (restore: boolean) => {
+    const selection = colorPalette?.selection;
+    if (restore && selection) restoreTextSelection(selection);
+    else if (!restore && colorPalette?.partial) {
+      finish();
+      setEditing(null);
+    }
+    setColorPalette(null);
+  };
+  const applyTextColor = (color: string) => {
+    if (!colorPalette || colorPalette.slideId !== activeId) return;
+    if (colorPalette.partial) {
+      const selection = colorPalette.selection;
+      if (!selection?.host.isConnected || selection.range.collapsed) return;
+      restoreTextSelection(selection);
+      selection.host.dataset.colorFormatting = "true";
+      document.execCommand("styleWithCSS", false, "true");
+      document.execCommand("foreColor", false, color);
+      selection.host.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          inputType: "formatFontColor",
+        }),
+      );
+      const next = captureTextSelection(selection.host);
+      setColorPalette(null);
+      if (next) restoreTextSelection(next);
+    } else {
+      changeSlide((s) => ({
+        ...s,
+        elements: s.elements.map((el) =>
+          colorPalette.ids.includes(el.id) && el.type === "text" && !el.locked
+            ? patchText(el, { color })
+            : el,
+        ),
+      }));
+      setColorPalette(null);
+    }
+  };
+
   const fontTools = (
     <>
       <div className="font-row">
@@ -1961,16 +2076,27 @@ export default function App() {
             updateSelected({ underline: !selectedElement?.underline })
           }
         />
-        <label className="toolbar-color" title="글자 색">
+        <button
+          className="toolbar-color"
+          title="글자 색"
+          aria-label="글자 색"
+          data-text-format-trigger
+          disabled={selectedElement?.type !== "text" || selectedElement.locked}
+          onPointerDown={() => {
+            const host = document.querySelector<HTMLElement>(".editing-text");
+            colorSelection.current = host
+              ? captureTextSelection(host)
+              : undefined;
+          }}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => openTextColor()}
+        >
           <span>A</span>
-          <input
-            type="color"
-            aria-label="글자 색"
-            disabled={selectedElement?.type !== "text"}
-            value={selectedElement?.color || "#233D35"}
-            onChange={(e) => updateSelected({ color: e.target.value })}
+          <span
+            className="color-bar"
+            style={{ background: selectedElement?.color || "#233D35" }}
           />
-        </label>
+        </button>
       </div>
     </>
   );
@@ -2091,6 +2217,14 @@ export default function App() {
         run: removeSelected,
       },
     );
+    if (selectedElement.type === "text")
+      objectMenuActions.push({
+        label: "글자 색",
+        icon: <Type size={16} />,
+        separator: true,
+        disabled: locked,
+        run: () => openTextColor(),
+      });
     if (selected.length === 1 && selectedElement.type === "text")
       objectMenuActions.push({
         label: "텍스트 편집",
@@ -2488,6 +2622,10 @@ export default function App() {
           ).map(([id, label]) => (
             <button
               key={id}
+              data-text-selection-control
+              onMouseDown={(event) => {
+                if (editing) event.preventDefault();
+              }}
               className={tab === id ? "selected-tab" : ""}
               onClick={() => {
                 setTab(id);
@@ -3298,7 +3436,7 @@ export default function App() {
                           ),
                         }))
                       }
-                      changeText={(id, text) =>
+                      changeText={(id, text, colors) =>
                         preview((d) => ({
                           ...d,
                           slides: d.slides.map((s) =>
@@ -3308,7 +3446,12 @@ export default function App() {
                                   elements: s.elements.map((el) =>
                                     el.id === id
                                       ? {
-                                          ...editText(el, text),
+                                          ...(colors
+                                            ? applyTextColorRanges(
+                                                editText(el, text),
+                                                colors,
+                                              )
+                                            : editText(el, text)),
                                           field: undefined,
                                         }
                                       : el,
@@ -3791,12 +3934,25 @@ export default function App() {
             <Maximize size={14} />
           </button>
         </footer>
+        {colorPalette && (
+          <TextColorPalette
+            {...colorPalette}
+            onApply={applyTextColor}
+            onClose={closeTextColor}
+          />
+        )}
         {textMenu && (
           <TextContextMenu
             key={`${textMenu.x}:${textMenu.y}`}
             {...textMenu}
             onClose={closeTextMenu}
             onError={notify}
+            onColor={() =>
+              openTextColor(textMenu.selection, {
+                x: textMenu.x,
+                y: textMenu.y,
+              })
+            }
             onObjectMenu={() => {
               finish();
               setEditing(null);

@@ -19,3 +19,24 @@ export function restoreTextSelection(selection: TextMenuSelection) {
     );
   else current?.addRange(range);
 }
+
+export function captureTextSelection(
+  host: HTMLElement,
+): TextMenuSelection | undefined {
+  const selection = getSelection();
+  if (
+    !selection?.rangeCount ||
+    !host.contains(selection.anchorNode) ||
+    !host.contains(selection.focusNode)
+  )
+    return;
+  const range = selection.getRangeAt(0).cloneRange();
+  return {
+    host,
+    range,
+    backward:
+      !range.collapsed &&
+      selection.anchorNode === range.endContainer &&
+      selection.anchorOffset === range.endOffset,
+  };
+}

@@ -45,7 +45,15 @@ export default function ObjectContextMenu({
       .querySelector<HTMLButtonElement>("button:not(:disabled)")
       ?.focus({ preventScroll: true });
     const outside = (event: PointerEvent) => {
-      if (!host.contains(event.target as Node)) onClose(false);
+      if (!host.contains(event.target as Node)) {
+        const transfer =
+          textSelection &&
+          event.target instanceof Element &&
+          event.target.closest(
+            "[data-text-format-trigger], [data-text-selection-control]",
+          );
+        onClose(!!transfer);
+      }
     };
     const close = () => onClose(false);
     const key = (event: KeyboardEvent) => {

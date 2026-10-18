@@ -5,6 +5,7 @@ import {
   Trash2,
   Type,
   Square,
+  Palette,
 } from "lucide-react";
 import ObjectContextMenu from "./ObjectContextMenu";
 
@@ -18,6 +19,7 @@ export default function TextContextMenu({
   selection,
   onClose,
   onObjectMenu,
+  onColor,
   onError,
 }: {
   x: number;
@@ -25,6 +27,7 @@ export default function TextContextMenu({
   selection: TextMenuSelection;
   onClose: (finishEditing?: boolean) => void;
   onObjectMenu: () => void;
+  onColor: () => void;
   onError: (message: string) => void;
 }) {
   const close = useCallback(
@@ -113,6 +116,13 @@ export default function TextContextMenu({
             restoreTextSelection(selection);
             document.execCommand("delete");
           },
+        },
+        {
+          label: "글자 색",
+          icon: <Palette size={16} />,
+          disabled: selection.range.collapsed,
+          separator: true,
+          run: onColor,
         },
         {
           label: "모두 선택",

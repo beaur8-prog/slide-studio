@@ -30,15 +30,25 @@ function withoutPrefix(runs: TextRun[], count: number): TextRun[] {
   return body.length ? body : [{ ...runs.at(-1), text: "" }];
 }
 
-export function hasTextBullets(element: SlideElement): boolean {
-  return paragraphs(element).every((p) => isBulletPrefix(prefix(p)));
+export function hasTextBullets(
+  element: SlideElement,
+  indices?: number[],
+): boolean {
+  return paragraphs(element)
+    .filter((_, i) => !indices || indices.includes(i))
+    .every((p) => isBulletPrefix(prefix(p)));
 }
 
 // Decide once for the whole selection, never invert individual paragraphs.
 // Work on runs directly so adding/removing markers cannot redistribute styles.
-export function toggleTextBullets(element: SlideElement): SlideElement {
-  const enable = !hasTextBullets(element);
-  const next = paragraphs(element).map((p) => {
+export function toggleTextBullets(
+  element: SlideElement,
+  indices?: number[],
+  enabled?: boolean,
+): SlideElement {
+  const enable = enabled ?? !hasTextBullets(element, indices);
+  const next = paragraphs(element).map((p, i) => {
+    if (indices && !indices.includes(i)) return p;
     const oldPrefix = prefix(p);
     const body = withoutPrefix(p.runs, oldPrefix.length);
     const oldHanging = oldPrefix ? Math.max(0, -(p.indent ?? 0)) : 0;
@@ -66,6 +76,44 @@ export function toggleTextBullets(element: SlideElement): SlideElement {
     paragraphs: next,
     field: undefined,
   };
+}
+
+export function textParagraphSelection(
+  element: SlideElement,
+  start: number,
+  end: number,
+): number[] {
+  let offset = 0;
+  const indices: number[] = [];
+  paragraphs(element).forEach((p, i) => {
+    const length = paragraphText([p]).length;
+    if (
+      start <= offset + length &&
+      (end === start ? end >= offset : end > offset)
+    )
+      indices.push(i);
+    offset += length + 1;
+  });
+  return indices;
+}
+
+export function remapBulletOffset(
+  before: SlideElement,
+  after: SlideElement,
+  at: number,
+): number {
+  let offset = 0;
+  const next = paragraphs(after);
+  for (const [i, p] of paragraphs(before).entries()) {
+    const length = paragraphText([p]).length;
+    if (at <= length)
+      return (
+        offset + Math.max(0, at - prefix(p).length) + prefix(next[i]).length
+      );
+    at -= length + 1;
+    offset += paragraphText([next[i]]).length + 1;
+  }
+  return after.text?.length ?? 0;
 }
 
 // Locate the caret in the same text representation used by editText, including

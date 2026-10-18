@@ -55,23 +55,9 @@ for (const sample of corpus) {
       for (let i = 0; i < project.slides.length; i++) {
         const originals = project.slides[i].elements,
           restoredElements = restored.slides[i].elements;
-        // Asymmetric cell borders export as explicit connectors. Extra edges
-        // are expected; text boxes and artwork must not multiply.
-        const expectedEdges = originals.reduce(
-          (n, e) =>
-            n +
-            (e.borders &&
-            !e.borders.every(
-              (b) =>
-                b.color === e.borders![0].color &&
-                b.width === e.borders![0].width,
-            )
-              ? e.borders.filter((b) => b.width && b.color !== "transparent")
-                  .length
-              : 0),
-          0,
-        );
-        if (restoredElements.length !== originals.length + expectedEdges)
+        // Composite border lines belong to their text box on reimport.
+        // Repeated round trips must not accumulate independent edge objects.
+        if (restoredElements.length !== originals.length)
           mismatches.push(`slide ${i + 1}: unexpected element count`);
         const nonLine = (e: (typeof originals)[number]) =>
           e.shape !== "line" && e.shape !== "arrow";
@@ -84,6 +70,11 @@ for (const sample of corpus) {
         for (let j = 0; j < a.length; j++) {
           if (normalize(a[j].text ?? "") !== normalize(b[j].text ?? ""))
             mismatches.push(`slide ${i + 1} element ${j}: text`);
+          if (
+            a[j].borders &&
+            JSON.stringify(a[j].borders) !== JSON.stringify(b[j].borders)
+          )
+            mismatches.push(`slide ${i + 1} element ${j}: borders`);
           for (const k of ["x", "y", "width", "height"] as const)
             if (Math.abs(a[j][k] - b[j][k]) > 0.1)
               mismatches.push(`slide ${i + 1} element ${j}: ${k}`);

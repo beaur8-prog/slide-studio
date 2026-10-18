@@ -15,6 +15,11 @@ import { drawingPaths } from "./drawing-path";
 import { readTextBody } from "./pptx-text";
 import { restoreLayoutXml } from "./pptx-export-layout";
 import {
+  writeObjectState,
+  readObjectState,
+  compositeBorderNodes,
+} from "./pptx-object-state";
+import {
   importedField,
   preserveObjectLinks,
   restoreInsertFields,
@@ -888,6 +893,7 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
     restoreLayoutXml(doc, slide.elements);
     restoreInsertFields(doc, slide.elements);
     restoreTableXml(doc, slide.elements);
+    writeObjectState(doc, slide.elements);
     xml = new XMLSerializer().serializeToString(doc);
     zip.file(
       path,
@@ -1222,14 +1228,12 @@ function transformGroupedElement(
   // A connector's rotation encodes its directed endpoints, including markers.
   // Images/custom paths instead keep reflection in their local flip flags.
   if (line && flipH) orientation += 180;
-  else if (element.type === "shape" && element.shape === "triangle" && flipV)
-    orientation += 180;
   return {
     ...element,
     x: cx + dx * Math.cos(angle) - dy * Math.sin(angle) - element.width / 2,
     y: cy + dx * Math.sin(angle) + dy * Math.cos(angle) - element.height / 2,
     rotation: orientation,
-    ...(element.type === "image" || element.paths
+    ...(element.type === "image" || (element.type === "shape" && !line)
       ? {
           flipH: Boolean(element.flipH) !== flipH,
           flipV: Boolean(element.flipV) !== flipV,
@@ -1239,12 +1243,17 @@ function transformGroupedElement(
 }
 function placeholder(
   node: Element,
-): { type: string; index: string } | undefined {
-  const ph = first(child(node, "nvSpPr") ?? child(node, "nvPicPr"), "ph");
+): { type: string; index: string | null } | undefined {
+  const ph = first(
+    ["nvSpPr", "nvPicPr", "nvGrpSpPr", "nvGraphicFramePr", "nvCxnSpPr"]
+      .map((name) => child(node, name))
+      .find(Boolean),
+    "ph",
+  );
   return ph
     ? {
         type: ph.getAttribute("type") ?? "obj",
-        index: ph.getAttribute("idx") ?? "0",
+        index: ph.getAttribute("idx"),
       }
     : undefined;
 }
@@ -1255,9 +1264,21 @@ function inheritedShape(
   const ph = placeholder(node);
   if (!ph || !doc) return undefined;
   const shapes = all(doc, "sp");
+  const sameType = (type: string | undefined) =>
+    type === ph.type ||
+    (["title", "ctrTitle"].includes(ph.type) &&
+      ["title", "ctrTitle"].includes(type ?? ""));
   return (
-    shapes.find((candidate) => placeholder(candidate)?.index === ph.index) ??
-    shapes.find((candidate) => placeholder(candidate)?.type === ph.type)
+    (ph.index !== null
+      ? shapes.find((candidate) => {
+          const p = placeholder(candidate);
+          return p?.index === ph.index && sameType(p.type);
+        })
+      : undefined) ??
+    (ph.index !== null
+      ? shapes.find((candidate) => placeholder(candidate)?.index === ph.index)
+      : undefined) ??
+    shapes.find((candidate) => sameType(placeholder(candidate)?.type))
   );
 }
 function bodyText(body: Element | undefined): string {
@@ -1686,7 +1707,7 @@ export async function importPptx(
       const styleName =
         ph?.type === "title" || ph?.type === "ctrTitle"
           ? "titleStyle"
-          : ph
+          : ph && ["body", "subTitle", "obj"].includes(ph.type)
             ? "bodyStyle"
             : "otherStyle";
       const masterTextStyle = child(first(master, "txStyles"), styleName);
@@ -1733,12 +1754,15 @@ export async function importPptx(
         first(properties, "sp3d")
       )
         warn("그림자·광택·3D 효과는 가져오지 않습니다.");
+      const geometryProperties = chain
+        .map((s) => child(s, "spPr"))
+        .find((p) => child(p, "prstGeom") || child(p, "custGeom"));
       const preset =
-        child(properties, "prstGeom")?.getAttribute("prst") ??
+        child(geometryProperties, "prstGeom")?.getAttribute("prst") ??
         (node.localName === "cxnSp" ? "line" : "rect");
       const fill = readFill(chain);
       const line = readLine(chain);
-      let paths = drawingPaths(child(properties, "custGeom"), {
+      let paths = drawingPaths(child(geometryProperties, "custGeom"), {
         width: attrNumber(child(xfrm, "ext"), "cx"),
         height: attrNumber(child(xfrm, "ext"), "cy"),
       });
@@ -1798,14 +1822,6 @@ export async function importPptx(
             ? (preset as ShapeKind)
             : "rect";
       if (paths) shape = "custom";
-      if (
-        (xfrm?.getAttribute("flipH") === "1" ||
-          xfrm?.getAttribute("flipV") === "1") &&
-        !paths &&
-        shape !== "line" &&
-        shape !== "arrow"
-      )
-        warn("뒤집힌 도형·텍스트는 뒤집기 없이 가져옵니다.");
       // The roundRect adjustment is a fraction of its shortest side, not a
       // fixed pixel radius. Office's preset pins it between 0 and 50000.
       let cornerRadius: number | undefined;
@@ -1838,7 +1854,7 @@ export async function importPptx(
           type: "shape",
           shape,
           ...(cornerRadius !== undefined ? { cornerRadius } : {}),
-          ...(paths
+          ...(shape !== "line" && shape !== "arrow"
             ? {
                 paths,
                 flipH: xfrm?.getAttribute("flipH") === "1",
@@ -1849,8 +1865,7 @@ export async function importPptx(
           ...(shape === "line" || shape === "arrow"
             ? { lineStart: line.start, lineEnd: line.end }
             : {}),
-          ...((shape === "line" || shape === "arrow") &&
-          (geometry.height > 0 || xfrm?.getAttribute("flipH") === "1")
+          ...(shape === "line" || shape === "arrow"
             ? (() => {
                 // OOXML connector extents encode two endpoints. The editor's
                 // line is horizontal within its box, so retain the diagonal as
@@ -1899,7 +1914,10 @@ export async function importPptx(
         parent,
         undefined,
         undefined,
-        pureText && (fill.color !== "transparent" || line.width > 0),
+        pureText &&
+          (fill.color !== "transparent" ||
+            line.width > 0 ||
+            readObjectState(node).preserveBox),
       );
       if (pureText)
         Object.assign(textElement, {
@@ -2360,6 +2378,7 @@ export async function importPptx(
       warn("표를 셀별로 편집 가능한 텍스트·배경·테두리로 가져왔습니다.");
     };
 
+    const generatedBorders = compositeBorderNodes(doc);
     const walk = async (
       tree: Element | undefined,
       parent: Transform,
@@ -2370,6 +2389,7 @@ export async function importPptx(
       if (!tree) return;
       if (depth > 30) fail("PPTX 그룹 중첩이 너무 깊습니다.");
       for (const node of Array.from(tree.children)) {
+        if (generatedBorders.has(node)) continue;
         if (decorationsOnly && placeholder(node)) continue;
         const elementStart = slide.elements.length;
         if (node.localName === "sp" || node.localName === "cxnSp")
@@ -2569,6 +2589,10 @@ export async function importPptx(
               );
           }
           for (let i = elementStart; i < slide.elements.length; i++) {
+            const state = readObjectState(node);
+            if (state.locked) slide.elements[i].locked = true;
+            if (state.borders && slide.elements[i].type === "text")
+              slide.elements[i].borders = state.borders;
             if (hyperlink) slide.elements[i].hyperlink = hyperlink;
             if (field && slide.elements[i].type === "text")
               slide.elements[i].field = field;

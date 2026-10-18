@@ -157,6 +157,16 @@ export default function TableEditor({
     row: initialRange?.startRow ?? 0,
     column: initialRange?.startColumn ?? 0,
   });
+  const originalDraft = useRef(JSON.stringify(draft));
+  const requestClose = () => {
+    if (JSON.stringify(draft) !== originalDraft.current) {
+      setError(
+        "변경 내용이 아직 적용되지 않았습니다. 적용 버튼으로 저장하거나 취소 버튼으로 변경을 버리세요.",
+      );
+      return;
+    }
+    onCancel();
+  };
   const [selected, setSelected] = useState({
     row: initialRange?.endRow ?? 0,
     column: initialRange?.endColumn ?? 0,
@@ -424,7 +434,7 @@ export default function TableEditor({
     <div
       className="modal-backdrop table-editor-backdrop"
       onPointerDown={(e) => {
-        if (e.target === e.currentTarget) onCancel();
+        if (e.target === e.currentTarget) requestClose();
       }}
     >
       <div
@@ -452,7 +462,7 @@ export default function TableEditor({
           if (event.key === "Escape") {
             event.preventDefault();
             event.stopPropagation();
-            onCancel();
+            requestClose();
           } else if (event.key === "Tab") {
             const controls = Array.from(
               event.currentTarget.querySelectorAll<HTMLElement>(
@@ -481,7 +491,7 @@ export default function TableEditor({
           <button
             className="icon-button"
             aria-label="표 편집 닫기"
-            onClick={onCancel}
+            onClick={requestClose}
           >
             ×
           </button>

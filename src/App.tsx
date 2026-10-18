@@ -87,6 +87,7 @@ import {
   applyTextFormatRanges,
   cssColorHex,
   trackTextFormat,
+  setSelectedFontSize,
   type InlineFormat,
 } from "./text-formatting";
 import { captureTextSelection, restoreTextSelection } from "./text-selection";
@@ -361,14 +362,43 @@ export default function App() {
   const slide = deck.slides[activeIndex];
   const [selected, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
+  const nudgeKey = useRef<string | null>(null);
   const [inlineFormat, setInlineFormat] = useState<
     Record<InlineFormat, boolean>
   >({ bold: false, italic: false, underline: false });
+  const ribbonTextSelection = useRef<TextMenuSelection | undefined>(undefined);
+  const [inlineTextStyle, setInlineTextStyle] = useState({
+    fontFamily: "Arial",
+    fontSize: 32,
+    color: "#233D35",
+    align: "left",
+  });
   useEffect(() => {
     if (!editing) return;
     const read = () => {
       const host = document.querySelector<HTMLElement>(".editing-text");
       if (!host || !captureTextSelection(host)) return;
+      const selection = getSelection();
+      let parent =
+        selection?.anchorNode instanceof Element
+          ? selection.anchorNode
+          : selection?.anchorNode?.parentElement;
+      if (parent) {
+        // Imported list separators use a zero-size span for a logical space.
+        // Show the surrounding marker's font rather than a meaningless 0.
+        while (parent !== host && getComputedStyle(parent).fontSize === "0px")
+          parent = parent.parentElement ?? host;
+        const css = getComputedStyle(parent);
+        setInlineTextStyle({
+          fontFamily: css.fontFamily
+            .split(",")[0]
+            .replace(/^["']|["']$/g, "")
+            .trim(),
+          fontSize: parseFloat(css.fontSize),
+          color: cssColorHex(css.color) ?? "#233D35",
+          align: css.textAlign,
+        });
+      }
       setInlineFormat({
         bold: document.queryCommandState("bold"),
         italic: document.queryCommandState("italic"),
@@ -525,6 +555,7 @@ export default function App() {
     cells?: string[][];
     cellStyles?: TableCellFormat[][];
   }>({});
+  const clipboardToken = useRef("");
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -939,7 +970,7 @@ export default function App() {
         ),
       }));
       setSelected([]);
-    } else removeSlide();
+    }
   };
   const clearSelectedTableCells = () => {
     if (!activeTableSelection || !tableRange) return;
@@ -997,6 +1028,33 @@ export default function App() {
     changeSlide((s) => ({ ...s, elements: [...s.elements, ...copies] }));
     setSelected(copies.map((e) => e.id));
   };
+  const writeInternalClipboard = (
+    text: string,
+    nativeClipboard?: DataTransfer | null,
+  ) => {
+    clipboardToken.current = uid();
+    const fill = (data: DataTransfer) => {
+      data.setData("text/plain", text);
+      data.setData("application/x-slide-studio", clipboardToken.current);
+    };
+    if (nativeClipboard) {
+      fill(nativeClipboard);
+      return;
+    }
+    // A native copy carries an identity marker. A later copy in another app
+    // replaces it, so stale in-memory objects never override external data.
+    const copy = (event: ClipboardEvent) => {
+      if (!event.clipboardData) return;
+      event.preventDefault();
+      fill(event.clipboardData);
+    };
+    document.addEventListener("copy", copy, true);
+    try {
+      document.execCommand("copy");
+    } finally {
+      document.removeEventListener("copy", copy, true);
+    }
+  };
   const copySelectedTableCells = (nativeClipboard?: DataTransfer | null) => {
     if (!activeTableSelection || !tableRange || !selectedElement?.table)
       return false;
@@ -1019,16 +1077,15 @@ export default function App() {
     clipboard.current = { cells, cellStyles };
     const text = tableClipboardText(cells);
     try {
-      if (nativeClipboard) nativeClipboard.setData("text/plain", text);
-      else void navigator.clipboard?.writeText(text).catch(() => {});
+      writeInternalClipboard(text, nativeClipboard);
     } catch {
-      /* Internal paste remains available. */
+      /* The explicit internal paste remains available. */
     }
     notify(`${cells.length * cells[0].length}개 셀을 복사했습니다.`);
     return true;
   };
-  const copySelection = () => {
-    if (copySelectedTableCells()) return;
+  const copySelection = (nativeClipboard?: DataTransfer | null) => {
+    if (copySelectedTableCells(nativeClipboard)) return;
     clipboard.current = selected.length
       ? {
           elements: clone(
@@ -1036,6 +1093,19 @@ export default function App() {
           ),
         }
       : { slide: clone(slide) };
+    const elements =
+      clipboard.current.elements ?? clipboard.current.slide?.elements ?? [];
+    try {
+      writeInternalClipboard(
+        elements
+          .map((e) => e.text ?? "")
+          .filter(Boolean)
+          .join("\n"),
+        nativeClipboard,
+      );
+    } catch {
+      /* Keep the internal copy if native clipboard access fails. */
+    }
     notify(
       selected.length ? "개체를 복사했습니다." : "슬라이드를 복사했습니다.",
     );
@@ -1786,21 +1856,18 @@ export default function App() {
         e.preventDefault();
         copySelection();
         if (selected.length) removeSelected();
-      } else if (cmd && e.key.toLowerCase() === "v") {
-        if (
-          clipboard.current.cells ||
-          clipboard.current.elements ||
-          clipboard.current.slide
-        ) {
-          e.preventDefault();
-          pasteSelection();
-        }
       } else if (cmd && e.key.toLowerCase() === "m") {
         e.preventDefault();
         addSlide();
       } else if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
-        removeSelected();
+        if (
+          !selected.length &&
+          e.target instanceof Element &&
+          e.target.closest(".thumbnail-list, .slide-sorter")
+        )
+          removeSlide();
+        else removeSelected();
       } else if (e.key === "F5") {
         e.preventDefault();
         startPresent(!e.shiftKey);
@@ -1817,8 +1884,12 @@ export default function App() {
       ) {
         e.preventDefault();
         if (selected.length) {
+          if (
+            !slide.elements.some((el) => selected.includes(el.id) && !el.locked)
+          )
+            return;
           const amount = e.shiftKey ? 10 : 1;
-          changeSlide((s) => ({
+          const move = (s: Slide) => ({
             ...s,
             elements: s.elements.map((el) =>
               selected.includes(el.id) && !el.locked
@@ -1841,7 +1912,15 @@ export default function App() {
                   }
                 : el,
             ),
-          }));
+          });
+          const update = (d: Deck) => ({
+            ...d,
+            slides: d.slides.map((s) => (s.id === slide.id ? move(s) : s)),
+          });
+          const key = `${slide.id}:${selected.join(",")}:${e.key}:${amount}`;
+          if (e.repeat && nudgeKey.current === key) preview(update);
+          else commit(update);
+          nudgeKey.current = key;
         } else {
           const idx = Math.max(
             0,
@@ -1854,14 +1933,21 @@ export default function App() {
         }
       }
     };
+    const stopNudge = () => {
+      nudgeKey.current = null;
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", stopNudge);
+    window.addEventListener("blur", stopNudge);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", stopNudge);
+      window.removeEventListener("blur", stopNudge);
+    };
   });
   useEffect(() => {
     const copyCells = (event: ClipboardEvent) => {
       if (
-        !tableRange ||
-        !selectedElement?.table ||
         modal ||
         presentationActive.current ||
         editingTarget(event.target) ||
@@ -1869,8 +1955,8 @@ export default function App() {
       )
         return;
       event.preventDefault();
-      copySelectedTableCells(event.clipboardData);
-      if (event.type === "cut") removeSelected();
+      copySelection(event.clipboardData);
+      if (event.type === "cut" && selected.length) removeSelected();
     };
     window.addEventListener("copy", copyCells);
     window.addEventListener("cut", copyCells);
@@ -1886,17 +1972,37 @@ export default function App() {
         return;
       }
       if (editingTarget(e.target) || modal) return;
-      if (clipboard.current.cells && activeTableSelection) {
-        e.preventDefault();
-        pasteSelection();
-        return;
-      }
       const file = Array.from(e.clipboardData?.items || [])
         .find((i) => i.type.startsWith("image/"))
         ?.getAsFile();
       if (file) {
         e.preventDefault();
         void addImage(file);
+        return;
+      }
+      if (
+        clipboardToken.current &&
+        e.clipboardData?.getData("application/x-slide-studio") ===
+          clipboardToken.current
+      ) {
+        e.preventDefault();
+        pasteSelection();
+        return;
+      }
+      const text = e.clipboardData?.getData("text/plain");
+      if (text) {
+        e.preventDefault();
+        insertElements([
+          element("text", {
+            text,
+            x: 80,
+            y: 80,
+            width: Math.max(160, deck.width - 160),
+            height: 80,
+            autoHeight: true,
+            wrap: true,
+          }),
+        ]);
       }
     };
     window.addEventListener("paste", paste);
@@ -2061,18 +2167,75 @@ export default function App() {
     }
   };
 
+  const rememberTextRange = () => {
+    const host = document.querySelector<HTMLElement>(".editing-text");
+    if (host) {
+      const selection = captureTextSelection(host);
+      if (selection) ribbonTextSelection.current = selection;
+    }
+  };
+  const setTextStyle = (
+    key: "fontFamily" | "fontSize" | "align",
+    value: string | number,
+  ) => {
+    if (selectedElement?.type !== "text" || selectedElement.locked) return;
+    if (!editing) {
+      updateSelected({ [key]: value });
+      return;
+    }
+    const host = document.querySelector<HTMLElement>(".editing-text");
+    const selection =
+      host && (captureTextSelection(host) ?? ribbonTextSelection.current);
+    if (!selection || selection.host !== host || !host.isConnected) return;
+    restoreTextSelection(selection);
+    const command =
+      key === "align"
+        ? (
+            {
+              left: "justifyLeft",
+              center: "justifyCenter",
+              right: "justifyRight",
+            } as Record<string, string>
+          )[String(value)]
+        : key === "fontFamily"
+          ? "fontName"
+          : "fontSize";
+    const type = `format${command[0].toUpperCase()}${command.slice(1)}`;
+    trackTextFormat(host, type);
+    if (key === "fontSize") setSelectedFontSize(host, Number(value));
+    else {
+      document.execCommand("styleWithCSS", false, "true");
+      document.execCommand(
+        command,
+        false,
+        key === "fontFamily" ? String(value) : undefined,
+      );
+    }
+    host.dispatchEvent(
+      new InputEvent("input", { bubbles: true, inputType: type }),
+    );
+    ribbonTextSelection.current = captureTextSelection(host);
+  };
   const fontTools = (
     <>
       <div className="font-row">
         <select
           aria-label="글꼴"
-          value={selectedElement?.fontFamily || "Arial"}
+          data-text-selection-control
+          onPointerDown={rememberTextRange}
+          onFocus={rememberTextRange}
+          value={
+            editing
+              ? inlineTextStyle.fontFamily
+              : selectedElement?.fontFamily || "Arial"
+          }
           disabled={selectedElement?.type !== "text"}
-          onChange={(e) => updateSelected({ fontFamily: e.target.value })}
+          onChange={(e) => setTextStyle("fontFamily", e.target.value)}
         >
           {[
             ...new Set([
               selectedElement?.fontFamily || "Arial",
+              ...(editing ? [inlineTextStyle.fontFamily] : []),
               "Arial",
               "Calibri",
               "Calibri Light",
@@ -2093,11 +2256,16 @@ export default function App() {
         <NumberInput
           key={selected.join(",")}
           aria-label="글자 크기"
+          data-text-selection-control
+          onPointerDown={rememberTextRange}
+          onFocus={rememberTextRange}
           min={8}
           max={240}
-          value={selectedElement?.fontSize || 32}
+          value={
+            editing ? inlineTextStyle.fontSize : selectedElement?.fontSize || 32
+          }
           disabled={selectedElement?.type !== "text"}
-          onChange={(fontSize) => updateSelected({ fontSize })}
+          onChange={(fontSize) => setTextStyle("fontSize", fontSize)}
         />
       </div>
       <div className="format-row">
@@ -2152,7 +2320,11 @@ export default function App() {
           <span>A</span>
           <span
             className="color-bar"
-            style={{ background: selectedElement?.color || "#233D35" }}
+            style={{
+              background: editing
+                ? inlineTextStyle.color
+                : selectedElement?.color || "#233D35",
+            }}
           />
         </button>
       </div>
@@ -2763,7 +2935,7 @@ export default function App() {
                       <Scissors size={14} />
                       잘라내기
                     </button>
-                    <button onClick={copySelection}>
+                    <button onClick={() => copySelection()}>
                       <Copy size={14} />
                       복사
                     </button>
@@ -2823,20 +2995,37 @@ export default function App() {
                       small
                       icon={<Icon size={18} />}
                       title={label}
-                      active={selectedElement?.align === align}
+                      preserveTextSelection
+                      active={
+                        (editing
+                          ? inlineTextStyle.align
+                          : selectedElement?.align) === align
+                      }
                       disabled={selectedElement?.type !== "text"}
-                      onClick={() => updateSelected({ align })}
+                      onClick={() => setTextStyle("align", align)}
                     />
                   ))}
                 </div>
                 <button
                   className="ribbon-text-action"
                   disabled={selectedElement?.type !== "text"}
+                  data-text-selection-control
+                  onPointerDown={(event) => {
+                    if (editing) event.preventDefault();
+                  }}
                   aria-pressed={
                     selectedElement?.type === "text" &&
                     hasTextBullets(selectedElement)
                   }
                   onClick={() => {
+                    if (editing) {
+                      document
+                        .querySelector(".editing-text")
+                        ?.dispatchEvent(
+                          new Event("slide-studio:toggle-bullets"),
+                        );
+                      return;
+                    }
                     finish();
                     setEditing(null);
                     changeSlide((s) => ({
@@ -3317,7 +3506,11 @@ export default function App() {
                     if (dragSlide !== null && dragSlide !== i)
                       commit((d) => ({
                         ...d,
-                        slides: reorder(d.slides, dragSlide, i),
+                        slides: reorder(
+                          d.slides,
+                          dragSlide,
+                          dragSlide < i ? i - 1 : i,
+                        ),
                       }));
                     setDragSlide(null);
                     setDropSlide(null);
@@ -3540,7 +3733,7 @@ export default function App() {
                           ),
                         }))
                       }
-                      changeText={(id, text, formats) =>
+                      changeText={(id, text, formats, edit) =>
                         preview((d) => ({
                           ...d,
                           slides: d.slides.map((s) =>
@@ -3552,10 +3745,20 @@ export default function App() {
                                       ? {
                                           ...(formats
                                             ? applyTextFormatRanges(
-                                                editText(el, text),
+                                                editText(
+                                                  el,
+                                                  text,
+                                                  edit?.softBreak,
+                                                  edit,
+                                                ),
                                                 formats,
                                               )
-                                            : editText(el, text)),
+                                            : editText(
+                                                el,
+                                                text,
+                                                edit?.softBreak,
+                                                edit,
+                                              )),
                                           field: undefined,
                                         }
                                       : el,

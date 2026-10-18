@@ -1,5 +1,6 @@
 import type { Deck, ElementLink, Slide, SlideElement } from "./types";
 import { element, THEMES } from "./model";
+import { editText } from "./text-layout";
 
 export function validateElementLink(value: unknown): ElementLink {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -58,7 +59,7 @@ export function resolveDeckFields(deck: Deck): Deck {
             : el.text;
       if (text === el.text) return el;
       changed = slideChanged = true;
-      return { ...el, text, paragraphs: undefined };
+      return editText(el, text ?? "");
     });
     return slideChanged ? { ...slide, elements } : slide;
   });
@@ -107,8 +108,7 @@ export function applyFooters(
           align,
         }),
         ...previous,
-        text,
-        paragraphs: undefined,
+        ...(previous ? editText(previous, text) : { text }),
         field,
       });
     };

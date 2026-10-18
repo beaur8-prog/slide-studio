@@ -364,11 +364,21 @@ test("canvas range Delete clears cells as one undo step while editor cancellatio
   await expect(tableOnSlide(page)).toHaveCount(1);
   const cleared = structuredClone(original.cells);
   for (const r of [1, 2]) for (const c of [1, 2]) cleared[r][c] = "";
-  expect((await savedTable(page)).table.cells).toEqual(cleared);
+  for (const r of [1, 2])
+    for (const c of [1, 2]) await expect(canvasCell(page, r, c)).toHaveText("");
+  // The key event can finish before React updates the save indicator. Wait
+  // for the persisted contents, not a stale "saved" label from the prior edit.
+  await expect
+    .poll(async () => (await savedTable(page)).table.cells)
+    .toEqual(cleared);
   await page.getByRole("button", { name: "실행 취소", exact: true }).click();
-  expect((await savedTable(page)).table).toEqual(original);
+  await expect
+    .poll(async () => (await savedTable(page)).table)
+    .toEqual(original);
   await page.getByRole("button", { name: "다시 실행", exact: true }).click();
-  expect((await savedTable(page)).table.cells).toEqual(cleared);
+  await expect
+    .poll(async () => (await savedTable(page)).table.cells)
+    .toEqual(cleared);
   await page.reload();
   await expect(tableOnSlide(page)).toHaveCount(1);
   dialog = await openEditor(page);

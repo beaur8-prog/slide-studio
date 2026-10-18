@@ -46,6 +46,13 @@ test("table dialog keeps Korean IME drafts, traps Tab and restores focus after E
   await expect(dialog.getByLabel("표 행 수")).toBeFocused();
   await firstCell.focus();
   await page.keyboard.press("Escape");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("alert")).toContainText("변경");
+  await page
+    .locator(".table-editor-backdrop")
+    .click({ position: { x: 3, y: 3 } });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "취소", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await expect(page.locator('.editable-slide [data-type="table"]')).toHaveCount(

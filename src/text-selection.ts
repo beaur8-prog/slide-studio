@@ -40,3 +40,71 @@ export function captureTextSelection(
       selection.anchorOffset === range.endOffset,
   };
 }
+import { editableText } from "./text-layout";
+
+export function textPointOffset(
+  host: HTMLElement,
+  node: Node,
+  offset: number,
+): number {
+  const path: number[] = [];
+  while (node !== host) {
+    const parent = node.parentNode!;
+    path.unshift(Array.prototype.indexOf.call(parent.childNodes, node));
+    node = parent;
+  }
+  const clone = host.cloneNode(true) as HTMLElement;
+  let copy: Node = clone;
+  for (const index of path) copy = copy.childNodes[index];
+  const marker = "\uFDD0" + crypto.randomUUID() + "\uFDD1",
+    point = document.createRange();
+  point.setStart(copy, offset);
+  point.collapse(true);
+  point.insertNode(document.createTextNode(marker));
+  return editableText(clone).indexOf(marker);
+}
+
+export function restoreTextOffsets(
+  host: HTMLElement,
+  start: number,
+  end: number,
+) {
+  const clone = host.cloneNode(true) as HTMLElement;
+  const originals = document.createTreeWalker(host, NodeFilter.SHOW_TEXT),
+    copies = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [],
+    prefix = "\uFDD0" + crypto.randomUUID() + ":";
+  let node: Node | null;
+  while ((node = originals.nextNode())) {
+    const copy = copies.nextNode()!;
+    if (!node.textContent) continue;
+    copy.textContent = prefix + nodes.length + "\uFDD1" + node.textContent;
+    nodes.push(node as Text);
+  }
+  const positions: number[] = [];
+  let removed = 0;
+  editableText(clone).replace(
+    new RegExp(prefix + "(\\d+)\uFDD1", "g"),
+    (marker, index, offset) => {
+      positions[Number(index)] = offset - removed;
+      removed += marker.length;
+      return "";
+    },
+  );
+  const point = (at: number): [Node, number] => {
+    for (const line of host.querySelectorAll<HTMLElement>("[data-text-line]"))
+      if (!editableText(line) && textPointOffset(host, line, 0) === at)
+        return [line, 0];
+    for (let i = 0; i < nodes.length; i++)
+      if (at <= positions[i] + nodes[i].length)
+        return [nodes[i], Math.max(0, at - positions[i])];
+    return nodes.length ? [nodes.at(-1)!, nodes.at(-1)!.length] : [host, 0];
+  };
+  host.focus({ preventScroll: true });
+  const range = document.createRange();
+  range.setStart(...point(start));
+  range.setEnd(...point(end));
+  const selection = getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}

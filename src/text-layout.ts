@@ -100,7 +100,6 @@ export function paragraphBullet(paragraph: TextParagraph) {
   if (
     !prefix ||
     !prefix.trim() ||
-    (paragraph.indent ?? 0) >= 0 ||
     !paragraph.runs
       .map((r) => r.text)
       .join("")
@@ -136,7 +135,28 @@ export function paragraphLines(paragraph: TextParagraph): TextRun[][] {
 
 // Preserve surrounding character styles when an edit inserts/deletes text.
 // The editable DOM stays untouched during IME composition; only the model changes.
-export function editText(element: SlideElement, text: string): SlideElement {
+export interface TextEdit {
+  start: number;
+  end: number;
+  softBreak: boolean;
+  paragraphs?: TextParagraph[];
+}
+
+export function editText(
+  element: SlideElement,
+  text: string,
+  softBreak = false,
+  edit?: TextEdit,
+): SlideElement {
+  if (edit?.paragraphs)
+    return { ...element, text, paragraphs: edit.paragraphs };
+  if (!element.paragraphs && softBreak)
+    element = {
+      ...element,
+      paragraphs: (element.text ?? "")
+        .split("\n")
+        .map((text) => ({ runs: [{ text }] })),
+    };
   if (!element.paragraphs || text === element.text) return { ...element, text };
   const old = element.text ?? "";
   let start = 0,
@@ -153,6 +173,17 @@ export function editText(element: SlideElement, text: string): SlideElement {
     old[old.length - 1 - end] === text[text.length - 1 - end]
   )
     end++;
+  if (
+    edit &&
+    edit.start >= 0 &&
+    edit.end >= edit.start &&
+    edit.end <= old.length &&
+    text.startsWith(old.slice(0, edit.start)) &&
+    text.endsWith(old.slice(edit.end))
+  ) {
+    start = edit.start;
+    end = old.length - edit.end;
+  }
   const styles: TextRun[] = [],
     paragraphAt: TextParagraph[] = [],
     paragraphBreaks: boolean[] = [];
@@ -201,7 +232,7 @@ export function editText(element: SlideElement, text: string): SlideElement {
   // Newly inserted newlines retain the editor's existing paragraph semantics.
   const nextBreaks = [
     ...paragraphBreaks.slice(0, start),
-    ...Array(text.length - start - end).fill(true),
+    ...Array(text.length - start - end).fill(!softBreak),
     ...paragraphBreaks.slice(old.length - end),
   ];
   const paragraphs: TextParagraph[] = [];

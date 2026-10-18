@@ -1,4 +1,5 @@
 import { memo, useRef, useLayoutEffect, useEffect } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type {
   Deck,
@@ -14,15 +15,28 @@ import {
   paragraphBullet,
   paragraphLines,
   scriptRuns,
+  type TextEdit,
 } from "./text-layout";
 import {
   editableTextFormatRanges,
   trackTextFormat,
+  applyPendingFontSize,
   type TextFormatRange,
 } from "./text-formatting";
-import type { TextMenuSelection } from "./text-selection";
-import { continueTextBullet } from "./text-bullets";
+import {
+  textPointOffset,
+  restoreTextOffsets,
+  type TextMenuSelection,
+} from "./text-selection";
+import {
+  continueTextBullet,
+  toggleTextBullets,
+  textParagraphSelection,
+  remapBulletOffset,
+  hasTextBullets,
+} from "./text-bullets";
 import { LineShape } from "./LineShape";
+import { selectionBounds, resizeElements } from "./canvas-resize";
 import { TableVisual } from "./TableEditor";
 import { TableResizer } from "./TableResizer";
 import type { TableCellRange } from "./table";
@@ -121,6 +135,7 @@ function TextLine({
                 ? {
                     display: "inline-block",
                     minWidth: Math.max(0, -(p.indent ?? 0)),
+                    marginRight: (p.indent ?? 0) >= 0 ? "0.25em" : undefined,
                     textIndent: 0,
                   }
                 : {}),
@@ -459,6 +474,7 @@ export function ElementVisual({
         width: "100%",
         height: "100%",
         background: e.fill,
+        transform: `scale(${e.flipH ? -1 : 1},${e.flipV ? -1 : 1})`,
         border: `${e.strokeWidth || 0}px solid ${e.stroke || "transparent"}`,
         borderRadius:
           e.shape === "ellipse"
@@ -593,12 +609,111 @@ function EditableText({
   onHeight,
 }: {
   element: SlideElement;
-  onInput: (text: string, formats?: TextFormatRange[]) => void;
+  onInput: (text: string, formats?: TextFormatRange[], edit?: TextEdit) => void;
   onDone: () => void;
   onHeight: (id: string, height: number) => void;
 }) {
   const ref = useTextHeight(element, onHeight);
   const initial = useRef(<TextContent element={element} editing />);
+  const inputEdit = useRef<TextEdit | undefined>(undefined);
+  const commandParagraphs = useRef<TextParagraph[] | undefined>(undefined);
+  const listHistory = useRef(
+    new Map<
+      string,
+      { paragraphs: TextParagraph[]; start: number; end: number }
+    >(),
+  );
+  const listSelection = () => {
+    const host = ref.current,
+      selection = getSelection();
+    if (!host || !selection?.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (
+      !host.contains(range.startContainer) ||
+      !host.contains(range.endContainer)
+    )
+      return;
+    const start = textPointOffset(
+        host,
+        range.startContainer,
+        range.startOffset,
+      ),
+      end = textPointOffset(host, range.endContainer, range.endOffset);
+    return {
+      host,
+      start,
+      end,
+      indices: textParagraphSelection(element, start, end),
+    };
+  };
+  const applyList = (
+    next: SlideElement,
+    range: NonNullable<ReturnType<typeof listSelection>>,
+  ) => {
+    const { host, start, end } = range;
+    const old =
+      element.paragraphs ??
+      (element.text ?? "").split("\n").map((text) => ({ runs: [{ text }] }));
+    listHistory.current.set(host.innerHTML, { paragraphs: old, start, end });
+    commandParagraphs.current = next.paragraphs;
+    const selection = getSelection(),
+      entire = document.createRange();
+    entire.selectNodeContents(host);
+    selection?.removeAllRanges();
+    selection?.addRange(entire);
+    document.execCommand(
+      "insertHTML",
+      false,
+      renderToStaticMarkup(<TextContent element={next} editing />),
+    );
+    const nextStart = remapBulletOffset(element, next, start),
+      nextEnd = remapBulletOffset(element, next, end);
+    listHistory.current.set(host.innerHTML, {
+      paragraphs: next.paragraphs!,
+      start: nextStart,
+      end: nextEnd,
+    });
+    if (listHistory.current.size > 20)
+      listHistory.current.delete(listHistory.current.keys().next().value!);
+    restoreTextOffsets(host, nextStart, nextEnd);
+  };
+  useEffect(() => {
+    const host = ref.current;
+    if (!host) return;
+    const toggle = () => {
+      const range = listSelection();
+      if (range) applyList(toggleTextBullets(element, range.indices), range);
+    };
+    host.addEventListener("slide-studio:toggle-bullets", toggle);
+    return () =>
+      host.removeEventListener("slide-studio:toggle-bullets", toggle);
+  }, [element]);
+  useLayoutEffect(() => {
+    const host = ref.current;
+    if (!host) return;
+    const beforeInput = (event: InputEvent) => {
+      const selection = getSelection();
+      const source =
+        event.getTargetRanges()[0] ??
+        (selection?.rangeCount ? selection.getRangeAt(0) : undefined);
+      inputEdit.current =
+        source &&
+        host.contains(source.startContainer) &&
+        host.contains(source.endContainer)
+          ? {
+              start: textPointOffset(
+                host,
+                source.startContainer,
+                source.startOffset,
+              ),
+              end: textPointOffset(host, source.endContainer, source.endOffset),
+              softBreak: event.inputType === "insertLineBreak",
+            }
+          : undefined;
+    };
+    host.addEventListener("beforeinput", beforeInput);
+    return () => host.removeEventListener("beforeinput", beforeInput);
+  }, []);
   useLayoutEffect(() => {
     if (!ref.current) return;
     ref.current.focus();
@@ -638,17 +753,92 @@ function EditableText({
       onInput={(e) => {
         const host = e.currentTarget;
         const type = (e.nativeEvent as InputEvent).inputType || "";
+        applyPendingFontSize(host);
         trackTextFormat(host, type);
+        let edit = inputEdit.current;
+        inputEdit.current = undefined;
+        const history = type.startsWith("history")
+          ? listHistory.current.get(host.innerHTML)
+          : undefined;
+        const paragraphs = commandParagraphs.current ?? history?.paragraphs;
+        commandParagraphs.current = undefined;
+        if (paragraphs)
+          edit = {
+            start: 0,
+            end: element.text?.length ?? 0,
+            softBreak: false,
+            paragraphs,
+          };
         onInput(
           editableText(host),
           host.dataset.textFormats ? editableTextFormatRanges(host) : undefined,
+          edit,
         );
+        if (history) restoreTextOffsets(host, history.start, history.end);
       }}
       onKeyDown={(e) => {
         // Let the object wrapper handle the context-menu keyboard shortcut,
         // including while this contenteditable owns the selection.
         if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) return;
         e.stopPropagation();
+        if (
+          !e.nativeEvent.isComposing &&
+          ["Tab", "Backspace", "Enter"].includes(e.key)
+        ) {
+          const range = listSelection();
+          if (range?.indices.length && hasTextBullets(element, range.indices)) {
+            const paragraphs: TextParagraph[] =
+                element.paragraphs ??
+                (element.text ?? "")
+                  .split("\n")
+                  .map((text) => ({ bulletPrefix: "• ", runs: [{ text }] })),
+              index = range.indices[0],
+              p = paragraphs[index];
+            const prefix = p.bulletPrefix ?? "• ";
+            const text = p.runs.map((r) => r.text).join("");
+            const before = paragraphs
+              .slice(0, index)
+              .reduce(
+                (sum, p) => sum + p.runs.map((r) => r.text).join("").length + 1,
+                0,
+              );
+            const atStart =
+              range.start === range.end &&
+              range.start === before + prefix.length;
+            if (
+              (e.key === "Enter" &&
+                !e.shiftKey &&
+                text.slice(prefix.length).trim() === "") ||
+              (e.key === "Backspace" && atStart)
+            ) {
+              e.preventDefault();
+              applyList(
+                toggleTextBullets(element, range.indices, false),
+                range,
+              );
+              return;
+            }
+            if (e.key === "Tab") {
+              e.preventDefault();
+              const next = {
+                ...element,
+                paragraphs: paragraphs.map((p, i) =>
+                  range.indices.includes(i)
+                    ? {
+                        ...p,
+                        marginLeft: Math.max(
+                          -(p.indent ?? 0),
+                          (p.marginLeft ?? 0) + (e.shiftKey ? -24 : 24),
+                        ),
+                      }
+                    : p,
+                ),
+              };
+              applyList(next, range);
+              return;
+            }
+          }
+        }
         if (
           e.key === "Enter" &&
           !e.shiftKey &&
@@ -742,7 +932,12 @@ interface Props {
   begin: () => void;
   preview: (elements: SlideElement[]) => void;
   finish: () => void;
-  changeText: (id: string, text: string, formats?: TextFormatRange[]) => void;
+  changeText: (
+    id: string,
+    text: string,
+    formats?: TextFormatRange[],
+    edit?: TextEdit,
+  ) => void;
   resizeText: (id: string, height: number) => void;
   showGuides: boolean;
   grid: boolean;
@@ -998,50 +1193,39 @@ export default function SlideCanvas({
       if (Math.abs(dx) > Math.abs(dy)) dy = 0;
       else dx = 0;
     }
+    if (!d.handle) {
+      const moving = d.elements.filter(
+        (e) => d.ids.includes(e.id) && !e.locked,
+      );
+      const left = Math.min(...moving.map((e) => e.x)),
+        top = Math.min(...moving.map((e) => e.y));
+      const right = Math.max(...moving.map((e) => e.x + e.width)),
+        bottom = Math.max(...moving.map((e) => e.y + e.height));
+      // Snap the shared translation, preserving every relative position.
+      if (grid) {
+        dx = Math.round((left + dx) / 10) * 10 - left;
+        dy = Math.round((top + dy) / 10) * 10 - top;
+      }
+      if (showGuides) {
+        if (Math.abs((left + right) / 2 + dx - deck.width / 2) < 7 / scale)
+          dx = (deck.width - left - right) / 2;
+        if (Math.abs((top + bottom) / 2 + dy - deck.height / 2) < 7 / scale)
+          dy = (deck.height - top - bottom) / 2;
+      }
+    }
+    if (d.handle) {
+      preview(resizeElements(d.elements, d.ids, d.handle, dx, dy, ev.shiftKey));
+      return;
+    }
     preview(
       d.elements.map((e) => {
         if (!d.ids.includes(e.id) || e.locked) return e;
         if (!d.handle) {
           let x = e.x + dx,
             y = e.y + dy;
-          if (grid) {
-            x = Math.round(x / 10) * 10;
-            y = Math.round(y / 10) * 10;
-          }
-          if (showGuides) {
-            if (Math.abs(x + e.width / 2 - deck.width / 2) < 7 / scale)
-              x = (deck.width - e.width) / 2;
-            if (Math.abs(y + e.height / 2 - deck.height / 2) < 7 / scale)
-              y = (deck.height - e.height) / 2;
-          }
           return { ...e, x, y };
         }
-        let { x, y, width, height } = e;
-        const h = d.handle;
-        if (h.includes("e")) width = Math.max(16, e.width + dx);
-        if (h.includes("s")) height = Math.max(8, e.height + dy);
-        if (h.includes("w")) {
-          width = Math.max(16, e.width - dx);
-          x = e.x + e.width - width;
-        }
-        if (h.includes("n")) {
-          height = Math.max(8, e.height - dy);
-          y = e.y + e.height - height;
-        }
-        if (ev.shiftKey && h.length === 2) {
-          height = (width * e.height) / e.width;
-          if (h.includes("n")) y = e.y + e.height - height;
-        }
-        return {
-          ...e,
-          x,
-          y,
-          width,
-          height,
-          ...(e.type === "text" && (h.includes("n") || h.includes("s"))
-            ? { autoHeight: false }
-            : {}),
-        };
+        return e;
       }),
     );
   };
@@ -1160,7 +1344,9 @@ export default function SlideCanvas({
                 <EditableText
                   element={e}
                   onHeight={resizeText}
-                  onInput={(text, formats) => changeText(e.id, text, formats)}
+                  onInput={(text, formats, edit) =>
+                    changeText(e.id, text, formats, edit)
+                  }
                   onDone={() => {
                     finish();
                     edit(null);
@@ -1257,6 +1443,7 @@ export default function SlideCanvas({
                 </>
               )}
               {!e.locked &&
+                selected.length === 1 &&
                 !editing &&
                 ["nw", "n", "ne", "e", "se", "s", "sw", "w"].map((h) => (
                   <span
@@ -1281,6 +1468,36 @@ export default function SlideCanvas({
               )}
             </div>
           ))}
+        {selected.length > 1 &&
+          !editing &&
+          (() => {
+            const items = slide.elements.filter(
+              (e) => selected.includes(e.id) && !e.locked,
+            );
+            if (items.length < 2) return null;
+            const box = selectionBounds(items);
+            return (
+              <div
+                className="slide-selection"
+                data-testid="selection-group"
+                style={
+                  {
+                    ...elementStyle({ ...items[0], ...box, rotation: 0 }),
+                    "--inverse-scale": 1 / scale,
+                  } as CSSProperties
+                }
+              >
+                {["nw", "n", "ne", "e", "se", "s", "sw", "w"].map((h) => (
+                  <span
+                    key={h}
+                    className={`resize-handle ${h}`}
+                    data-testid={`resize-${h}`}
+                    onPointerDown={(ev) => down(ev, items[0], h)}
+                  />
+                ))}
+              </div>
+            );
+          })()}
       </div>
     </div>
   );

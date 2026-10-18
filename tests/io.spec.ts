@@ -179,7 +179,7 @@ test("PPTX exports editable objects and imports geometry, styles, notes, images 
   expect(slide.elements[2]).toMatchObject({
     shape: "arrow",
     stroke: "#FF8800",
-    height: 0,
+    height: 1,
     strokeWidth: 3,
   });
   expect(slide.elements[3]).toMatchObject({

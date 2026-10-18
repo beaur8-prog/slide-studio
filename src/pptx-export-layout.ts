@@ -1,5 +1,6 @@
 import type { SlideElement, TextParagraph, TextRun } from "./types";
 import { paragraphBullet } from "./text-layout";
+import { arcCubics } from "./svg-arc";
 const A = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const P = "http://schemas.openxmlformats.org/presentationml/2006/main";
 const child = (n: Element | undefined, name: string) =>
@@ -155,6 +156,10 @@ export function restoreLayoutXml(
       if (!body) continue;
       const bp = child(body, "bodyPr");
       if (bp) {
+        for (const fit of Array.from(bp.children))
+          if (["noAutofit", "spAutoFit", "normAutofit"].includes(fit.localName))
+            fit.remove();
+        make(el.autoHeight ? "spAutoFit" : "noAutofit", {}, bp);
         // The model stores effective spacing after source edge suppression.
         bp.setAttribute("spcFirstLastPara", "1");
         if ((el.textColumns ?? 1) > 1) {
@@ -304,7 +309,14 @@ export function restoreLayoutXml(
             { typeface: marker.fontFamily ?? el.fontFamily ?? "Arial" },
             pr,
           );
-          make("buChar", { char: bullet.label }, pr);
+          const numbered = bullet.label.match(/^([1-9]\d*)\.$/);
+          if (numbered)
+            make(
+              "buAutoNum",
+              { type: "arabicPeriod", startAt: Number(numbered[1]) },
+              pr,
+            );
+          else make("buChar", { char: bullet.label }, pr);
           runProps(
             pr,
             {
@@ -408,8 +420,33 @@ export function restoreLayoutXml(
               sweep = number(),
               nx = number(),
               ny = number();
-            if (rotation !== 0 || rx <= 0 || ry <= 0)
-              throw Error("Unsupported ellipse rotation");
+            if (
+              rotation !== 0 ||
+              rx <= 0 ||
+              ry <= 0 ||
+              (x === nx && y === ny)
+            ) {
+              if (!rx || !ry) point(make("lnTo", {}, path), nx, ny);
+              else
+                for (const points of arcCubics(
+                  x,
+                  y,
+                  rx,
+                  ry,
+                  rotation,
+                  large,
+                  sweep,
+                  nx,
+                  ny,
+                )) {
+                  const curve = make("cubicBezTo", {}, path);
+                  for (let i = 0; i < points.length; i += 2)
+                    point(curve, points[i], points[i + 1]);
+                }
+              x = nx;
+              y = ny;
+              continue;
+            }
             const dx = (x - nx) / 2,
               dy = (y - ny) / 2,
               lambda = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);

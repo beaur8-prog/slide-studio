@@ -71,12 +71,15 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
     const props = [
       pPr,
       child(child(body, "lstStyle"), `lvl${level}pPr`),
-      ...bodies
-        .slice(1)
-        .flatMap((b) => [
-          child(children(b, "p")[0], "pPr"),
-          child(child(b, "lstStyle"), `lvl${level}pPr`),
-        ]),
+      ...bodies.slice(1).flatMap((b) => [
+        child(
+          children(b, "p").find(
+            (p) => num([child(p, "pPr")], "lvl", 0) === level - 1,
+          ),
+          "pPr",
+        ),
+        child(child(b, "lstStyle"), `lvl${level}pPr`),
+      ]),
       child(ctx.masterStyle, `lvl${level}pPr`),
       child(ctx.defaultStyle, `lvl${level}pPr`),
     ];
@@ -141,6 +144,7 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
     // Bullet formatting is independent of the paragraph's body text. Resolve
     // the body metrics before inserting the synthetic, editable list label.
     const size = runs[0].fontSize ?? 32;
+    const spacingSize = Math.max(...runs.map((run) => run.fontSize ?? size));
     const bulletNode = props
       .flatMap((n) => Array.from(n?.children ?? []))
       .find((n) => ["buNone", "buChar", "buAutoNum"].includes(n.localName));
@@ -219,7 +223,7 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
       return pt
         ? (num([pt], "val", 0) / 75) * Math.abs(ctx.sy) * scale
         : pct
-          ? (num([pct], "val", 0) / 100000) * size
+          ? (num([pct], "val", 0) / 100000) * spacingSize
           : 0;
     };
     const line = firstChild(props, "lnSpc"),
@@ -319,11 +323,19 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
           ),
           textColumnGap: Math.max(
             0,
-            Math.min(100000, num(bodyProps, "spcCol", 0) / 9525),
+            Math.min(
+              100000,
+              (num(bodyProps, "spcCol", 0) / 9525) * Math.abs(ctx.sx),
+            ),
           ),
         }
       : {}),
     align: paragraphs[0].align,
+    ...(fit?.localName === "spAutoFit" &&
+    vertical === "horz" &&
+    num(bodyProps, "numCol", 1) === 1
+      ? { autoHeight: true }
+      : {}),
     verticalAlign:
       anchor === "ctr" ? "middle" : anchor === "b" ? "bottom" : "top",
     wrap:

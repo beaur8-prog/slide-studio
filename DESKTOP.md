@@ -8,7 +8,7 @@ The native application is generated at `release/Slide Studio.app`. Open it direc
 
 On Macs where Documents is managed by a File Provider, Finder may add metadata that causes strict signature verification of the copied `.app` to fail. The ZIP is created from the verified bundle before that copy; extract it into Applications for a clean install. Packaging also retains its verified temporary bundle, whose exact path is written to `release/BUILD.json` and printed by the build command.
 
-The editor runs locally, with no account or PowerPoint installation required. File → Open reads `.slide` and `.pptx` files. File → Save exports the editable Slide Studio project; the Export commands write PowerPoint or PDF files. These commands use native dialogs. Files are limited to 256 MiB, with separate limits for expanded archive contents, images and objects. Autosave is stored in the app's local profile at `~/Library/Application Support/Slide Studio` on macOS or `%APPDATA%/Slide Studio` on Windows.
+The editor runs locally, with no account or PowerPoint installation required. File → Open reads `.slide` and `.pptx` files. File → Save exports the editable Slide Studio project; the Export commands write PowerPoint or PDF files. These commands use native dialogs. Files are limited to 256 MiB, with separate limits for expanded archive contents, images and objects. Autosave is stored in the app's local profile at `~/Library/Application Support/Slide Studio` on macOS or `%APPDATA%/Slide Studio` on Windows. Linux uses `$XDG_CONFIG_HOME/Slide Studio`, defaulting to `~/.config/Slide Studio`.
 
 ## Run and rebuild
 
@@ -50,12 +50,22 @@ The manually dispatched [Windows installer workflow](.github/workflows/windows-i
 
 ## Object context menu (1.5.4)
 
-The editing-text context-menu correction below is a source/local-app follow-up; it has not been published in a new release.
+These editing-text context-menu and selected-color corrections are included in the published 1.5.7 app.
 
 Right-clicking a canvas object selects it, or preserves a multi-selection containing it, then opens the editor menu. Actions reuse existing document operations and undo history: cut/copy/paste, duplicate/delete, layer order, lock/unlock and inspector. Text objects also offer text editing and tables offer table editing. Locked objects disable destructive commands. Right-click or Shift+F10 while editing text keeps the contenteditable mounted and opens the text-selection menu. The DOM Range, backward-selection direction and caret position are preserved; a CSS Custom Highlight keeps the selected letters visible while the menu has focus. Escape restores focus and the same selection. Cut/copy/delete apply to selected characters, paste uses the saved range, and selecting Text Box Menu explicitly ends editing and opens the whole-object menu. Electron has no default text context menu; editing must not bypass the app menu. The sender-validated `edit-text-clipboard` IPC accepts only copy/cut/paste and routes to the existing webContents editing methods; no raw clipboard read or general command execution is exposed. Shift+F10 and the context-menu key open the object menu; arrows/Home/End, Enter and Escape support keyboard use. The menu clamps to the viewport and dismisses on outside input, window resize/blur, slide change, dialog or presentation entry.
 
-## Selected-text color palette (unpublished local follow-up)
+## Selected-text color palette
 
 Home's Font Color control and the editing-text context menu open the same palette. A cloned DOM Range survives Home tab changes and palette focus, with a CSS Custom Highlight for the source letters. Swatches, a custom color input and hex text update a draft; only Apply changes the document. Cancel/Escape restore the range, and outside input cancels without stealing focus. A caret-only palette cannot accidentally recolor the whole text box. Whole-object selection explicitly applies to the entire selected text box.
 
 Selected-text Apply uses Chromium's native foreground-color edit command so selection and native undo/redo remain available. The input handler maps computed colors from a single detached DOM clone back onto typed paragraph/run ranges; only those colors are serialized, preserving run typography, paragraph metrics, soft breaks and blank lines. Subsequent edits and native undo/redo keep that color model synchronized. No arbitrary editor HTML is persisted. [Verification](qa/TEXT-COLOR-SELECTION.md).
+
+## Linux packaging
+
+`npm run package:linux` builds `release/Slide-Studio-linux-amd64.deb` on macOS or Linux with Node.js dependencies and Python 3. The packager checks the official Electron Linux x64 ZIP against the checksum shipped with the locked Electron package, verifies every CRC, rejects unsafe paths and symlinks, and checks the executable is ELF64 x86-64. It bundles only production `dist`, `electron` and minimal application metadata; the 1.5.7 ASAR is byte-identical to Mac/Windows.
+
+The Debian 2.0 archive contains a root-owned payload in `/opt/slide-studio`, `/usr/bin/slide-studio`, a desktop entry and the existing orange icon. Chromium's shipped `chrome-sandbox` helper alone is mode 4755. The app is run by an ordinary user, with renderer sandboxing and context isolation retained. No `--no-sandbox`, kernel/AppArmor relaxation or package maintainer shell scripts are used. Python writes standard ordered ar members with GNU tar/gzip archives, reads back every payload hash/owner/mode, and leaves native install validation to Linux CI. Build provenance is in `release/BUILD-linux-amd64.json`.
+
+Install/update with `sudo apt install ./Slide-Studio-linux-amd64.deb`, then launch from the application menu or `slide-studio`. Save and close before updating. `sudo apt remove slide-studio` removes package-owned files while retaining the user's profile and saved documents. There is no automatic update service or file association. The package is a standalone download, not a signed apt repository.
+
+The manual [Linux workflow](.github/workflows/linux-package.yml) downloads the exact public DEB with a supplied SHA-256. Disposable Ubuntu 22.04/24.04 x64 runners validate dpkg metadata, desktop entries, shared libraries, installed payload hashes and sandbox ownership, exercise the real installed Electron app under Xvfb/Openbox, then reinstall/uninstall and check profile and unrelated-file preservation. [Linux results and limits](qa/LINUX-1.5.7.md) cover the verified desktop features. Other distributions, ARM, Wayland, physical IME and printing require separate verification.

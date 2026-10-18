@@ -1,6 +1,6 @@
 # Slide Studio
 
-Mac과 Windows에서 독립적으로 실행하는 프레젠테이션 편집 앱입니다. PowerPoint의 공개 사용법에 나오는 리본, 슬라이드 목록, 개체 편집과 발표 흐름을 참고해 새로 구현했습니다. Microsoft PowerPoint 원본이나 원본 소스를 복원한 제품은 아닙니다.
+Mac, Windows와 Linux에서 독립적으로 실행하는 프레젠테이션 편집 앱입니다. PowerPoint의 공개 사용법에 나오는 리본, 슬라이드 목록, 개체 편집과 발표 흐름을 참고해 새로 구현했습니다. Microsoft PowerPoint 원본이나 원본 소스를 복원한 제품은 아닙니다.
 
 **1.5.7**은 긴 글을 위한 자동 줄바꿈·자동 높이 설정, 차트 삽입 전 데이터 연동 제한 안내, 원본 PPTX의 다단 텍스트 보존을 추가합니다. 기존 선택 글자색·우클릭 선택 유지·원본 글꼴 추가와 발표 레이저·펜·지우개도 포함합니다. [1.5.7 검증 기록](qa/RELEASE-1.5.7.md)을 확인하세요.
 
@@ -20,6 +20,7 @@ Mac과 Windows에서 독립적으로 실행하는 프레젠테이션 편집 앱�
 | --- | --- | --- |
 | macOS 12 이상 · Apple Silicon(M1 이후) | [Mac ARM64 ZIP](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-mac-arm64.zip) | ZIP을 풀고 Slide Studio.app을 응용 프로그램 폴더로 옮겨 실행 |
 | Windows 10/11 · Intel/AMD 64비트 | [Windows Setup.exe](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-Setup-x64.exe) | 설치 마법사를 완료한 뒤 시작 메뉴의 Slide Studio 실행 |
+| Ubuntu 22.04/24.04 · Intel/AMD 64비트 | [Linux amd64 DEB](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-linux-amd64.deb) | 아래 명령으로 설치한 뒤 앱 목록의 Slide Studio 실행 |
 
 공개 ZIP의 버전은 릴리스 페이지에서 확인하세요. 저장소의 소스 버전과 공개 릴리스 버전은 다를 수 있습니다.
 
@@ -28,6 +29,17 @@ Mac과 Windows에서 독립적으로 실행하는 프레젠테이션 편집 앱�
 Windows 설치판은 현재 사용자 계정의 `%LOCALAPPDATA%\Programs\Slide Studio`에 설치하고 시작 메뉴와 선택한 바탕화면 바로가기를 만듭니다. 업데이트 전에는 작업을 `.slide`로 저장하고 앱을 종료한 뒤 새 Setup을 실행하세요. Windows 설정의 설치된 앱에서 제거할 수 있으며 자동 저장 자료는 보존합니다. 기존 ZIP 배포본과 같은 `%APPDATA%\Slide Studio` 사용자 자료를 사용합니다.
 
 Mac 빌드는 Apple 공증을 받지 않았고 Windows 빌드는 배포용 코드 서명이 없습니다. 따라서 다운로드·설치 또는 첫 실행 시 운영체제의 보안 경고가 표시되거나 실행이 제한될 수 있습니다. 앱 기능, Windows 설치·실행·재설치·제거와 사용자 자료 보존은 [1.5.7 검증 기록](qa/RELEASE-1.5.7.md)을 확인하세요. 실제 키보드 IME 직접 타이핑과 종이 출력은 미검증입니다. Intel Mac, Windows ARM 및 32비트용 패키지는 제공하지 않습니다.
+
+Linux는 내려받은 파일이 있는 폴더에서 설치합니다. 설치·업데이트에는 관리자 권한과 시스템 라이브러리를 받을 네트워크가 필요할 수 있습니다. 설치 후 앱은 일반 사용자 계정으로 실행하세요.
+
+```sh
+sudo apt install ./Slide-Studio-linux-amd64.deb
+slide-studio
+# 제거할 때
+sudo apt remove slide-studio
+```
+
+Linux 앱은 `/opt/slide-studio`에 설치하며 앱 목록에 기존 주황색 아이콘을 등록합니다. 자동 저장 자료는 `$XDG_CONFIG_HOME/Slide Studio`(미설정 시 `~/.config/Slide Studio`)에 보관하고 제거 후에도 유지합니다. 업데이트 전 작업을 `.slide`로 저장하고 앱을 종료하세요. Linux 패키지는 별도 서명된 apt 저장소 배포가 아닙니다. [Linux 검증과 지원 범위](qa/LINUX-1.5.7.md)를 확인하세요. ARM, RPM, AppImage용 패키지는 제공하지 않습니다.
 
 다운로드한 파일의 해시는 릴리스에 첨부된 `SHA256SUMS.txt`와 비교할 수 있습니다.
 
@@ -45,7 +57,7 @@ Mac 빌드는 Apple 공증을 받지 않았고 Windows 빌드는 배포용 코�
 
 자동 저장은 현재 기기에만 남으며 기기 간 동기화를 하지 않습니다. 중요한 작업은 `.slide` 파일로도 저장하세요. 이전 문서는 왼쪽 위 로고 또는 **파일 → 내 프레젠테이션**에서 찾을 수 있습니다.
 
-| 기능 | Mac | Windows |
+| 기능 | Mac | Windows / Linux |
 | --- | --- | --- |
 | 파일 열기 / 프로젝트 저장 | ⌘O / ⌘S | Ctrl+O / Ctrl+S |
 | 실행 취소 / 다시 실행 | ⌘Z / ⇧⌘Z | Ctrl+Z / Ctrl+Y |
@@ -117,6 +129,7 @@ npm run build
 npm test
 npm run package:mac  # macOS에서 실행
 npm run package:win  # Windows x64 Setup.exe와 ZIP 생성, macOS에서도 가능
+npm run package:linux  # Linux amd64 DEB 생성, macOS/Linux + Python 3
 ```
 
 테스트는 설치된 Google Chrome을 사용합니다. PPTX 왕복 변환, 슬라이드 순서, 테마·레이아웃 상속, 한글 조합·저장·실행 취소, 300장 편집 성능, 잘못된 프로젝트 입력과 압축 파일 경계 조건을 확인합니다. 공개 자료 회귀 검사는 `python3 scripts/fetch-qa-samples.py`로 받은 샘플이 필요하며, 배포용 자산 검사는 먼저 빌드해야 합니다. `npm run package` / `npm run package:mac`은 Mac 앱 번들과 ZIP을 만듭니다. `npm run package:win`은 공식 Electron Windows x64 런타임의 SHA-256을 검증한 뒤 PC용 ZIP과 NSIS 설치 프로그램을 만듭니다. NSIS와 7-Zip이 필요하며 Mac에서는 `brew install makensis sevenzip`으로 준비합니다. 기존 ZIP으로 설치 파일만 다시 만들려면 `npm run package:win:setup`을 사용합니다. 앱은 로컬 임시 서명을 사용하며 Apple 공증 배포본은 아닙니다.

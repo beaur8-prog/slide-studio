@@ -8,6 +8,7 @@ const { fileURLToPath } = require('node:url');
 const { readOfficeArialNovaLight } = require('./office-fonts.cjs');
 
 const PRODUCT_NAME = 'Slide Studio';
+const APP_ICON = path.join(__dirname, 'assets', 'SlideStudio.png');
 const DEV_URL = 'http://127.0.0.1:5190';
 const IS_DEV = !app.isPackaged && process.env.SLIDE_STUDIO_DEV === '1';
 const INDEX_PATH = path.resolve(__dirname, '..', 'dist', 'index.html');
@@ -401,6 +402,7 @@ async function createWindow() {
     minWidth: 1080,
     minHeight: 720,
     title: PRODUCT_NAME,
+    icon: APP_ICON,
     backgroundColor: process.platform === 'win32' ? '#151515' : '#f8f7f4',
     show: false,
     autoHideMenuBar: process.platform === 'win32',
@@ -480,9 +482,12 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
   app.whenReady().then(async () => {
+    // A direct Electron/QA launch does not inherit the packaged app's ICNS.
+    if (process.platform === 'darwin') app.dock.setIcon(APP_ICON);
     app.setAboutPanelOptions({
       applicationName: PRODUCT_NAME,
       applicationVersion: app.getVersion(),
+      iconPath: APP_ICON,
       copyright: 'An independent presentation editor. Not affiliated with Microsoft.',
     });
     hardenSession();

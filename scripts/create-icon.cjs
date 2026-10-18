@@ -80,9 +80,21 @@ async function createWindowsIcon(destination) {
   return icon;
 }
 
-module.exports = { createIcon, createWindowsIcon };
+async function createRuntimeIcon() {
+  const sharp = require(require.resolve('sharp', { paths: [root, path.dirname(root)] }));
+  const destination = path.join(root, 'electron', 'assets');
+  await fs.mkdir(destination, { recursive: true });
+  const icon = path.join(destination, 'SlideStudio.png');
+  await sharp(Buffer.from(ICON_SVG)).resize(1024, 1024).png().toFile(icon);
+  return icon;
+}
+
+module.exports = { createIcon, createWindowsIcon, createRuntimeIcon };
 if (require.main === module) {
-  createIcon(path.resolve(process.argv[2] || path.join(root, 'release', 'artwork')))
+  const task = process.argv.includes('--runtime')
+    ? createRuntimeIcon()
+    : createIcon(path.resolve(process.argv[2] || path.join(root, 'release', 'artwork')));
+  task
     .then(filename => console.log(filename))
     .catch(error => { console.error(error.message); process.exitCode = 1; });
 }

@@ -22,6 +22,8 @@ For development, run `npm run dev` in one terminal and `npm run desktop` in anot
 
 Packaging requires `@electron/asar`, `sharp`, and standard macOS `codesign` and `ditto` tools. The script stages files in a temporary directory, bundles only the built editor and Electron shell, creates the original orange presentation icon, signs and verifies the bundle, and writes the results into `release/`.
 
+The original orange artwork in `scripts/create-icon.cjs` also generates the committed `electron/assets/SlideStudio.png`. `npm run build` refreshes this PNG before bundling; regenerate it on its own with `node scripts/create-icon.cjs --runtime` after changing the artwork. The desktop shell explicitly applies it to the macOS Dock and window icon, so direct Electron and QA launches use the same artwork as packaged apps. Use the packaged `Slide Studio.app` when opening the final application for everyday use.
+
 ## Native integration
 
 `src/desktop.d.ts` describes the optional `window.desktop` bridge: `saveFile`, `openFile`, `exportPDF`, `print`, and `onMenu`. Menu actions are `new`, `open`, `save`, `export-pptx`, `export-pdf`, `print`, and `present`. Returning `null` from a file method means the user cancelled the dialog; failures reject the promise. Printing returns `true` for submission and `false` for cancellation. A registered printer is required; on a Mac with no printers, Electron rejects the operation before opening the print dialog. PDF export works without a printer.

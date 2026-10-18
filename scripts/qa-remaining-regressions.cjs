@@ -4,7 +4,7 @@
 const { expect } = require('@playwright/test');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-module.exports = async function verifyRemaining(page, output) {
+module.exports = async function verifyRemaining(page, output, { app } = {}) {
   await expect(page.locator('.save-indicator')).toHaveText('저장됨');
   await fs.mkdir(output, { recursive: true });
   const base = { rotation: 0, opacity: 1, fontFamily: 'Arial', fontSize: 30,
@@ -64,6 +64,7 @@ module.exports = async function verifyRemaining(page, output) {
   await expect(page.locator('.save-indicator')).toHaveText('저장됨');
   await page.screenshot({ path: path.join(output, 'merged-table.png') });
 
+  const editorViewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
   await page.getByRole('button', { name: '슬라이드 쇼', exact: true }).click();
   const opened = page.waitForEvent('popup');
   await page.getByRole('button', { name: '발표자 보기', exact: true }).click();
@@ -80,10 +81,26 @@ module.exports = async function verifyRemaining(page, output) {
   await popup.getByRole('button', { name: '발표 종료', exact: true }).click();
   await expect(page.getByTestId('presentation-view')).toBeHidden();
   await popup.close();
-
+  // Native window managers complete fullscreen exit/entry asynchronously.
+  // Wait for the actual viewport and focus before calculating drag coordinates.
+  await expect.poll(() => page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual(editorViewport);
+  await page.bringToFront();
+  await page.getByTestId('canvas-frame').click({ position: { x: 15, y: 15 } });
   await page.keyboard.press('F5');
   const ink = page.getByTestId('presentation-ink');
   await expect(ink).toBeVisible();
+  if (app) {
+    await expect.poll(() => app.evaluate(({ BrowserWindow, screen }) => {
+      const win = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('#presenter='));
+      const bounds = win.getContentBounds(), display = screen.getDisplayMatching(win.getBounds()).bounds;
+      return win.isFullScreen() && bounds.width === display.width && bounds.height === display.height;
+    })).toBe(true);
+    await app.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('#presenter='));
+      win.focus(); win.webContents.focus();
+    });
+  }
+  await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true);
   await page.keyboard.press('ControlOrMeta+h');
   await expect(ink).toHaveAttribute('data-tool', 'highlighter');
   const bounds = await ink.boundingBox();

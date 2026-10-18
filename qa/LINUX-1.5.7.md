@@ -1,6 +1,6 @@
 # Slide Studio 1.5.7 Linux package
 
-Linux amd64 is added to the existing 1.5.7 release. This is a new platform package of the same application, with no changes to the Mac/Windows archives or runtime sources. The existing v1.5.7 tag remains unchanged; packaging and CI source are on main.
+Linux amd64 is added to the existing 1.5.7 release. This is a new platform package of the same application, with no changes to the Mac/Windows archives or runtime sources. The existing v1.5.7 tag remains unchanged; packaging and CI source are on main, including the Korean-font dependency in `361e781`.
 
 ## Artifact and build
 
@@ -41,6 +41,6 @@ Verified support is Ubuntu 22.04/24.04 x64 on an X11 desktop. Other Debian-famil
 
 ## Publication and cleanup
 
-Linux is added to the existing GitHub v1.5.7 release and SHA256SUMS.txt; previous Mac/Windows binary bytes and download URLs are preserved. The existing Lithos download document is updated in place, retaining its public URL and running share/tunnel processes.
+Linux is added to the existing GitHub v1.5.7 release and SHA256SUMS.txt; previous Mac/Windows binary bytes and download URLs are preserved. The existing Lithos download document is updated in place, retaining its public URL and running share/tunnel processes. All five public download addresses (including checksums) were downloaded in full and matched their local files and GitHub asset digests. The previous Mac/Windows bytes remain unchanged. The public document and seven images match the reviewed source, and its Linux section was confirmed in the browser.
 
 32 obsolete generated targets were removed: eight old app bundles, old extracted ASAR copies, four duplicate 1.4.2 ZIPs and a Python bytecode cache. Their logical file sizes total 4,985,942,536 bytes (APFS physical space reclaimed may differ). Current app/release binaries and 217 protected files, including all four historical profile backups, were hash-checked before/after cleanup. Source, user documents, regression fixtures and canonical QA records remain. Local ignored evidence is in `qa/results/linux-1.5.7/`, including native results, cleanup manifest, source comparison and publication verification.

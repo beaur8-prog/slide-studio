@@ -22,7 +22,7 @@ Mac, Windows와 Linux에서 독립적으로 실행하는 프레젠테이션 편�
 | Windows 10/11 · Intel/AMD 64비트 | [Windows Setup.exe](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-Setup-x64.exe) | 설치 마법사를 완료한 뒤 시작 메뉴의 Slide Studio 실행 |
 | Ubuntu 22.04/24.04 · Intel/AMD 64비트 | [Linux amd64 DEB](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-linux-amd64.deb) | 아래 명령으로 설치한 뒤 앱 목록의 Slide Studio 실행 |
 
-공개 ZIP의 버전은 릴리스 페이지에서 확인하세요. 저장소의 소스 버전과 공개 릴리스 버전은 다를 수 있습니다.
+공개 배포 파일의 버전은 릴리스 페이지에서 확인하세요. 저장소의 소스 버전과 공개 릴리스 버전은 다를 수 있습니다.
 
 다운로드 주소는 버전이 바뀌어도 동일합니다. 같은 주소를 사용하는 리토스 문서의 다운로드 버튼도 최신 공개 릴리스를 받으며, 파일 교체를 위해 공유 서버를 재시작할 필요가 없습니다.
 
@@ -35,11 +35,9 @@ Linux는 내려받은 파일이 있는 폴더에서 설치합니다. 설치·업
 ```sh
 sudo apt install ./Slide-Studio-linux-amd64.deb
 slide-studio
-# 제거할 때
-sudo apt remove slide-studio
 ```
 
-Linux 앱은 `/opt/slide-studio`에 설치하며 앱 목록에 기존 주황색 아이콘을 등록합니다. 자동 저장 자료는 `$XDG_CONFIG_HOME/Slide Studio`(미설정 시 `~/.config/Slide Studio`)에 보관하고 제거 후에도 유지합니다. 업데이트 전 작업을 `.slide`로 저장하고 앱을 종료하세요. Linux 패키지는 별도 서명된 apt 저장소 배포가 아닙니다. [Linux 검증과 지원 범위](qa/LINUX-1.5.7.md)를 확인하세요. ARM, RPM, AppImage용 패키지는 제공하지 않습니다.
+Linux 앱은 `/opt/slide-studio`에 설치하며 앱 목록에 기존 주황색 아이콘을 등록합니다. 제거는 `sudo apt remove slide-studio`를 사용합니다. 자동 저장 자료는 `$XDG_CONFIG_HOME/Slide Studio`(미설정 시 `~/.config/Slide Studio`)에 보관하고 제거 후에도 유지합니다. 업데이트 전 작업을 `.slide`로 저장하고 앱을 종료하세요. Linux 패키지는 별도 서명된 apt 저장소 배포가 아닙니다. [Linux 검증과 지원 범위](qa/LINUX-1.5.7.md)를 확인하세요. ARM, RPM, AppImage용 패키지는 제공하지 않습니다.
 
 다운로드한 파일의 해시는 릴리스에 첨부된 `SHA256SUMS.txt`와 비교할 수 있습니다.
 

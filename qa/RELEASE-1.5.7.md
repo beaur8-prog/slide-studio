@@ -4,6 +4,8 @@ This release includes automatic wrapping/height for newly inserted text boxes, w
 
 The production fixes in `af0ad93899c73281425a1df09d1a9477002794c2` passed the complete 178-case suite: **176 passed, 2 environment skips, 0 failures**. The skips require a local Office font cache and native Windows fullscreen on the Mac. [Detailed text/layout checks and three additional public decks](TEXT-LAYOUT-2026-10-18.md) describe the source corpus and limits.
 
+Linux amd64 is also available in this same release. See [Linux package verification and installation](LINUX-1.5.7.md); the Mac/Windows binaries below remain unchanged.
+
 ## Release checks
 
 All 14 release-specific browser checks passed: long Korean/no-space text, automatic height and manual height/undo, project persistence/PPTX geometry, the three pinned workplace decks, inherited two-column text, chart/insertion dialogs and production assets. The packaged `dist` and `electron` files are byte-identical to the fully tested development build; only application version metadata changes. This justifies reusing the complete 176-pass suite above without claiming a second full run.

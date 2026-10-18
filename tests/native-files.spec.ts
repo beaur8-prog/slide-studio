@@ -93,7 +93,7 @@ for (const platform of ['win32', 'darwin']) {
         },
       } : realRequire(id),
     };
-    vm.runInNewContext(fs.readFileSync(filename, 'utf8') + '\nthis.startWindow = createWindow; this.installIPC = installIPC; this.installMenu = installMenu;', sandbox);
+    vm.runInNewContext(fs.readFileSync(filename, 'utf8') + '\nthis.startWindow = createWindow; this.installIPC = installIPC; this.installMenu = installMenu; this.presenterWindows = presenterWindows;', sandbox);
     sandbox.installIPC();
     sandbox.installMenu();
     await sandbox.startWindow();
@@ -133,6 +133,20 @@ for (const platform of ['win32', 'darwin']) {
     expect(() => loadFont({ ...event, sender: {} })).toThrow('editor window');
     expect(() => loadFont({ ...event, senderFrame: { url: contents.mainFrame.url } })).toThrow('editor window');
     expect(() => loadFont(event, 'C:\\private.ttf')).toThrow('no paths or arguments');
+    const presenterFrame = { url: contents.mainFrame.url + '#presenter=00000000-0000-4000-8000-000000000001' };
+    const presenterContents = { mainFrame: presenterFrame };
+    const presenter = { isDestroyed: () => false, webContents: presenterContents };
+    sandbox.presenterWindows.add(presenter);
+    const presenterEvent = { sender: presenterContents, senderFrame: presenterFrame };
+    expect(() => loadFont(presenterEvent, '/private/font.ttf')).toThrow('no paths or arguments');
+    expect(() => textClipboard(presenterEvent, 'copy')).toThrow('editor window');
+    expect(() => updateTheme(presenterEvent, 'light')).toThrow('editor window');
+    if (platform === 'darwin') expect(await loadFont(presenterEvent)).toBeNull();
+    presenterFrame.url = 'https://example.com/#presenter=00000000-0000-4000-8000-000000000001';
+    expect(() => loadFont(presenterEvent)).toThrow('editor window');
+    presenterFrame.url = contents.mainFrame.url;
+    expect(() => loadFont(presenterEvent)).toThrow('editor window');
+    sandbox.presenterWindows.delete(presenter);
     if (platform === 'darwin') expect(await loadFont(event)).toBeNull();
     updateTheme(event, 'light');
     updateTheme(event, 'dark');
@@ -179,4 +193,21 @@ test('preload exposes an immutable platform and a narrow theme command', async (
   expect(calls).toEqual([['slide-studio:edit-text-clipboard', 'copy'], ['slide-studio:set-chrome-theme', 'light'], ['slide-studio:load-office-light-font'], ['slide-studio:load-office-calibri-fonts']]);
   expect(bridge.invoke).toBeUndefined();
   expect(bridge.send).toBeUndefined();
+});
+
+test('presenter preload loads matching desktop fonts without exposing editing or file capabilities', async () => {
+  let bridge: any;
+  const calls: unknown[] = [];
+  vm.runInNewContext(fs.readFileSync(path.resolve('electron/presenter-preload.cjs'), 'utf8'), {
+    process: { platform: 'darwin' },
+    require: () => ({
+      contextBridge: { exposeInMainWorld(name: string, value: unknown) { expect(name).toBe('desktop'); bridge = value; } },
+      ipcRenderer: { invoke(...args: unknown[]) { calls.push(args); return Promise.resolve([]); } },
+    }),
+  });
+  expect(Object.isFrozen(bridge)).toBe(true);
+  expect(Object.keys(bridge).sort()).toEqual(['loadOfficeCalibriFonts', 'loadOfficeLightFont', 'platform']);
+  await bridge.loadOfficeCalibriFonts('/private/font.ttf');
+  await bridge.loadOfficeLightFont('/private/font.ttf');
+  expect(calls).toEqual([['slide-studio:load-office-calibri-fonts'], ['slide-studio:load-office-light-font']]);
 });

@@ -1,4 +1,22 @@
-import { memo, useRef, useLayoutEffect, useEffect } from "react";
+import { GradientDefs, gradientCss } from "./gradient";
+import { SlideLinks } from "./slide-links";
+import { alphaColor } from "./colors";
+import EditableText from "./EditableText";
+import {
+  useTextHeight,
+  textStyle,
+  shapeTextElement,
+  shapeTextFrame,
+} from "./text-geometry";
+export { textStyle } from "./text-geometry";
+import {
+  memo,
+  useId,
+  useRef,
+  useLayoutEffect,
+  useEffect,
+  useState,
+} from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type {
@@ -36,291 +54,20 @@ import {
   hasTextBullets,
 } from "./text-bullets";
 import { LineShape } from "./LineShape";
-import { selectionBounds, resizeElements } from "./canvas-resize";
+import {
+  selectionBounds,
+  resizeElements,
+  rotateElements,
+} from "./canvas-resize";
+import { expandGroups } from "./object-groups";
+import { snapMovement } from "./object-arrange";
 import { TableVisual } from "./TableEditor";
 import { TableResizer } from "./TableResizer";
-import type { TableCellRange } from "./table";
+import { tableMerge, visibleTableCells, MAX_TABLE_ROWS, type TableCellRange } from "./table";
 import { selectionRange, type TableCellSelection } from "./table-selection";
 
-// Chromium does not implement CSS hanging-punctuation. Try letting the terminal
-// stop/comma hang, and keep it only when that prevents an extra line. A sentence
-// that already fits keeps its natural width, including center/right alignment.
-function TextLine({
-  line,
-  paragraph: p,
-  element: e,
-  first,
-  editing = false,
-}: {
-  line: TextRun[];
-  paragraph: TextParagraph;
-  element: SlideElement;
-  first: boolean;
-  editing?: boolean;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const bullet = first ? paragraphBullet({ ...p, runs: line }) : undefined;
-  const runs = bullet
-    ? [{ ...line[0], text: bullet.label }, ...bullet.runs.flatMap(scriptRuns)]
-    : line.flatMap(scriptRuns);
-  useLayoutEffect(() => {
-    const box = ref.current;
-    const stop = box?.querySelector<HTMLElement>("[data-hanging-punctuation]");
-    if (!box || !stop) return;
-    const reset = () => {
-      stop.style.display = "";
-      stop.style.width = "";
-      stop.style.whiteSpace = "";
-    };
-    let disposed = false;
-    const layout = () => {
-      if (disposed) return;
-      reset();
-      if (
-        !p.hangingPunctuation ||
-        e.wrap === false ||
-        (e.writingMode && e.writingMode !== "horizontal")
-      )
-        return;
-      const before = box.getBoundingClientRect().height;
-      stop.style.display = "inline-block";
-      stop.style.width = "0px";
-      stop.style.whiteSpace = "pre";
-      if (box.getBoundingClientRect().height >= before - 0.1) reset();
-    };
-    layout();
-    void document.fonts.ready.then(layout);
-    document.fonts.addEventListener("loadingdone", layout);
-    window.addEventListener("slide-studio:fonts-changed", layout);
-    const observer = new ResizeObserver(layout);
-    observer.observe(box);
-    window.addEventListener("beforeprint", layout);
-    return () => {
-      disposed = true;
-      document.fonts.removeEventListener("loadingdone", layout);
-      window.removeEventListener("slide-studio:fonts-changed", layout);
-      observer.disconnect();
-      window.removeEventListener("beforeprint", layout);
-    };
-  }, [line, p, e]);
-  return (
-    <div
-      ref={ref}
-      data-text-line
-      style={{
-        fontSize: Math.max(
-          ...line.map((r) => r.fontSize ?? p.fontSize ?? e.fontSize ?? 32),
-          ...(line.length ? [] : [p.fontSize ?? e.fontSize ?? 32]),
-        ),
-        // An empty line has no inline box, but still occupies its full line
-        // advance (including fixed spacing and the font size of this line).
-        minBlockSize: line.every((r) => !r.text) ? "1lh" : undefined,
-        textIndent: first ? (p.indent ?? 0) : 0,
-      }}
-    >
-      {runs.map((r, j) => {
-        const terminal =
-          j === runs.length - 1 && p.hangingPunctuation
-            ? r.text.match(
-                /[,.\u060c\u06d4\u3001\u3002\uff0c\uff0e\ufe50\ufe51\ufe52\uff61\uff64]$/u,
-              )?.[0]
-            : undefined;
-        return (
-          <span
-            key={j}
-            lang={r.language}
-            data-bullet={bullet && j === 0 ? "" : undefined}
-            style={{
-              ...(bullet && j === 0
-                ? {
-                    display: "inline-block",
-                    minWidth: Math.max(0, -(p.indent ?? 0)),
-                    marginRight: (p.indent ?? 0) >= 0 ? "0.25em" : undefined,
-                    textIndent: 0,
-                  }
-                : {}),
-              letterSpacing: r.letterSpacing,
-              overflowWrap:
-                p.latinLineBreak === false &&
-                !/[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(
-                  r.text,
-                )
-                  ? "normal"
-                  : undefined,
-              fontKerning:
-                r.kerning === undefined
-                  ? "none"
-                  : (r.fontSize ?? e.fontSize ?? 32) >= r.kerning
-                    ? "normal"
-                    : "none",
-              wordBreak:
-                p.latinLineBreak &&
-                !/[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(
-                  r.text,
-                )
-                  ? "break-all"
-                  : undefined,
-              fontFamily: r.fontFamily
-                ? fontStack(r.fontFamily, r.bold ?? e.bold)
-                : undefined,
-              fontSize: r.baseline
-                ? `${(r.fontSize ?? e.fontSize ?? 32) * 0.65}px`
-                : r.fontSize,
-              fontWeight:
-                r.bold === undefined
-                  ? undefined
-                  : r.bold
-                    ? 700
-                    : /Light$/i.test(r.fontFamily ?? e.fontFamily ?? "")
-                      ? 300
-                      : 400,
-              fontStyle:
-                r.italic === undefined
-                  ? undefined
-                  : r.italic
-                    ? "italic"
-                    : "normal",
-              textDecoration:
-                (r.underline ?? e.underline) ? "underline" : "none",
-              color: r.color,
-              verticalAlign: r.baseline ? `${r.baseline / 1000}%` : undefined,
-            }}
-          >
-            {terminal ? (
-              <>
-                {r.text.slice(0, -terminal.length)}
-                <span data-hanging-punctuation>{terminal}</span>
-              </>
-            ) : (
-              r.text
-            )}
-            {editing && bullet && j === 0 ? (
-              <span
-                style={{
-                  // An empty list has no body run for the native caret. Do not
-                  // let the first typed characters inherit a zero font size.
-                  fontSize: bullet.runs.some((r) => r.text)
-                    ? 0
-                    : (p.fontSize ?? e.fontSize ?? 32),
-                }}
-              >
-                {p.bulletPrefix!.slice(bullet.label.length)}
-              </span>
-            ) : null}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-export function TextContent({
-  element: e,
-  editing = false,
-}: {
-  element: SlideElement;
-  editing?: boolean;
-}) {
-  let content;
-  if (!e.paragraphs)
-    // Keep native formatting spans inside one inline formatting context.
-    // Direct children of the column-flex editor would become separate rows.
-    content = (
-      <div data-text-plain style={{ flexShrink: 0, minBlockSize: "1lh" }}>
-        <span style={{ textDecoration: e.underline ? "underline" : "none" }}>
-          {e.text}
-        </span>
-      </div>
-    );
-  else
-    content = (
-      <>
-        {e.paragraphs.map((p, i) => (
-          <div
-            key={i}
-            data-text-paragraph
-            style={{
-              flexShrink: 0,
-              fontSize: p.fontSize ?? e.fontSize,
-              textAlign: p.align ?? e.align,
-              lineHeight:
-                p.lineSpacing !== undefined
-                  ? `${p.lineSpacing}px`
-                  : (p.lineHeight ?? 1.2),
-              marginTop: p.spaceBefore ?? 0,
-              marginBottom: p.spaceAfter ?? 0,
-              paddingLeft: p.marginLeft ?? 0,
-              paddingRight: p.marginRight ?? 0,
-              tabSize: p.tabSize === undefined ? undefined : `${p.tabSize}px`,
-              lineBreak: p.eastAsianLineBreak === false ? "auto" : "strict",
-              wordBreak: p.eastAsianLineBreak === false ? "keep-all" : "normal",
-            }}
-          >
-            {paragraphLines(p).map((line, lineIndex) => (
-              <TextLine
-                key={lineIndex}
-                line={line}
-                paragraph={p}
-                element={e}
-                first={lineIndex === 0}
-                editing={editing}
-              />
-            ))}
-          </div>
-        ))}
-      </>
-    );
-  return (e.textColumns ?? 1) > 1 ? (
-    <div
-      data-text-columns
-      style={{
-        height: "100%",
-        minHeight: 0,
-        flexShrink: 0,
-        columnCount: e.textColumns,
-        columnGap: e.textColumnGap ?? 0,
-        columnFill: "auto",
-      }}
-    >
-      {content}
-    </div>
-  ) : (
-    content
-  );
-}
-
-function useTextHeight(
-  element: SlideElement,
-  onHeight?: (id: string, height: number) => void,
-) {
-  const ref = useRef<HTMLDivElement>(null);
-  const callback = useRef(onHeight);
-  callback.current = onHeight;
-  useLayoutEffect(() => {
-    const host = ref.current;
-    if (!host || !automaticTextHeight(element) || !onHeight || element.locked)
-      return;
-    const measure = () => {
-      // offsetHeight is in slide pixels even inside a zoomed/rotated canvas.
-      const height = Math.min(100000, Math.max(8, host.offsetHeight));
-      if (Math.abs(height - element.height) >= 1)
-        callback.current?.(element.id, height);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(host);
-    return () => observer.disconnect();
-  }, [element, Boolean(onHeight)]);
-  return ref;
-}
-
-function automaticTextHeight(e: SlideElement) {
-  return (
-    e.autoHeight &&
-    (!e.writingMode || e.writingMode === "horizontal") &&
-    (e.textColumns ?? 1) === 1
-  );
-}
+import { TextContent } from "./TextContent";
+export { TextContent } from "./TextContent";
 
 function StaticText({
   element,
@@ -364,6 +111,7 @@ function TextBorders({ element: e }: { element: SlideElement }) {
             x2={edge[2] as number}
             y2={edge[3] as number}
             stroke={b.color}
+            strokeOpacity={b.opacity}
             strokeWidth={b.width}
           />
         );
@@ -373,12 +121,34 @@ function TextBorders({ element: e }: { element: SlideElement }) {
 }
 
 export function ElementVisual({
+  element,
+  onTextHeight,
+}: {
+  element: SlideElement;
+  onTextHeight?: (id: string, height: number) => void;
+}) {
+  if (element.type !== "shape")
+    return <ArtworkVisual element={element} onTextHeight={onTextHeight} />;
+  return (
+    <>
+      <ArtworkVisual element={element} />
+      {element.text !== undefined && (
+        <div className="shape-text-frame" style={shapeTextFrame(element)}>
+          <StaticText element={shapeTextElement(element)} />
+        </div>
+      )}
+    </>
+  );
+}
+
+function ArtworkVisual({
   element: e,
   onTextHeight,
 }: {
   element: SlideElement;
   onTextHeight?: (id: string, height: number) => void;
 }) {
+  const gradientId = "fill-" + useId().replace(/[^a-z0-9]/gi, "");
   if (e.type === "table") return <TableVisual element={e} />;
   if (e.type === "image")
     return (
@@ -423,13 +193,25 @@ export function ElementVisual({
         preserveAspectRatio="none"
         style={{ transform: `scale(${e.flipH ? -1 : 1},${e.flipV ? -1 : 1})` }}
       >
+        <GradientDefs gradient={e.gradient} id={gradientId} />
         {e.paths.map((p, i) => (
           <path
             key={i}
             d={p.d}
             transform={`scale(${e.width / p.width},${e.height / p.height})`}
-            fill={p.fill ? e.fill : "none"}
+            fill={
+              p.fill ? (e.gradient ? `url(#${gradientId})` : e.fill) : "none"
+            }
+            fillOpacity={e.fillOpacity}
             stroke={p.stroke ? e.stroke : "none"}
+            strokeOpacity={e.strokeOpacity}
+            strokeDasharray={e.strokeDash
+              ?.map(
+                (n) =>
+                  n / Math.sqrt(((e.width / p.width) * e.height) / p.height),
+              )
+              .join(" ")}
+            strokeLinecap={e.strokeCap}
             strokeWidth={
               (e.strokeWidth ?? 0) /
               Math.max(
@@ -468,14 +250,55 @@ export function ElementVisual({
         )}
       </svg>
     );
+  if (e.gradient || e.strokeDash)
+    return (
+      <svg
+        className="element-svg"
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${e.width} ${e.height}`}
+        preserveAspectRatio="none"
+        style={{ transform: `scale(${e.flipH ? -1 : 1},${e.flipV ? -1 : 1})` }}
+      >
+        <GradientDefs gradient={e.gradient} id={gradientId} />
+        <g
+          fill={e.gradient ? `url(#${gradientId})` : e.fill}
+          fillOpacity={e.fillOpacity}
+          stroke={e.stroke}
+          strokeOpacity={e.strokeOpacity}
+          strokeWidth={e.strokeWidth}
+          strokeDasharray={e.strokeDash?.join(" ")}
+          strokeLinecap={e.strokeCap}
+        >
+          {e.shape === "ellipse" ? (
+            <ellipse
+              cx={e.width / 2}
+              cy={e.height / 2}
+              rx={e.width / 2}
+              ry={e.height / 2}
+            />
+          ) : e.shape === "triangle" ? (
+            <polygon
+              points={`${e.width / 2},0 ${e.width},${e.height} 0,${e.height}`}
+            />
+          ) : (
+            <rect
+              width={e.width}
+              height={e.height}
+              rx={e.shape === "roundRect" ? (e.cornerRadius ?? 22) : 0}
+            />
+          )}
+        </g>
+      </svg>
+    );
   return (
     <div
       style={{
         width: "100%",
         height: "100%",
-        background: e.fill,
+        background: alphaColor(e.fill, e.fillOpacity),
         transform: `scale(${e.flipH ? -1 : 1},${e.flipV ? -1 : 1})`,
-        border: `${e.strokeWidth || 0}px solid ${e.stroke || "transparent"}`,
+        border: `${e.strokeWidth || 0}px solid ${alphaColor(e.stroke, e.strokeOpacity) || "transparent"}`,
         borderRadius:
           e.shape === "ellipse"
             ? "50%"
@@ -490,51 +313,6 @@ export function ElementVisual({
     />
   );
 }
-export function textStyle(e: SlideElement): CSSProperties {
-  return {
-    fontFamily: fontStack(e.fontFamily, e.bold),
-    fontSize: e.fontSize || 32,
-    letterSpacing: e.letterSpacing,
-    fontKerning:
-      e.kerning === undefined
-        ? undefined
-        : (e.fontSize ?? 32) >= e.kerning
-          ? "normal"
-          : "none",
-    fontWeight: e.bold ? 700 : /Light$/i.test(e.fontFamily ?? "") ? 300 : 400,
-    fontStyle: e.italic ? "italic" : "normal",
-    fontSynthesis: "style",
-    // Put underline on runs so it can be removed from a partial selection.
-    // An ancestor's text decoration cannot be cancelled by a child span.
-    textDecoration: "none",
-    color: e.color || "#233D35",
-    textAlign: e.align || "left",
-    whiteSpace: e.wrap === false ? "pre" : "pre-wrap",
-    overflowWrap: e.wrap === false ? "normal" : "break-word",
-    wordBreak: e.paragraphs ? "keep-all" : undefined,
-    overflow: automaticTextHeight(e) ? "visible" : (e.textOverflow ?? "hidden"),
-    height: automaticTextHeight(e) ? "auto" : undefined,
-    background: e.fill,
-    outline:
-      e.strokeWidth && e.stroke !== "transparent"
-        ? `${e.strokeWidth}px solid ${e.stroke}`
-        : undefined,
-    padding: e.textInsets?.map((v) => `${v}px`).join(" "),
-    writingMode:
-      e.writingMode === "vertical" || e.writingMode === "stacked"
-        ? "vertical-rl"
-        : e.writingMode === "vertical270"
-          ? "vertical-lr"
-          : undefined,
-    textOrientation: e.writingMode === "stacked" ? "upright" : undefined,
-    justifyContent:
-      e.verticalAlign === "middle"
-        ? "center"
-        : e.verticalAlign === "bottom"
-          ? "flex-end"
-          : "flex-start",
-  };
-}
 export function elementStyle(e: SlideElement): CSSProperties {
   return {
     left: e.x,
@@ -543,6 +321,9 @@ export function elementStyle(e: SlideElement): CSSProperties {
     height: e.height,
     transform: `rotate(${e.rotation}deg)`,
     opacity: e.opacity,
+    filter: e.shadow
+      ? `drop-shadow(${e.shadow.dx}px ${e.shadow.dy}px ${e.shadow.blur / 2}px ${alphaColor(e.shadow.color, e.shadow.opacity)})`
+      : undefined,
   };
 }
 export const SlideVisual = memo(function SlideVisual({
@@ -561,309 +342,50 @@ export const SlideVisual = memo(function SlideVisual({
   onSlideLink?: (slideId: string) => void;
 }) {
   return (
-    <div
-      className="slide-visual"
-      style={{
-        width,
-        height,
-        background: slide.background,
-        transform: `scale(${scale})`,
-      }}
-    >
-      {slide.elements.map((e) => (
-        <div
-          key={e.id}
-          className="slide-element static"
-          style={elementStyle(e)}
-        >
-          <ElementVisual element={e} />
-          {interactive && e.hyperlink?.url && (
-            <a
-              className="presentation-link"
-              href={e.hyperlink.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={e.text || e.alt || "웹 링크 열기"}
-              onClick={(event) => event.stopPropagation()}
-            />
-          )}
-          {interactive && e.hyperlink?.slideId && (
-            <button
-              className="presentation-link"
-              aria-label={e.text || "연결한 슬라이드로 이동"}
-              onClick={(event) => {
-                event.stopPropagation();
-                onSlideLink?.(e.hyperlink!.slideId!);
-              }}
-            />
-          )}
-        </div>
-      ))}
-    </div>
+    <SlideLinks.Provider value={{ interactive, onSlideLink }}>
+      <div
+        className="slide-visual"
+        style={{
+          width,
+          height,
+          background: slide.background,
+          backgroundImage:gradientCss(slide.backgroundGradient),
+          transform: `scale(${scale})`,
+        }}
+      >
+        {slide.elements.map((e) => (
+          <div
+            key={e.id}
+            className="slide-element static"
+            style={elementStyle(e)}
+          >
+            <ElementVisual element={e} />
+            {interactive && e.hyperlink?.url && (
+              <a
+                className="presentation-link"
+                href={e.hyperlink.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={e.text || e.alt || "웹 링크 열기"}
+                onClick={(event) => event.stopPropagation()}
+              />
+            )}
+            {interactive && e.hyperlink?.slideId && (
+              <button
+                className="presentation-link"
+                aria-label={e.text || "연결한 슬라이드로 이동"}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSlideLink?.(e.hyperlink!.slideId!);
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </SlideLinks.Provider>
   );
 });
-function EditableText({
-  element,
-  onInput,
-  onDone,
-  onHeight,
-}: {
-  element: SlideElement;
-  onInput: (text: string, formats?: TextFormatRange[], edit?: TextEdit) => void;
-  onDone: () => void;
-  onHeight: (id: string, height: number) => void;
-}) {
-  const ref = useTextHeight(element, onHeight);
-  const initial = useRef(<TextContent element={element} editing />);
-  const inputEdit = useRef<TextEdit | undefined>(undefined);
-  const commandParagraphs = useRef<TextParagraph[] | undefined>(undefined);
-  const listHistory = useRef(
-    new Map<
-      string,
-      { paragraphs: TextParagraph[]; start: number; end: number }
-    >(),
-  );
-  const listSelection = () => {
-    const host = ref.current,
-      selection = getSelection();
-    if (!host || !selection?.rangeCount) return;
-    const range = selection.getRangeAt(0);
-    if (
-      !host.contains(range.startContainer) ||
-      !host.contains(range.endContainer)
-    )
-      return;
-    const start = textPointOffset(
-        host,
-        range.startContainer,
-        range.startOffset,
-      ),
-      end = textPointOffset(host, range.endContainer, range.endOffset);
-    return {
-      host,
-      start,
-      end,
-      indices: textParagraphSelection(element, start, end),
-    };
-  };
-  const applyList = (
-    next: SlideElement,
-    range: NonNullable<ReturnType<typeof listSelection>>,
-  ) => {
-    const { host, start, end } = range;
-    const old =
-      element.paragraphs ??
-      (element.text ?? "").split("\n").map((text) => ({ runs: [{ text }] }));
-    listHistory.current.set(host.innerHTML, { paragraphs: old, start, end });
-    commandParagraphs.current = next.paragraphs;
-    const selection = getSelection(),
-      entire = document.createRange();
-    entire.selectNodeContents(host);
-    selection?.removeAllRanges();
-    selection?.addRange(entire);
-    document.execCommand(
-      "insertHTML",
-      false,
-      renderToStaticMarkup(<TextContent element={next} editing />),
-    );
-    const nextStart = remapBulletOffset(element, next, start),
-      nextEnd = remapBulletOffset(element, next, end);
-    listHistory.current.set(host.innerHTML, {
-      paragraphs: next.paragraphs!,
-      start: nextStart,
-      end: nextEnd,
-    });
-    if (listHistory.current.size > 20)
-      listHistory.current.delete(listHistory.current.keys().next().value!);
-    restoreTextOffsets(host, nextStart, nextEnd);
-  };
-  useEffect(() => {
-    const host = ref.current;
-    if (!host) return;
-    const toggle = () => {
-      const range = listSelection();
-      if (range) applyList(toggleTextBullets(element, range.indices), range);
-    };
-    host.addEventListener("slide-studio:toggle-bullets", toggle);
-    return () =>
-      host.removeEventListener("slide-studio:toggle-bullets", toggle);
-  }, [element]);
-  useLayoutEffect(() => {
-    const host = ref.current;
-    if (!host) return;
-    const beforeInput = (event: InputEvent) => {
-      const selection = getSelection();
-      const source =
-        event.getTargetRanges()[0] ??
-        (selection?.rangeCount ? selection.getRangeAt(0) : undefined);
-      inputEdit.current =
-        source &&
-        host.contains(source.startContainer) &&
-        host.contains(source.endContainer)
-          ? {
-              start: textPointOffset(
-                host,
-                source.startContainer,
-                source.startOffset,
-              ),
-              end: textPointOffset(host, source.endContainer, source.endOffset),
-              softBreak: event.inputType === "insertLineBreak",
-            }
-          : undefined;
-    };
-    host.addEventListener("beforeinput", beforeInput);
-    return () => host.removeEventListener("beforeinput", beforeInput);
-  }, []);
-  useLayoutEffect(() => {
-    if (!ref.current) return;
-    ref.current.focus();
-    const range = document.createRange();
-    range.selectNodeContents(ref.current);
-    const sel = getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-  }, []);
-  return (
-    <div
-      ref={ref}
-      className="element-text editing-text"
-      contentEditable
-      role="textbox"
-      aria-label="슬라이드 텍스트 편집"
-      suppressContentEditableWarning
-      spellCheck={false}
-      style={textStyle(element)}
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        if (e.button === 2) e.preventDefault();
-      }}
-      onMouseDown={(e) => {
-        if (e.button === 2) e.preventDefault();
-      }}
-      onBlur={(e) => {
-        if (
-          e.relatedTarget instanceof Element &&
-          e.relatedTarget.closest(
-            ".object-context-menu, .text-color-palette, [data-text-format-trigger], [data-text-selection-control]",
-          )
-        )
-          return;
-        onDone();
-      }}
-      onInput={(e) => {
-        const host = e.currentTarget;
-        const type = (e.nativeEvent as InputEvent).inputType || "";
-        applyPendingFontSize(host);
-        trackTextFormat(host, type);
-        let edit = inputEdit.current;
-        inputEdit.current = undefined;
-        const history = type.startsWith("history")
-          ? listHistory.current.get(host.innerHTML)
-          : undefined;
-        const paragraphs = commandParagraphs.current ?? history?.paragraphs;
-        commandParagraphs.current = undefined;
-        if (paragraphs)
-          edit = {
-            start: 0,
-            end: element.text?.length ?? 0,
-            softBreak: false,
-            paragraphs,
-          };
-        onInput(
-          editableText(host),
-          host.dataset.textFormats ? editableTextFormatRanges(host) : undefined,
-          edit,
-        );
-        if (history) restoreTextOffsets(host, history.start, history.end);
-      }}
-      onKeyDown={(e) => {
-        // Let the object wrapper handle the context-menu keyboard shortcut,
-        // including while this contenteditable owns the selection.
-        if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) return;
-        e.stopPropagation();
-        if (
-          !e.nativeEvent.isComposing &&
-          ["Tab", "Backspace", "Enter"].includes(e.key)
-        ) {
-          const range = listSelection();
-          if (range?.indices.length && hasTextBullets(element, range.indices)) {
-            const paragraphs: TextParagraph[] =
-                element.paragraphs ??
-                (element.text ?? "")
-                  .split("\n")
-                  .map((text) => ({ bulletPrefix: "• ", runs: [{ text }] })),
-              index = range.indices[0],
-              p = paragraphs[index];
-            const prefix = p.bulletPrefix ?? "• ";
-            const text = p.runs.map((r) => r.text).join("");
-            const before = paragraphs
-              .slice(0, index)
-              .reduce(
-                (sum, p) => sum + p.runs.map((r) => r.text).join("").length + 1,
-                0,
-              );
-            const atStart =
-              range.start === range.end &&
-              range.start === before + prefix.length;
-            if (
-              (e.key === "Enter" &&
-                !e.shiftKey &&
-                text.slice(prefix.length).trim() === "") ||
-              (e.key === "Backspace" && atStart)
-            ) {
-              e.preventDefault();
-              applyList(
-                toggleTextBullets(element, range.indices, false),
-                range,
-              );
-              return;
-            }
-            if (e.key === "Tab") {
-              e.preventDefault();
-              const next = {
-                ...element,
-                paragraphs: paragraphs.map((p, i) =>
-                  range.indices.includes(i)
-                    ? {
-                        ...p,
-                        marginLeft: Math.max(
-                          -(p.indent ?? 0),
-                          (p.marginLeft ?? 0) + (e.shiftKey ? -24 : 24),
-                        ),
-                      }
-                    : p,
-                ),
-              };
-              applyList(next, range);
-              return;
-            }
-          }
-        }
-        if (
-          e.key === "Enter" &&
-          !e.shiftKey &&
-          !e.ctrlKey &&
-          !e.metaKey &&
-          !e.altKey &&
-          !e.nativeEvent.isComposing &&
-          continueTextBullet(e.currentTarget, element)
-        )
-          e.preventDefault();
-        if (e.key === "Escape") {
-          e.preventDefault();
-          e.currentTarget.blur();
-        }
-      }}
-      onPaste={(e) => {
-        e.preventDefault();
-        const text = e.clipboardData.getData("text/plain");
-        document.execCommand("insertText", false, text);
-      }}
-    >
-      {initial.current}
-    </div>
-  );
-}
 type Drag = {
   pointer: number;
   startX: number;
@@ -928,12 +450,21 @@ interface Props {
   edit: (id: string | null) => void;
   editTable?: (id: string, range?: TableCellRange) => void;
   resizeTable: (id: string, before: TableData, after: TableData) => void;
+  appendTableRow: (id:string)=>void;
   tableResizeEnabled: boolean;
   begin: () => void;
   preview: (elements: SlideElement[]) => void;
   finish: () => void;
   changeText: (
     id: string,
+    text: string,
+    formats?: TextFormatRange[],
+    edit?: TextEdit,
+  ) => void;
+  changeCell: (
+    id: string,
+    row: number,
+    column: number,
     text: string,
     formats?: TextFormatRange[],
     edit?: TextEdit,
@@ -955,15 +486,18 @@ export default function SlideCanvas({
   edit,
   editTable,
   resizeTable,
+  appendTableRow,
   tableResizeEnabled,
   begin,
   preview,
   finish,
   changeText,
+  changeCell,
   resizeText,
   showGuides,
   grid,
 }: Props) {
+  const editPoint = useRef<{ id: string; x: number; y: number } | null>(null);
   const openContextMenu = (
     element: SlideElement,
     host: HTMLElement,
@@ -994,6 +528,48 @@ export default function SlideCanvas({
       host.focus({ preventScroll: true });
       contextMenu(element.id, x, y);
     }
+  };
+  const marqueeRef = useRef<{
+    pointer: number;
+    x: number;
+    y: number;
+    initial: string[];
+  } | null>(null);
+  const [marquee, setMarquee] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [snapLines, setSnapLines] = useState<{ axis: "x" | "y"; at: number }[]>(
+    [],
+  );
+  const [inlineCell, setInlineCell] = useState<{
+    id: string;
+    row: number;
+    column: number;
+  } | null>(null);
+  const startCell = (
+    element: SlideElement,
+    row: number,
+    column: number,
+    seed?: string,
+  ) => {
+    if (!element.table || element.locked) return;
+    const merge = tableMerge(element.table, row, column),
+      r = merge?.row ?? row,
+      c = merge?.column ?? column;
+    stopCellDrag();
+    select([element.id]);
+    begin();
+    edit(element.id);
+    selectTableCells({
+      elementId: element.id,
+      anchor: { row: r, column: c },
+      focus: { row: r, column: c },
+    });
+    if (seed !== undefined) changeCell(element.id, r, c, seed);
+    setInlineCell({ id: element.id, row: r, column: c });
   };
   const drag = useRef<Drag | null>(null);
   const cellDrag = useRef<CellDrag | null>(null);
@@ -1055,6 +631,9 @@ export default function SlideCanvas({
       if (cellDrag.current?.pointer === event.pointerId) stopCellDrag();
     };
     const blur = () => {
+      marqueeRef.current = null;
+      setMarquee(null);
+      setSnapLines([]);
       stopCellDrag();
       if (drag.current) {
         drag.current = null;
@@ -1086,7 +665,13 @@ export default function SlideCanvas({
   const down = (ev: ReactPointerEvent, el: SlideElement, handle?: string) => {
     if (ev.button !== 0 || editing === el.id) return;
     ev.stopPropagation();
-    if (!handle && el.type === "table" && el.table && !el.locked) {
+    if (
+      !handle &&
+      el.type === "table" &&
+      el.table &&
+      !el.locked &&
+      !(el.groups?.length && !ev.altKey)
+    ) {
       const host = ev.currentTarget as HTMLElement;
       const cell =
         ev.target instanceof Element
@@ -1154,11 +739,13 @@ export default function SlideCanvas({
     stopCellDrag();
     tableSelectionRef.current = null;
     selectTableCells(null);
-    let ids = selected.includes(el.id) ? selected : [el.id];
-    if (ev.shiftKey && !handle) {
-      ids = selected.includes(el.id)
-        ? selected.filter((id) => id !== el.id)
-        : [...selected, el.id];
+    const members = ev.altKey ? [el.id] : expandGroups(slide.elements, [el.id]);
+    let ids = selected.includes(el.id) ? selected : members;
+    if (!ev.altKey) ids = expandGroups(slide.elements, ids);
+    if ((ev.shiftKey || ev.ctrlKey || ev.metaKey) && !handle) {
+      ids = members.every((id) => selected.includes(id))
+        ? selected.filter((id) => !members.includes(id))
+        : [...new Set([...selected, ...members])];
       select(ids);
       return;
     }
@@ -1177,6 +764,45 @@ export default function SlideCanvas({
     };
   };
   const move = (ev: ReactPointerEvent) => {
+    const rectangle = marqueeRef.current;
+    if (rectangle?.pointer === ev.pointerId) {
+      const canvas = ev.currentTarget.getBoundingClientRect();
+      const x = (ev.clientX - canvas.left) / scale,
+        y = (ev.clientY - canvas.top) / scale;
+      const box = {
+        x: Math.min(x, rectangle.x),
+        y: Math.min(y, rectangle.y),
+        width: Math.abs(x - rectangle.x),
+        height: Math.abs(y - rectangle.y),
+      };
+      setMarquee(box);
+      const contained = slide.elements.filter((e) => {
+        const angle = (e.rotation * Math.PI) / 180;
+        const w =
+          Math.abs(e.width * Math.cos(angle)) +
+          Math.abs(e.height * Math.sin(angle));
+        const h =
+          Math.abs(e.width * Math.sin(angle)) +
+          Math.abs(e.height * Math.cos(angle));
+        return (
+          e.x + e.width / 2 - w / 2 >= box.x &&
+          e.y + e.height / 2 - h / 2 >= box.y &&
+          e.x + e.width / 2 + w / 2 <= box.x + box.width &&
+          e.y + e.height / 2 + h / 2 <= box.y + box.height
+        );
+      });
+      const ids = contained
+        .filter(
+          (e) =>
+            !e.groups?.length ||
+            expandGroups(slide.elements, [e.id]).every((id) =>
+              contained.some((item) => item.id === id),
+            ),
+        )
+        .map((e) => e.id);
+      select([...new Set([...rectangle.initial, ...ids])]);
+      return;
+    }
     if (cellDrag.current?.pointer === ev.pointerId) {
       cellDrag.current.clientX = ev.clientX;
       cellDrag.current.clientY = ev.clientY;
@@ -1189,6 +815,22 @@ export default function SlideCanvas({
       dy = (ev.clientY - d.startY) / scale;
     if (Math.abs(dx) + Math.abs(dy) < 2 && !d.moved) return;
     d.moved = true;
+    if (d.handle === "rotate") {
+      const canvas = ev.currentTarget.getBoundingClientRect();
+      const bounds = selectionBounds(
+        d.elements.filter((e) => d.ids.includes(e.id) && !e.locked),
+      );
+      const cx = canvas.left + (bounds.x + bounds.width / 2) * scale;
+      const cy = canvas.top + (bounds.y + bounds.height / 2) * scale;
+      let angle =
+        ((Math.atan2(ev.clientY - cy, ev.clientX - cx) -
+          Math.atan2(d.startY - cy, d.startX - cx)) *
+          180) /
+        Math.PI;
+      if (ev.shiftKey) angle = Math.round(angle / 15) * 15;
+      preview(rotateElements(d.elements, d.ids, angle));
+      return;
+    }
     if (ev.shiftKey && !d.handle) {
       if (Math.abs(dx) > Math.abs(dy)) dy = 0;
       else dx = 0;
@@ -1207,10 +849,19 @@ export default function SlideCanvas({
         dy = Math.round((top + dy) / 10) * 10 - top;
       }
       if (showGuides) {
-        if (Math.abs((left + right) / 2 + dx - deck.width / 2) < 7 / scale)
-          dx = (deck.width - left - right) / 2;
-        if (Math.abs((top + bottom) / 2 + dy - deck.height / 2) < 7 / scale)
-          dy = (deck.height - top - bottom) / 2;
+        const snap = snapMovement(
+          d.elements,
+          d.ids,
+          dx,
+          dy,
+          deck.width,
+          deck.height,
+          7 / scale,
+          ev.shiftKey ? (Math.abs(dx) > Math.abs(dy) ? "x" : "y") : undefined,
+        );
+        dx = snap.dx;
+        dy = snap.dy;
+        setSnapLines(snap.guides);
       }
     }
     if (d.handle) {
@@ -1230,6 +881,11 @@ export default function SlideCanvas({
     );
   };
   const up = (ev: ReactPointerEvent) => {
+    if (snapLines.length) setSnapLines([]);
+    if (marqueeRef.current?.pointer === ev.pointerId) {
+      marqueeRef.current = null;
+      setMarquee(null);
+    }
     if (cellDrag.current?.pointer === ev.pointerId) stopCellDrag();
     if (drag.current?.pointer === ev.pointerId) {
       finish();
@@ -1249,6 +905,7 @@ export default function SlideCanvas({
           width: deck.width,
           height: deck.height,
           backgroundColor: slide.background,
+          backgroundImage: gradientCss(slide.backgroundGradient),
           transform: `scale(${scale})`,
         }}
         onPointerDown={(e) => {
@@ -1257,11 +914,23 @@ export default function SlideCanvas({
             (e.target instanceof Element &&
               e.target.classList.contains("slide-artwork"))
           ) {
+            if (e.button !== 0) return;
+            e.preventDefault();
             stopCellDrag();
             tableSelectionRef.current = null;
             selectTableCells(null);
-            select([]);
+            const initial =
+              e.shiftKey || e.ctrlKey || e.metaKey ? selected : [];
+            select(initial);
             edit(null);
+            const rect = e.currentTarget.getBoundingClientRect();
+            marqueeRef.current = {
+              pointer: e.pointerId,
+              x: (e.clientX - rect.left) / scale,
+              y: (e.clientY - rect.top) / scale,
+              initial,
+            };
+            e.currentTarget.setPointerCapture(e.pointerId);
           }
         }}
         onPointerMove={move}
@@ -1273,6 +942,14 @@ export default function SlideCanvas({
         }}
       >
         <div className="slide-artwork">
+          {snapLines.map((line, i) => (
+            <div
+              key={i}
+              className={`guide ${line.axis === "x" ? "vertical" : "horizontal"}`}
+              data-testid="object-snap-guide"
+              style={line.axis === "x" ? { left: line.at } : { top: line.at }}
+            />
+          ))}
           {showGuides && (
             <>
               <div
@@ -1306,6 +983,32 @@ export default function SlideCanvas({
               }}
               onKeyDown={(ev) => {
                 if (
+                  e.type === "table" &&
+                  editing !== e.id &&
+                  tableSelection?.elementId === e.id &&
+                  !e.locked &&
+                  !ev.ctrlKey &&
+                  !ev.metaKey &&
+                  !ev.altKey &&
+                  (ev.key === "F2" ||
+                    ev.key === "Enter" ||
+                    ev.key.length === 1 ||
+                    ev.nativeEvent.keyCode === 229)
+                ) {
+                  ev.stopPropagation();
+                  const composing =
+                    ev.nativeEvent.isComposing ||
+                    ev.nativeEvent.keyCode === 229;
+                  if (!composing) ev.preventDefault();
+                  startCell(
+                    e,
+                    tableSelection.focus.row,
+                    tableSelection.focus.column,
+                    !composing && ev.key.length === 1 ? ev.key : undefined,
+                  );
+                  return;
+                }
+                if (
                   ev.key !== "ContextMenu" &&
                   !(ev.shiftKey && ev.key === "F10")
                 )
@@ -1333,25 +1036,47 @@ export default function SlideCanvas({
                       : undefined,
                   );
                 }
-                if (e.type === "text" && !e.locked) {
+                if ((e.type === "text" || e.type === "shape") && !e.locked) {
                   select([e.id]);
+                  editPoint.current = {
+                    id: e.id,
+                    x: ev.clientX,
+                    y: ev.clientY,
+                  };
                   begin();
                   edit(e.id);
                 }
               }}
             >
-              {editing === e.id ? (
-                <EditableText
-                  element={e}
-                  onHeight={resizeText}
-                  onInput={(text, formats, edit) =>
-                    changeText(e.id, text, formats, edit)
-                  }
-                  onDone={() => {
-                    finish();
-                    edit(null);
-                  }}
-                />
+              {editing === e.id && e.type !== "table" ? (
+                <>
+                  {e.type === "shape" && <ArtworkVisual element={e} />}
+                  <div
+                    style={
+                      e.type === "shape"
+                        ? shapeTextFrame(e)
+                        : { width: "100%", height: "100%" }
+                    }
+                  >
+                    <EditableText
+                      element={e.type === "shape" ? shapeTextElement(e) : e}
+                      initialPoint={
+                        editPoint.current?.id === e.id
+                          ? editPoint.current
+                          : undefined
+                      }
+                      onHeight={e.type === "shape" ? undefined : resizeText}
+                      onInput={(text, formats, edit) =>
+                        changeText(e.id, text, formats, edit)
+                      }
+                      onDone={() => {
+                        finish();
+                        edit(null);
+                        editPoint.current = null;
+                      }}
+                    />
+                  </div>
+                </>
               ) : e.type === "table" ? (
                 <TableResizer
                   element={e}
@@ -1368,6 +1093,44 @@ export default function SlideCanvas({
                     edit(null);
                   }}
                   onCommit={(before, after) => resizeTable(e.id, before, after)}
+                  inlineEditing={
+                    editing === e.id && inlineCell?.id === e.id
+                      ? {
+                          row: inlineCell.row,
+                          column: inlineCell.column,
+                          onInput: (text, formats, edit) =>
+                            changeCell(
+                              e.id,
+                              inlineCell.row,
+                              inlineCell.column,
+                              text,
+                              formats,
+                              edit,
+                            ),
+                          onDone: () => {
+                            finish();
+                            edit(null);
+                            setInlineCell(null);
+                          },
+                          onNavigate: (backward) => {
+                            finish();
+                            const cells = visibleTableCells(e.table!),
+                              index = cells.findIndex(
+                                (c) =>
+                                  c.row === inlineCell.row &&
+                                  c.column === inlineCell.column,
+                              ),
+                              next = cells[index + (backward ? -1 : 1)];
+                            if (next) startCell(e, next.row, next.column);
+                            else {
+                              edit(null);
+                              setInlineCell(null);
+                              if(!backward&&e.table!.cells.length<MAX_TABLE_ROWS){const row=e.table!.cells.length;appendTableRow(e.id);selectTableCells({elementId:e.id,anchor:{row,column:0},focus:{row,column:0}});requestAnimationFrame(()=>document.querySelector<HTMLElement>('.editable-slide .slide-element.selected')?.focus());}
+                            }
+                          },
+                        }
+                      : undefined
+                  }
                   selection={
                     tableSelection?.elementId === e.id
                       ? selectionRange(tableSelection)
@@ -1380,6 +1143,18 @@ export default function SlideCanvas({
             </div>
           ))}
         </div>
+        {marquee && (
+          <div
+            className="canvas-marquee"
+            data-testid="canvas-marquee"
+            style={{
+              left: marquee.x,
+              top: marquee.y,
+              width: marquee.width,
+              height: marquee.height,
+            }}
+          />
+        )}
         {slide.elements
           .filter((e) => selected.includes(e.id))
           .map((e) => (
@@ -1453,6 +1228,18 @@ export default function SlideCanvas({
                     onPointerDown={(ev) => down(ev, e, h)}
                   />
                 ))}
+              {!e.locked && selected.length === 1 && !editing && (
+                <button
+                  type="button"
+                  className="rotation-handle"
+                  data-testid="rotate-handle"
+                  aria-label="개체 회전"
+                  title="회전 (Shift: 15° 단위)"
+                  onPointerDown={(ev) => down(ev, e, "rotate")}
+                >
+                  ↻
+                </button>
+              )}
               {selected.includes(e.id) && (
                 <span className="element-label">
                   {e.locked
@@ -1495,6 +1282,16 @@ export default function SlideCanvas({
                     onPointerDown={(ev) => down(ev, items[0], h)}
                   />
                 ))}
+                <button
+                  type="button"
+                  className="rotation-handle"
+                  data-testid="rotate-handle"
+                  aria-label="선택 개체 함께 회전"
+                  title="함께 회전 (Shift: 15° 단위)"
+                  onPointerDown={(ev) => down(ev, items[0], "rotate")}
+                >
+                  ↻
+                </button>
               </div>
             );
           })()}

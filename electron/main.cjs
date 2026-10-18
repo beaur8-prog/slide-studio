@@ -20,6 +20,7 @@ const CHROME_THEMES = {
 };
 
 let mainWindow = null;
+const presenterWindows = new Set();
 let nativeOperationPending = false;
 let officeLightFont;
 let officeCalibriFonts;
@@ -65,6 +66,16 @@ function requireTrustedSender(event) {
     event.senderFrame !== mainWindow.webContents.mainFrame ||
     !isTrustedURL(event.senderFrame.url)
   ) throw new Error('This operation is available only to the editor window.');
+}
+
+function requireTrustedFontSender(event) {
+  for (const child of presenterWindows) {
+    if (!child.isDestroyed() && event.sender === child.webContents &&
+        event.senderFrame === child.webContents.mainFrame &&
+        isTrustedURL(event.senderFrame.url) &&
+        /^#presenter=[0-9a-f-]{36}$/i.test(new URL(event.senderFrame.url).hash)) return;
+  }
+  requireTrustedSender(event);
 }
 
 function safeFilename(input, extension) {
@@ -131,12 +142,14 @@ function setPresentationMode(enabled) {
       menuBarVisible: mainWindow.isMenuBarVisible(),
     };
     mainWindow.setMenuBarVisibility(false);
+    mainWindow.webContents.setBackgroundThrottling(false);
     mainWindow.setFullScreen(true);
   } else if (presentationWindowState) {
     const previous = presentationWindowState;
     presentationWindowState = null;
     mainWindow.setFullScreen(previous.fullScreen);
     mainWindow.setMenuBarVisibility(previous.menuBarVisible);
+    mainWindow.webContents.setBackgroundThrottling(true);
   }
 }
 
@@ -272,14 +285,14 @@ function installIPC() {
   });
 
   ipcMain.handle('slide-studio:load-office-calibri-fonts', (event, ...args) => {
-    requireTrustedSender(event);
+    requireTrustedFontSender(event);
     if (args.length) throw new TypeError('This font request takes no paths or arguments.');
     officeCalibriFonts ??= readOfficeCalibriFonts({ platform: process.platform });
     return officeCalibriFonts;
   });
 
   ipcMain.handle('slide-studio:load-office-light-font', (event, ...args) => {
-    requireTrustedSender(event);
+    requireTrustedFontSender(event);
     if (args.length) throw new TypeError('This font request takes no paths or arguments.');
     officeLightFont ??= readOfficeArialNovaLight({ platform: process.platform });
     return officeLightFont;
@@ -444,13 +457,39 @@ async function createWindow() {
   // visible ribbon. Window Controls Overlay retains Windows' native caption buttons.
   if (process.platform === 'win32') mainWindow.setMenuBarVisibility(false);
 
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // The presenter has no Node or access to editor-only native IPC.
+    let target;
+    try { target = new URL(url); } catch { return { action: 'deny' }; }
+    if (!isTrustedURL(url) || !/^#presenter=[0-9a-f-]{36}$/i.test(target.hash)) return { action: 'deny' };
+    return { action: 'allow', overrideBrowserWindowOptions: {
+      title: 'Slide Studio — 발표자 보기', width: 1180, height: 780,
+      minWidth: 800, minHeight: 600, autoHideMenuBar: true, fullscreenable: false,
+      webPreferences: { preload: path.join(__dirname, 'presenter-preload.cjs'),
+        contextIsolation: true, nodeIntegration: false, sandbox: true,
+        webSecurity: true, webviewTag: false, backgroundThrottling: false },
+    } };
+  });
+  mainWindow.webContents.on('did-create-window', child => {
+    presenterWindows.add(child);
+    child.on('closed', () => presenterWindows.delete(child));
+    if (process.platform === 'darwin') child.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    child.webContents.on('will-navigate', (event, url) => { if (!isTrustedURL(url)) event.preventDefault(); });
+  });
+  mainWindow.on('enter-full-screen', () => {
+    // macOS creates a new Space for the audience window. Keep the movable
+    // presenter window accessible there, including after the transition ends.
+    for (const child of presenterWindows) {
+      if (!child.isDestroyed()) { child.show(); child.focus(); }
+    }
+  });
   mainWindow.webContents.on('before-input-event', (event, input) => {
     // Native Edit/Print accelerators otherwise consume these before the
     // renderer can choose a slideshow pointer or undo a session ink stroke.
     if (!presentationWindowState || input.type !== 'keyDown' || input.alt ||
         !(input.control || input.meta)) return;
-    const command = { a: 'arrow', l: 'laser', p: 'pen', e: 'eraser',
+    const command = { a: 'arrow', l: 'laser', p: 'pen', h: 'highlighter', e: 'eraser',
       z: input.shift ? 'redo' : 'undo', y: 'redo' }[input.key.toLowerCase()];
     if (command) { event.preventDefault(); if (!input.isAutoRepeat) sendMenuAction('presentation-' + command); }
   });
@@ -477,13 +516,14 @@ async function createWindow() {
     const previous = presentationWindowState;
     presentationWindowState = null;
     mainWindow.setMenuBarVisibility(previous.menuBarVisible);
+    mainWindow.webContents.setBackgroundThrottling(true);
     mainWindow.webContents.send('slide-studio:presentation-ended');
   });
   mainWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
     if (mainFrame && !inPlace) { clearCaptureSources(); setPresentationMode(false); }
   });
   mainWindow.webContents.on('render-process-gone', () => { clearCaptureSources(); setPresentationMode(false); });
-  mainWindow.on('closed', () => { clearCaptureSources(); presentationWindowState = null; mainWindow = null; });
+  mainWindow.on('closed', () => { for(const child of presenterWindows)if(!child.isDestroyed())child.destroy();presenterWindows.clear();clearCaptureSources(); presentationWindowState = null; mainWindow = null; });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
   try {

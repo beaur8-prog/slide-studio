@@ -89,11 +89,17 @@ try {
       });
       const stats = await page.evaluate(async (file) => {
         const { importPptx } = await import("/src/io.ts");
+        const { tableTextElements } = await import("/src/table.ts");
         const bytes = await (await fetch(`/qa/samples/${file}`)).arrayBuffer();
         const start = performance.now();
         try {
           const result = await importPptx(bytes);
           const ms = performance.now() - start;
+          const texts = result.deck.slides.flatMap((s) =>
+            s.elements.flatMap((e) =>
+              e.table ? tableTextElements(e) : e.text !== undefined ? [e] : [],
+            ),
+          );
           return {
             status: "parsed",
             import_ms: ms,
@@ -104,14 +110,9 @@ try {
               (n, s) => n + s.elements.length,
               0,
             ),
-            text_elements: result.deck.slides
-              .flatMap((s) => s.elements)
-              .filter((e) => e.type === "text").length,
-            hangul_elements: result.deck.slides
-              .flatMap((s) => s.elements)
-              .filter((e) => /[가-힣]/.test(e.text || "")).length,
-            warnings: result.warnings,
-            expanded_model_chars: JSON.stringify(result.deck).length,
+            text_elements: texts.length,
+            hangul_elements: texts.filter((e) => /[가-힣]/.test(e.text ?? ""))
+              .length,
           };
         } catch (error) {
           return {
@@ -182,20 +183,35 @@ try {
                 const boxes = Array.from(
                   slide.querySelectorAll(".slide-element"),
                 );
-                const text = boxes.filter((box) =>
-                  box.querySelector(".element-text"),
+                const text = Array.from(
+                  slide.querySelectorAll(".element-text,.table-cell-text"),
                 );
                 const overflow = text
                   .map((box, element) => {
-                    const el = box.querySelector(".element-text");
+                    const el = box,
+                      cell = el.classList.contains("table-cell-text")
+                        ? el.closest("[data-row][data-column]")
+                        : null;
+                    const cellStyle = cell ? getComputedStyle(cell) : null;
+                    const height = cell
+                      ? cell.clientHeight -
+                        parseFloat(cellStyle.paddingTop) -
+                        parseFloat(cellStyle.paddingBottom)
+                      : el.clientHeight;
+                    const width = cell
+                      ? cell.clientWidth -
+                        parseFloat(cellStyle.paddingLeft) -
+                        parseFloat(cellStyle.paddingRight)
+                      : el.clientWidth;
                     return {
                       element,
                       text: el.textContent.slice(0, 100),
-                      overflow_y: el.scrollHeight - el.clientHeight,
-                      overflow_x: el.scrollWidth - el.clientWidth,
-                      width: el.clientWidth,
-                      height: el.clientHeight,
-                      clipping: getComputedStyle(el).overflow === "hidden",
+                      overflow_y: el.scrollHeight - height,
+                      overflow_x: el.scrollWidth - width,
+                      width,
+                      height,
+                      clipping:
+                        getComputedStyle(cell ?? el).overflow === "hidden",
                     };
                   })
                   .filter((el) => el.overflow_y > 2 || el.overflow_x > 2);
@@ -203,7 +219,7 @@ try {
                 const slideRect = slide.getBoundingClientRect();
                 const glyphs = text.map((box) => {
                   const walker = document.createTreeWalker(
-                      box.querySelector(".element-text"),
+                      box,
                       NodeFilter.SHOW_TEXT,
                     ),
                     rects = [];
@@ -406,6 +422,7 @@ try {
             item.round_trip = await page.evaluate(async () => {
               const { loadAutosave } = await import("/src/storage.ts");
               const { exportPptx, importPptx } = await import("/src/io.ts");
+              const { tableTextElements } = await import("/src/table.ts");
               const deck = await loadAutosave(),
                 start = performance.now();
               const bytes = await exportPptx(deck),
@@ -414,7 +431,13 @@ try {
               const texts = (d) =>
                 d.slides.map((s) =>
                   s.elements
-                    .filter((e) => e.type === "text")
+                    .flatMap((e) =>
+                      e.table
+                        ? tableTextElements(e)
+                        : e.text !== undefined
+                          ? [e]
+                          : [],
+                    )
                     .map((e) => e.text),
                 );
               const images = (d) =>

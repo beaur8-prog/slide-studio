@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { SlideElement, TableData } from "./types";
 import { resizeTableBoundary, tableSizes, type TableCellRange } from "./table";
-import { TableVisual } from "./TableEditor";
+import { TableVisual, type TableInlineEditing } from "./TableEditor";
 
 type Axis = "column" | "row";
 type Resize = {
@@ -25,6 +25,7 @@ export function TableResizer({
   selection,
   onStart,
   onCommit,
+  inlineEditing,
 }: {
   element: SlideElement;
   scale: number;
@@ -33,6 +34,7 @@ export function TableResizer({
   selection?: TableCellRange;
   onStart: () => void;
   onCommit: (before: TableData, after: TableData) => void;
+  inlineEditing?: TableInlineEditing;
 }) {
   const [preview, setPreview] = useState<TableData | null>(null);
   const [active, setActive] = useState<string | null>(null);
@@ -241,6 +243,7 @@ export function TableResizer({
       <TableVisual
         element={preview ? { ...element, table } : element}
         selection={selection}
+        inlineEditing={inlineEditing}
       />
       {enabled && !element.locked && (
         <>

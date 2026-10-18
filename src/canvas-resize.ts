@@ -9,6 +9,36 @@ export function selectionBounds(elements: SlideElement[]) {
     height: Math.max(...elements.map((e) => e.y + e.height)) - y,
   };
 }
+export function rotateElements(
+  elements: SlideElement[],
+  ids: string[],
+  delta: number,
+): SlideElement[] {
+  const moving = elements.filter((e) => ids.includes(e.id) && !e.locked);
+  if (!moving.length) return elements;
+  const box = selectionBounds(moving),
+    cx = box.x + box.width / 2,
+    cy = box.y + box.height / 2;
+  const angle = (delta * Math.PI) / 180;
+  return elements.map((e) =>
+    !ids.includes(e.id) || e.locked
+      ? e
+      : {
+          ...e,
+          x:
+            cx +
+            (e.x + e.width / 2 - cx) * Math.cos(angle) -
+            (e.y + e.height / 2 - cy) * Math.sin(angle) -
+            e.width / 2,
+          y:
+            cy +
+            (e.x + e.width / 2 - cx) * Math.sin(angle) +
+            (e.y + e.height / 2 - cy) * Math.cos(angle) -
+            e.height / 2,
+          rotation: e.rotation + delta,
+        },
+  );
+}
 export function resizeElements(
   elements: SlideElement[],
   ids: string[],

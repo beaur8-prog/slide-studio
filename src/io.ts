@@ -1,3 +1,16 @@
+import { readGradient, writeGradient, validateGradient } from "./gradient";
+import { presetGeometry } from "./drawing-presets";
+import { drawingTextFrame } from "./drawing-guides";
+import { normalizeObjectAlpha, rgbToHsl, hslToRgb } from "./colors";
+import {
+  record,
+  stringValue,
+  numberValue,
+  booleanValue,
+  enumValue,
+  colorValue,
+} from "./validation";
+import { validateParagraphs } from "./text-validation";
 import JSZip from "jszip";
 import PptxGenJS from "pptxgenjs";
 import type {
@@ -14,6 +27,7 @@ import { paragraphLines, paragraphText } from "./text-layout";
 import { drawingPaths } from "./drawing-path";
 import { readTextBody } from "./pptx-text";
 import { restoreLayoutXml } from "./pptx-export-layout";
+import { writeGroups } from "./object-groups";
 import {
   writeObjectState,
   readObjectState,
@@ -24,7 +38,14 @@ import {
   preserveObjectLinks,
   restoreInsertFields,
 } from "./pptx-insert-fields";
-import { tableCellStyle, tableSizes, validateTable } from "./table";
+import {
+  createTable,
+  MAX_TABLE_ROWS,
+  MAX_TABLE_COLUMNS,
+  tableCellStyle,
+  tableSizes,
+  validateTable,
+} from "./table";
 import { resolveDeckFields, validateElementLink } from "./insert-fields";
 
 // The editor uses CSS pixels. OOXML uses English Metric Units and PptxGenJS
@@ -57,72 +78,6 @@ function fail(message: string): never {
 }
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
-
-function record(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    fail(`${label}: 올바른 객체가 아닙니다.`);
-  return value as Record<string, unknown>;
-}
-function stringValue(
-  value: unknown,
-  label: string,
-  max = 100000,
-  allowEmpty = true,
-): string {
-  if (
-    typeof value !== "string" ||
-    value.length > max ||
-    (!allowEmpty && !value.trim())
-  )
-    fail(`${label}: 문자열이 없거나 너무 깁니다.`);
-  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(value as string))
-    fail(`${label}: 지원하지 않는 제어 문자가 있습니다.`);
-  return value as string;
-}
-function numberValue(
-  value: unknown,
-  label: string,
-  min: number,
-  max: number,
-): number {
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value) ||
-    value < min ||
-    value > max
-  )
-    fail(`${label}: ${min}–${max} 범위의 숫자가 필요합니다.`);
-  return value as number;
-}
-function booleanValue(value: unknown, label: string): boolean {
-  if (typeof value !== "boolean") fail(`${label}: 불리언 값이 필요합니다.`);
-  return value as boolean;
-}
-function colorValue(
-  value: unknown,
-  label: string,
-  transparent = false,
-): string {
-  if (transparent && value === "transparent") return "transparent";
-  if (typeof value !== "string") fail(`${label}: HEX 색상이 필요합니다.`);
-  const hex = (value as string).replace(/^#/, "");
-  if (/^[0-9a-f]{3}$/i.test(hex))
-    return `#${[...hex]
-      .map((x) => x + x)
-      .join("")
-      .toUpperCase()}`;
-  if (!/^[0-9a-f]{6}$/i.test(hex)) fail(`${label}: HEX 색상이 필요합니다.`);
-  return `#${hex.toUpperCase()}`;
-}
-function enumValue<T extends string>(
-  value: unknown,
-  values: readonly T[],
-  label: string,
-): T {
-  if (typeof value !== "string" || !values.includes(value as T))
-    fail(`${label}: 지원하지 않는 값입니다.`);
-  return value as T;
-}
 
 function rasterMime(bytes: Uint8Array): string | undefined {
   if (
@@ -233,6 +188,9 @@ export function parseDeckJson(text: string): Deck {
           ? { hidden: booleanValue(slide.hidden, `${label} 숨김`) }
           : {}),
         background: colorValue(slide.background, `${label} 배경`),
+        ...(slide.backgroundGradient !== undefined
+          ? { backgroundGradient: validateGradient(slide.backgroundGradient) }
+          : {}),
         notes: stringValue(slide.notes, `${label} 발표 노트`, 500000),
         transition: enumValue(
           slide.transition,
@@ -264,11 +222,70 @@ export function parseDeckJson(text: string): Deck {
           if (elementIds.has(el.id))
             fail(`${label}: 개체 ID가 중복되어 있습니다.`);
           elementIds.add(el.id);
+          for (const key of [
+            "fillOpacity",
+            "strokeOpacity",
+            "textOpacity",
+          ] as const)
+            if (source[key] !== undefined)
+              el[key] = numberValue(source[key], elLabel, 0, 1);
+          if (source.gradient !== undefined)
+            el.gradient = validateGradient(source.gradient);
+          if (source.shadow !== undefined) {
+            const v = record(source.shadow, elLabel);
+            el.shadow = {
+              color: colorValue(v.color, elLabel),
+              opacity: numberValue(v.opacity, elLabel, 0, 1),
+              blur: numberValue(v.blur, elLabel, 0, 10000),
+              dx: numberValue(v.dx, elLabel, -100000, 100000),
+              dy: numberValue(v.dy, elLabel, -100000, 100000),
+            };
+          }
+          if (source.strokeDash !== undefined) {
+            if (
+              !Array.isArray(source.strokeDash) ||
+              !source.strokeDash.length ||
+              source.strokeDash.length > 32
+            )
+              fail("잘못된 점선 간격");
+            el.strokeDash = source.strokeDash.map((v: unknown) =>
+              numberValue(v, elLabel, 0.01, 100000),
+            );
+          }
+          if (source.strokeCap !== undefined)
+            el.strokeCap = enumValue(
+              source.strokeCap,
+              ["butt", "round", "square"] as const,
+              elLabel,
+            );
+          if (source.groups !== undefined) {
+            if (
+              !Array.isArray(source.groups) ||
+              source.groups.length > 30 ||
+              new Set(source.groups).size !== source.groups.length
+            )
+              fail(`${elLabel}: 잘못된 그룹 계층`);
+            el.groups = source.groups.map((id: unknown) =>
+              stringValue(id, `${elLabel} 그룹`, 160, false),
+            );
+          }
           if (el.type === "table") {
             el.table = validateTable(source.table);
             elementCount += el.table.cells.length * el.table.cells[0].length;
             if (elementCount > MAX_ELEMENTS)
               fail("표 셀을 포함한 프로젝트 개체 수가 10,000개를 초과합니다.");
+          }
+          if (source.textFrame !== undefined) {
+            if (
+              !Array.isArray(source.textFrame) ||
+              source.textFrame.length !== 4
+            )
+              fail("잘못된 도형 텍스트 영역");
+            el.textFrame = source.textFrame.map((v: unknown) =>
+              numberValue(v, elLabel, -10, 10),
+            ) as SlideElement["textFrame"];
+            if (el.textFrame![2] <= 0 || el.textFrame![3] <= 0)
+              fail("도형 텍스트 영역의 너비와 높이는 양수여야 합니다.");
           }
           if (source.hyperlink !== undefined)
             el.hyperlink = validateElementLink(source.hyperlink);
@@ -431,109 +448,18 @@ export function parseDeckJson(text: string): Deck {
               return {
                 color: colorValue(b.color, elLabel, true),
                 width: numberValue(b.width, elLabel, 0, 1000),
+                ...(b.opacity !== undefined
+                  ? { opacity: numberValue(b.opacity, elLabel, 0, 1) }
+                  : {}),
               };
             }) as NonNullable<SlideElement["borders"]>;
           }
-          if (source.paragraphs !== undefined) {
-            if (
-              !Array.isArray(source.paragraphs) ||
-              source.paragraphs.length > 2000
-            )
-              fail(`${elLabel}: 문단 수가 너무 많습니다.`);
-            let runCount = 0;
-            el.paragraphs = source.paragraphs.map((value: unknown) => {
-              const p = record(value, elLabel);
-              if (!Array.isArray(p.runs) || (runCount += p.runs.length) > 10000)
-                fail(`${elLabel}: 글자 서식 수가 너무 많습니다.`);
-              const paragraph: TextParagraph = {
-                runs: p.runs.map((raw: unknown) => {
-                  const r = record(raw, elLabel);
-                  const run: TextRun = { text: stringValue(r.text, elLabel) };
-                  if (r.fontFamily !== undefined)
-                    run.fontFamily = stringValue(
-                      r.fontFamily,
-                      elLabel,
-                      200,
-                      false,
-                    );
-                  if (r.fontSize !== undefined)
-                    run.fontSize = numberValue(r.fontSize, elLabel, 1, 1000);
-                  if (r.fontFamilyEastAsian !== undefined)
-                    run.fontFamilyEastAsian = stringValue(
-                      r.fontFamilyEastAsian,
-                      elLabel,
-                      200,
-                      false,
-                    );
-                  if (r.language !== undefined)
-                    run.language = stringValue(r.language, elLabel, 80, false);
-                  if (r.letterSpacing !== undefined)
-                    run.letterSpacing = numberValue(
-                      r.letterSpacing,
-                      elLabel,
-                      -1000,
-                      1000,
-                    );
-                  if (r.kerning !== undefined)
-                    run.kerning = numberValue(r.kerning, elLabel, 0, 10000);
-                  for (const key of ["bold", "italic", "underline"] as const)
-                    if (r[key] !== undefined)
-                      run[key] = booleanValue(r[key], elLabel);
-                  if (r.color !== undefined)
-                    run.color = colorValue(r.color, elLabel);
-                  if (r.baseline !== undefined)
-                    run.baseline = numberValue(
-                      r.baseline,
-                      elLabel,
-                      -100000,
-                      100000,
-                    );
-                  return run;
-                }),
-              };
-              if (p.align !== undefined)
-                paragraph.align = enumValue(
-                  p.align,
-                  ["left", "center", "right"] as const,
-                  elLabel,
-                );
-              if (p.bulletPrefix !== undefined)
-                paragraph.bulletPrefix = stringValue(
-                  p.bulletPrefix,
-                  elLabel,
-                  200,
-                  false,
-                );
-              for (const key of [
-                "fontSize",
-                "lineHeight",
-                "lineSpacing",
-                "spaceBefore",
-                "spaceAfter",
-                "marginLeft",
-                "marginRight",
-                "indent",
-                "tabSize",
-              ] as const)
-                if (p[key] !== undefined)
-                  paragraph[key] = numberValue(
-                    p[key],
-                    elLabel,
-                    key === "indent" ? -10000 : 0,
-                    key === "lineHeight" ? 20 : 10000,
-                  );
-              for (const key of [
-                "latinLineBreak",
-                "eastAsianLineBreak",
-                "hangingPunctuation",
-              ] as const)
-                if (p[key] !== undefined)
-                  paragraph[key] = booleanValue(p[key], elLabel);
-              return paragraph;
-            });
-            if (paragraphText(el.paragraphs) !== el.text)
-              fail(`${elLabel}: 문단과 텍스트가 일치하지 않습니다.`);
-          }
+          if (source.paragraphs !== undefined)
+            el.paragraphs = validateParagraphs(
+              source.paragraphs,
+              el.text ?? "",
+              elLabel,
+            );
           if (source.paths !== undefined) {
             if (!Array.isArray(source.paths) || source.paths.length > 100)
               fail(`${elLabel}: 경로 수가 너무 많습니다.`);
@@ -671,14 +597,138 @@ function restoreTableXml(doc: Document, elements: SlideElement[]) {
     const props = child(table, "tblPr");
     props?.setAttribute("firstRow", data.header ? "1" : "0");
     props?.setAttribute("bandRow", data.striped ? "1" : "0");
-    for (const color of all(table, "srgbClr")) {
-      child(color, "alpha")?.remove();
-      if (element.opacity < 1) {
-        const alpha = doc.createElementNS(A, "a:alpha");
-        alpha.setAttribute("val", String(Math.round(element.opacity * 100000)));
-        color.appendChild(alpha);
-      }
-    }
+    children(table, "tr").forEach((row, r) =>
+      children(row, "tc").forEach((cell, c) => {
+        const merge = data.merges?.find(
+          (m) =>
+            r >= m.row &&
+            r < m.row + m.rowSpan &&
+            c >= m.column &&
+            c < m.column + m.columnSpan,
+        );
+        if (merge) {
+          if (r === merge.row && c === merge.column) {
+            if (merge.rowSpan > 1)
+              cell.setAttribute("rowSpan", String(merge.rowSpan));
+            if (merge.columnSpan > 1)
+              cell.setAttribute("gridSpan", String(merge.columnSpan));
+          } else {
+            if (r === merge.row && merge.rowSpan > 1)
+              cell.setAttribute("rowSpan", String(merge.rowSpan));
+            if (c === merge.column && merge.columnSpan > 1)
+              cell.setAttribute("gridSpan", String(merge.columnSpan));
+            if (r > merge.row) cell.setAttribute("vMerge", "1");
+            if (c > merge.column) cell.setAttribute("hMerge", "1");
+          }
+        }
+        const style = tableCellStyle(data, r, c),
+          body = child(cell, "txBody"),
+          cp = child(cell, "tcPr");
+        if (body && style.paragraphs) {
+          const P =
+            "http://schemas.openxmlformats.org/presentationml/2006/main";
+          const temporary = doc.implementation.createDocument(P, "p:sp"),
+            root = temporary.documentElement;
+          const nv = temporary.createElementNS(P, "p:nvSpPr"),
+            named = temporary.createElementNS(P, "p:cNvPr");
+          const name = `cell-${r}-${c}`;
+          named.setAttribute("name", name);
+          nv.append(named);
+          root.append(nv, temporary.importNode(body, true));
+          restoreLayoutXml(temporary, [
+            {
+              id: name,
+              type: "text",
+              text: cells[r][c],
+              paragraphs: style.paragraphs,
+              x: 0,
+              y: 0,
+              width: widths[c] / EMU_PER_PX,
+              height: heights[r] / EMU_PER_PX,
+              rotation: 0,
+              opacity: element.opacity,
+              textOpacity: style.textOpacity,
+              fontFamily: style.fontFamily,
+              fontSize: style.fontSize,
+              bold: style.bold,
+              italic: style.italic,
+              underline: style.underline,
+              color: style.color,
+              align: style.align,
+              textInsets: style.textInsets ?? [
+                style.padding,
+                style.padding,
+                style.padding,
+                style.padding,
+              ],
+              wrap: true,
+            },
+          ]);
+          body.replaceWith(doc.importNode(child(root, "txBody")!, true));
+        }
+        if (cp && style.textInsets)
+          ["marT", "marR", "marB", "marL"].forEach((key, i) =>
+            cp.setAttribute(
+              key,
+              String(Math.round(style.textInsets![i] * EMU_PER_PX)),
+            ),
+          );
+        if (cp && style.fill === "transparent") {
+          child(cp, "solidFill")?.remove();
+          cp.append(doc.createElementNS(A, "a:noFill"));
+        }
+        if (cp && style.borders)
+          ["T", "R", "B", "L"].forEach((side, i) => {
+            child(cp, "ln" + side)?.remove();
+            const border = style.borders![i],
+              line = doc.createElementNS(A, "a:ln" + side);
+            line.setAttribute(
+              "w",
+              String(Math.round(border.width * EMU_PER_PX)),
+            );
+            const fill = doc.createElementNS(
+              A,
+              border.color === "transparent" || !border.width
+                ? "a:noFill"
+                : "a:solidFill",
+            );
+            if (fill.localName === "solidFill") {
+              const color = doc.createElementNS(A, "a:srgbClr");
+              color.setAttribute("val", border.color.replace("#", ""));
+              fill.append(color);
+            }
+            line.append(fill);
+            cp.append(line);
+          });
+      }),
+    );
+    children(table, "tr").forEach((row, r) =>
+      children(row, "tc").forEach((cell, c) => {
+        const style = tableCellStyle(data, r, c),
+          cp = child(cell, "tcPr"),
+          body = child(cell, "txBody");
+        const alpha = (container: Element | undefined, opacity: number) => {
+          if (!container) return;
+          for (const color of all(container, "srgbClr")) {
+            child(color, "alpha")?.remove();
+            if (opacity !== 1) {
+              const a = doc.createElementNS(A, "a:alpha");
+              a.setAttribute("val", String(Math.round(opacity * 100000)));
+              color.append(a);
+            }
+          }
+        };
+        alpha(child(cp, "solidFill"), element.opacity * style.fillOpacity);
+        ["T", "R", "B", "L"].forEach((side, i) =>
+          alpha(
+            child(cp, "ln" + side),
+            element.opacity *
+              (style.borders?.[i]?.opacity ?? style.strokeOpacity),
+          ),
+        );
+        if (!style.paragraphs) alpha(body, element.opacity * style.textOpacity);
+      }),
+    );
   }
 }
 
@@ -725,12 +775,14 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
         transparency:
           el.stroke === "transparent" || !el.stroke || !el.strokeWidth
             ? 100
-            : transparency,
+            : (1 - el.opacity * (el.strokeOpacity ?? 1)) * 100,
       };
       const fill: PptxGenJS.ShapeFillProps = {
         color: hex(el.fill, "FFFFFF"),
         transparency:
-          !el.fill || el.fill === "transparent" ? 100 : transparency,
+          !el.fill || el.fill === "transparent"
+            ? 100
+            : (1 - el.opacity * (el.fillOpacity ?? 1)) * 100,
       };
       if (
         el.borders?.every(
@@ -745,10 +797,13 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
         line.transparency =
           b.color === "transparent" || !b.width ? 100 : transparency;
       }
-      if (el.type === "text") {
+      if (
+        el.type === "text" ||
+        (el.type === "shape" && el.text !== undefined)
+      ) {
         slide.addText(el.text ?? "", {
           ...box,
-          objectName: el.id,
+          objectName: el.type === "shape" ? `${el.id}-textbody` : el.id,
           fontFace: el.fontFamily ?? "Arial",
           fontSize: (el.fontSize ?? 32) * 0.75,
           bold: el.bold ?? false,
@@ -771,12 +826,14 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
           paraSpaceBefore: 0,
           fit: "none",
           wrap: el.wrap ?? true,
-          transparency,
+          transparency: (1 - el.opacity * (el.textOpacity ?? 1)) * 100,
           isTextBox: true,
           fill,
           line,
         });
-      } else if (el.type === "table" && el.table) {
+      }
+      if (el.type === "text") continue;
+      if (el.type === "table" && el.table) {
         const table = el.table;
         slide.addTable(
           table.cells.map((row, r) =>
@@ -788,6 +845,12 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
                   fill: { color: hex(style.fill, "FFFFFF"), transparency },
                   color: hex(style.color, "233D35"),
                   bold: style.bold,
+                  italic: style.italic,
+                  underline: {
+                    style: style.underline
+                      ? ("sng" as const)
+                      : ("none" as const),
+                  },
                   fontFace: style.fontFamily,
                   fontSize: style.fontSize * 0.75,
                   align: style.align,
@@ -889,11 +952,86 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
     const doc = xmlDocument(xml, path);
     if (slide.hidden) doc.documentElement.setAttribute("show", "0");
     else doc.documentElement.removeAttribute("show");
+    if (slide.backgroundGradient) {
+      const cs = child(doc.documentElement, "cSld")!;
+      let bg = child(cs, "bg");
+      if (!bg) {
+        bg = doc.createElementNS(
+          "http://schemas.openxmlformats.org/presentationml/2006/main",
+          "p:bg",
+        );
+        cs.insertBefore(bg, cs.firstChild);
+      }
+      let props = child(bg, "bgPr");
+      if (!props) {
+        props = doc.createElementNS(
+          "http://schemas.openxmlformats.org/presentationml/2006/main",
+          "p:bgPr",
+        );
+        bg.append(props);
+      }
+      writeGradient(doc, props, slide.backgroundGradient);
+    }
     preserveObjectLinks(doc, slide.elements);
     restoreLayoutXml(doc, slide.elements);
     restoreInsertFields(doc, slide.elements);
     restoreTableXml(doc, slide.elements);
+    const relationshipPath = `ppt/slides/_rels/slide${index + 1}.xml.rels`;
+    const relationshipDoc = xmlDocument(
+      await zip.file(relationshipPath)!.async("string"),
+      relationshipPath,
+    );
+    const relationshipNs =
+      "http://schemas.openxmlformats.org/package/2006/relationships";
+    let linkIndex = 0;
+    const linkIds = new Map<string, string>();
+    for (const props of all(doc, "rPr")) {
+      const raw = props.getAttribute("data-ss-link");
+      if (!raw) continue;
+      props.removeAttribute("data-ss-link");
+      const link = validateElementLink(JSON.parse(raw)),
+        key = JSON.stringify(link);
+      let id = linkIds.get(key);
+      if (!id) {
+        do {
+          id = `rIdSS${++linkIndex}`;
+        } while (
+          all(relationshipDoc, "Relationship").some(
+            (n) => n.getAttribute("Id") === id,
+          )
+        );
+        const rel = relationshipDoc.createElementNS(
+          relationshipNs,
+          "Relationship",
+        );
+        rel.setAttribute("Id", id);
+        if (link.url) {
+          rel.setAttribute("Type", REL_NS + "/hyperlink");
+          rel.setAttribute("Target", link.url);
+          rel.setAttribute("TargetMode", "External");
+        } else {
+          const target = deck.slides.findIndex((s) => s.id === link.slideId);
+          if (target < 0) continue;
+          rel.setAttribute("Type", REL_NS + "/slide");
+          rel.setAttribute("Target", `slide${target + 1}.xml`);
+        }
+        relationshipDoc.documentElement.append(rel);
+        linkIds.set(key, id);
+      }
+      const click = doc.createElementNS(
+        "http://schemas.openxmlformats.org/drawingml/2006/main",
+        "a:hlinkClick",
+      );
+      click.setAttributeNS(REL_NS, "r:id", id);
+      if (link.slideId) click.setAttribute("action", "ppaction://hlinksldjump");
+      props.append(click);
+    }
+    zip.file(
+      relationshipPath,
+      new XMLSerializer().serializeToString(relationshipDoc),
+    );
     writeObjectState(doc, slide.elements);
+    writeGroups(doc, slide.elements);
     xml = new XMLSerializer().serializeToString(doc);
     zip.file(
       path,
@@ -1119,12 +1257,18 @@ function readColor(
     "sysClr",
     "scrgbClr",
     "prstClr",
+    "hslClr",
   ].includes(container.localName)
     ? container
     : Array.from(container.children).find((el) =>
-        ["srgbClr", "schemeClr", "sysClr", "scrgbClr", "prstClr"].includes(
-          el.localName,
-        ),
+        [
+          "srgbClr",
+          "schemeClr",
+          "sysClr",
+          "scrgbClr",
+          "prstClr",
+          "hslClr",
+        ].includes(el.localName),
       );
   if (!node) return undefined;
   let value: string | undefined;
@@ -1137,7 +1281,28 @@ function readColor(
     const last = node.getAttribute("lastClr") ?? "";
     value = /^[0-9a-f]{6}$/i.test(last) ? `#${last}` : PRESET_COLORS[val];
   }
-  if (node.localName === "prstClr") value = PRESET_COLORS[val];
+  if (node.localName === "prstClr") {
+    value = PRESET_COLORS[val];
+    const name = val
+      .replace(/^lt/, "light")
+      .replace(/^dk/, "dark")
+      .replace(/^med/, "medium");
+    if (!value && /^[a-z]{1,40}$/i.test(name) && CSS.supports("color", name)) {
+      const context = document.createElement("canvas").getContext("2d")!;
+      context.fillStyle = name;
+      value = context.fillStyle;
+    }
+  }
+  if (node.localName === "hslClr")
+    value =
+      "#" +
+      hslToRgb([
+        attrNumber(node, "hue") / 60000,
+        attrNumber(node, "sat") / 100000,
+        attrNumber(node, "lum") / 100000,
+      ])
+        .map((c) => Math.round(c).toString(16).padStart(2, "0"))
+        .join("");
   if (node.localName === "scrgbClr")
     value =
       "#" +
@@ -1155,10 +1320,20 @@ function readColor(
     const amount = attrNumber(transform, "val", 100000) / 100000;
     if (transform.localName === "tint")
       rgb = rgb.map((c) => c * amount + 255 * (1 - amount));
-    if (transform.localName === "shade" || transform.localName === "lumMod")
-      rgb = rgb.map((c) => c * amount);
-    if (transform.localName === "lumOff")
-      rgb = rgb.map((c) => c + 255 * amount);
+    if (transform.localName === "shade") rgb = rgb.map((c) => c * amount);
+    if (/^(?:lum|sat|hue)(?:Mod|Off)?$/.test(transform.localName)) {
+      const name = transform.localName,
+        hsl = rgbToHsl(rgb),
+        index = name.startsWith("hue") ? 0 : name.startsWith("sat") ? 1 : 2;
+      const val =
+        index === 0 ? attrNumber(transform, "val", 0) / 60000 : amount;
+      hsl[index] = name.endsWith("Mod")
+        ? hsl[index] * amount
+        : name.endsWith("Off")
+          ? hsl[index] + val
+          : val;
+      rgb = hslToRgb(hsl);
+    }
     if (transform.localName === "alpha") opacity = amount;
     if (transform.localName === "alphaMod") opacity *= amount;
     if (transform.localName === "alphaOff") opacity += amount;
@@ -1544,7 +1719,11 @@ export async function importPptx(
     const bgColor =
       readColor(child(child(backgroundNode, "bgPr"), "solidFill"), theme) ??
       readColor(child(backgroundNode, "bgRef"), theme);
-    if (backgroundNode && !bgColor)
+    const bgGradient = readGradient(
+      child(child(backgroundNode, "bgPr"), "gradFill"),
+      (n) => readColor(n, theme),
+    );
+    if (backgroundNode && !bgColor && !bgGradient)
       warn(
         "일부 배경의 그라데이션·이미지·효과는 단색 배경으로 대체되었습니다.",
       );
@@ -1556,6 +1735,7 @@ export async function importPptx(
         ? { hidden: true }
         : {}),
       background: bgColor?.color ?? "#FFFFFF",
+      ...(bgGradient ? { backgroundGradient: bgGradient } : {}),
       notes: "",
       transition: "none",
       elements: [],
@@ -1594,12 +1774,13 @@ export async function importPptx(
       }
       if (++count > MAX_ELEMENTS || slide.elements.length >= 1000)
         fail("PPTX 개체 수가 지원 한도를 초과합니다.");
+      normalizeObjectAlpha(el);
       slide.elements.push(el);
     };
     const readFill = (
       nodes: (Element | undefined)[],
       defaultColor = "transparent",
-    ): Color => {
+    ): Color & { gradient?: SlideElement["gradient"] } => {
       for (const node of nodes) {
         const properties = child(node, "spPr");
         if (child(properties, "noFill"))
@@ -1609,15 +1790,11 @@ export async function importPptx(
           return solid.opacity === 0
             ? { color: "transparent", opacity: 1 }
             : solid;
-        if (child(properties, "gradFill")) {
-          warn("그라데이션 채우기는 첫 번째 색상의 단색으로 바뀝니다.");
-          return (
-            readColor(first(child(properties, "gradFill"), "gs"), theme) ?? {
-              color: defaultColor,
-              opacity: 1,
-            }
-          );
-        }
+        const gradient = readGradient(child(properties, "gradFill"), (n) =>
+          readColor(n, theme),
+        );
+        if (gradient)
+          return { color: gradient.stops[0].color, opacity: 1, gradient };
         if (child(properties, "pattFill") || child(properties, "blipFill"))
           warn("도형의 패턴·그림 채우기는 가져오지 않습니다.");
         const reference = readColor(
@@ -1641,6 +1818,8 @@ export async function importPptx(
       arrow: boolean;
       start?: LineEnd;
       end?: LineEnd;
+      dash?: number[];
+      cap?: SlideElement["strokeCap"];
     } => {
       for (const node of nodes) {
         const line = child(child(node, "spPr"), "ln");
@@ -1673,11 +1852,27 @@ export async function importPptx(
           };
           const start = marker("headEnd"),
             end = marker("tailEnd");
-          if (
-            child(line, "prstDash")?.getAttribute("val") &&
-            child(line, "prstDash")?.getAttribute("val") !== "solid"
-          )
-            warn("점선과 사용자 지정 선 스타일은 실선으로 바뀝니다.");
+          const presets: Record<string, number[]> = {
+            dot: [1, 3],
+            dash: [4, 3],
+            lgDash: [8, 3],
+            dashDot: [4, 3, 1, 3],
+            lgDashDot: [8, 3, 1, 3],
+            lgDashDotDot: [8, 3, 1, 3, 1, 3],
+            sysDot: [1, 1],
+            sysDash: [3, 1],
+            sysDashDot: [3, 1, 1, 1],
+            sysDashDotDot: [3, 1, 1, 1, 1, 1],
+          };
+          const width = color ? attrNumber(line, "w", 12700) / EMU_PER_PX : 0;
+          const custom = children(child(line, "custDash"), "ds").flatMap(
+            (n) => [attrNumber(n, "d") / 100000, attrNumber(n, "sp") / 100000],
+          );
+          const dash = (
+            custom.length
+              ? custom
+              : presets[child(line, "prstDash")?.getAttribute("val") ?? ""]
+          )?.map((n) => Math.max(0.01, n * width));
           return {
             color:
               color?.opacity === 0
@@ -1688,6 +1883,13 @@ export async function importPptx(
             arrow: end.type !== "none" || start.type !== "none",
             start,
             end,
+            dash,
+            cap:
+              line.getAttribute("cap") === "rnd"
+                ? "round"
+                : line.getAttribute("cap") === "sq"
+                  ? "square"
+                  : "butt",
           };
         }
       }
@@ -1732,6 +1934,21 @@ export async function importPptx(
         cellProperties,
         runDefaults,
         preserveBox,
+        link: (link) => {
+          if (!link) return;
+          const rel = rels.find((r) => r.id === relId(link));
+          if (rel?.external && rel.type.endsWith("/hyperlink")) {
+            try {
+              return validateElementLink({ url: rel.target });
+            } catch {
+              return;
+            }
+          }
+          if (rel?.path && rel.type.endsWith("/slide")) {
+            const id = slidePathIds.get(rel.path);
+            if (id) return { slideId: id };
+          }
+        },
       });
     };
 
@@ -1749,11 +1966,13 @@ export async function importPptx(
         return;
       }
       if (
-        first(properties, "effectLst")?.children.length ||
+        Array.from(first(properties, "effectLst")?.children ?? []).some(
+          (n) => n.localName !== "outerShdw",
+        ) ||
         first(properties, "scene3d") ||
         first(properties, "sp3d")
       )
-        warn("그림자·광택·3D 효과는 가져오지 않습니다.");
+        warn("광택·반사·내부 그림자·3D 효과는 가져오지 않습니다.");
       const geometryProperties = chain
         .map((s) => child(s, "spPr"))
         .find((p) => child(p, "prstGeom") || child(p, "custGeom"));
@@ -1762,6 +1981,24 @@ export async function importPptx(
         (node.localName === "cxnSp" ? "line" : "rect");
       const fill = readFill(chain);
       const line = readLine(chain);
+      const effect = chain
+          .map((n) => child(child(n, "spPr"), "effectLst"))
+          .find(Boolean),
+        shadowNode = child(effect, "outerShdw"),
+        shadowColor = readColor(shadowNode, theme);
+      const distance = attrNumber(shadowNode, "dist") / EMU_PER_PX,
+        direction = ((attrNumber(shadowNode, "dir") / 60000) * Math.PI) / 180;
+      const shadow =
+        shadowNode && shadowColor
+          ? {
+              color: shadowColor.color,
+              opacity: shadowColor.opacity,
+              blur: attrNumber(shadowNode, "blurRad") / EMU_PER_PX,
+              dx: distance * Math.cos(direction),
+              dy: distance * Math.sin(direction),
+            }
+          : undefined;
+
       let paths = drawingPaths(child(geometryProperties, "custGeom"), {
         width: attrNumber(child(xfrm, "ext"), "cx"),
         height: attrNumber(child(xfrm, "ext"), "cy"),
@@ -1802,6 +2039,27 @@ export async function importPptx(
             : "";
         paths = [{ d: outer + inner, width, height, fill: true, stroke: true }];
       }
+      const extent = {
+        width: attrNumber(child(xfrm, "ext"), "cx"),
+        height: attrNumber(child(xfrm, "ext"), "cy"),
+      };
+      const sourceGeometry =
+        child(geometryProperties, "custGeom") ??
+        presetGeometry(
+          preset,
+          child(child(geometryProperties, "prstGeom"), "avLst"),
+        );
+      if (
+        !paths &&
+        !SHAPES.has(preset as ShapeKind) &&
+        preset !== "straightConnector1"
+      )
+        paths = drawingPaths(sourceGeometry, extent);
+      const sourceTextFrame = drawingTextFrame(
+        sourceGeometry,
+        extent.width,
+        extent.height,
+      );
       const body = child(node, "txBody");
       const text = bodyText(body);
       const isTextBox =
@@ -1848,8 +2106,9 @@ export async function importPptx(
         warn(
           "지원하지 않는 도형·자유형 경로는 사각형 또는 선으로 단순화됩니다.",
         );
+      let shapeElement: SlideElement | undefined;
       if (!pureText)
-        addElement({
+        shapeElement = {
           id: uid(),
           type: "shape",
           shape,
@@ -1887,42 +2146,71 @@ export async function importPptx(
                 };
               })()
             : {}),
-          opacity: fill.color !== "transparent" ? fill.opacity : line.opacity,
+          opacity: 1,
+          fillOpacity: fill.opacity,
+          strokeOpacity: line.opacity,
           fill: fill.color,
+          gradient: fill.gradient,
+          shadow,
+          strokeDash: line.dash,
+          strokeCap: line.cap,
           stroke: line.color,
           strokeWidth: line.width,
-        });
-      if (!body || (!text && !pureText)) return;
-      if (!pureText)
-        warn(
-          "텍스트를 포함한 도형은 편집 가능한 도형과 텍스트 상자로 분리됩니다.",
-        );
+        };
+      if (!body || (!text && !pureText)) {
+        if (shapeElement) addElement(shapeElement);
+        return;
+      }
+      const inset =
+        !pureText && (preset === "ellipse" || preset === "donut")
+          ? (1 - Math.SQRT1_2) / 2
+          : 0;
       const textElement = makeText(
         body,
         chain,
-        // Round presets lay text inside their inscribed rectangle, then apply
-        // the body margins. Using the outer bounds changes Korean line breaks.
-        !pureText && (preset === "ellipse" || preset === "donut")
-          ? {
-              ...geometry,
-              x: geometry.x + (geometry.width * (1 - Math.SQRT1_2)) / 2,
-              y: geometry.y + (geometry.height * (1 - Math.SQRT1_2)) / 2,
-              width: geometry.width * Math.SQRT1_2,
-              height: geometry.height * Math.SQRT1_2,
-            }
-          : geometry,
+        geometry,
         parent,
         undefined,
         undefined,
-        pureText &&
-          (fill.color !== "transparent" ||
-            line.width > 0 ||
-            readObjectState(node).preserveBox),
+        true,
       );
+      if (shapeElement) {
+        const {
+          id,
+          type,
+          x,
+          y,
+          width,
+          height,
+          rotation,
+          opacity,
+          fill: textFill,
+          stroke: textStroke,
+          strokeWidth: textStrokeWidth,
+          ...content
+        } = textElement;
+        Object.assign(shapeElement, content, {
+          autoHeight: false,
+          textFrame: sourceTextFrame ?? [
+            inset,
+            inset,
+            1 - 2 * inset,
+            1 - 2 * inset,
+          ],
+        });
+        addElement(shapeElement);
+        return;
+      }
       if (pureText)
         Object.assign(textElement, {
           fill: fill.color,
+          gradient: fill.gradient,
+          shadow,
+          strokeDash: line.dash,
+          strokeCap: line.cap,
+          fillOpacity: fill.opacity,
           stroke: line.color,
+          strokeOpacity: line.opacity,
           strokeWidth: line.width,
         });
       addElement(textElement);
@@ -2177,6 +2465,8 @@ export async function importPptx(
       const pendingCells: {
         el: SlideElement;
         row: number;
+        column: number;
+        columnSpan: number;
         span: number;
         x: number;
       }[] = [];
@@ -2205,13 +2495,28 @@ export async function importPptx(
               "http://schemas.openxmlformats.org/drawingml/2006/main",
               "a:tcPr",
             );
-          const merged =
-            cell.getAttribute("hMerge") === "1" ||
-            cell.getAttribute("vMerge") === "1";
+          const merged = ["hMerge", "vMerge"].some((key) =>
+            ["1", "true"].includes(cell.getAttribute(key) ?? ""),
+          );
           const w = widths.slice(c, c + colSpan).reduce((a, b) => a + b, 0),
             h = rowHeights.slice(r, r + rowSpan).reduce((a, b) => a + b, 0);
-          const body = child(cell, "txBody");
-          if (body && !merged && c < columns.length) {
+          const body =
+            child(cell, "txBody") ??
+            (() => {
+              const empty = cell.ownerDocument.createElementNS(
+                "http://schemas.openxmlformats.org/drawingml/2006/main",
+                "a:txBody",
+              );
+              for (const name of ["bodyPr", "p"])
+                empty.append(
+                  cell.ownerDocument.createElementNS(
+                    empty.namespaceURI,
+                    "a:" + name,
+                  ),
+                );
+              return empty;
+            })();
+          if (!merged && c < columns.length) {
             const names = ["wholeTbl"];
             if (props?.getAttribute("bandRow") === "1")
               names.push(
@@ -2232,6 +2537,34 @@ export async function importPptx(
               names.push("firstRow");
             if (r === rows.length - 1 && props?.getAttribute("lastRow") === "1")
               names.push("lastRow");
+            if (
+              r === 0 &&
+              c === 0 &&
+              props?.getAttribute("firstRow") === "1" &&
+              props?.getAttribute("firstCol") === "1"
+            )
+              names.push("nwCell");
+            if (
+              r === 0 &&
+              c === columns.length - 1 &&
+              props?.getAttribute("firstRow") === "1" &&
+              props?.getAttribute("lastCol") === "1"
+            )
+              names.push("neCell");
+            if (
+              r === rows.length - 1 &&
+              c === 0 &&
+              props?.getAttribute("lastRow") === "1" &&
+              props?.getAttribute("firstCol") === "1"
+            )
+              names.push("swCell");
+            if (
+              r === rows.length - 1 &&
+              c === columns.length - 1 &&
+              props?.getAttribute("lastRow") === "1" &&
+              props?.getAttribute("lastCol") === "1"
+            )
+              names.push("seCell");
             const styles = names
               .reverse()
               .map((n) => child(style, n))
@@ -2273,6 +2606,7 @@ export async function importPptx(
                 paragraph.lineHeight = 1.2;
             }
             el.fill = fill?.color ?? "transparent";
+            el.fillOpacity = fill?.opacity ?? 1;
             el.borders = ["T", "R", "B", "L"].map((suffix, i) => {
               const side = ["top", "right", "bottom", "left"][i];
               const ln =
@@ -2287,6 +2621,7 @@ export async function importPptx(
                   .find(Boolean);
               const color = readColor(child(ln, "solidFill"), theme);
               return {
+                opacity: color?.opacity ?? 1,
                 color: child(ln, "noFill")
                   ? "transparent"
                   : (color?.color ?? "transparent"),
@@ -2296,7 +2631,14 @@ export async function importPptx(
                   : 0,
               };
             }) as NonNullable<SlideElement["borders"]>;
-            pendingCells.push({ el, row: r, span: rowSpan, x });
+            pendingCells.push({
+              el,
+              row: r,
+              column: c,
+              columnSpan: colSpan,
+              span: rowSpan,
+              x,
+            });
           }
           const advance = cells.length < columns.length ? colSpan : 1;
           x += widths.slice(c, c + advance).reduce((a, b) => a + b, 0);
@@ -2349,6 +2691,67 @@ export async function importPptx(
         rowHeights.forEach((_, r) => {
           rowHeights[r] *= geometry.height / baseHeight;
         });
+      // Standard PowerPoint tables need no private extension to stay tables.
+      // The cells retain their paragraphs, asymmetric edges, padding and merges.
+      if (
+        rows.length <= MAX_TABLE_ROWS &&
+        columns.length <= MAX_TABLE_COLUMNS
+      ) {
+        try {
+          const data = createTable(rows.length, columns.length);
+          data.autoRows = false;
+          try {
+            const meta = JSON.parse(marker?.textContent ?? "null");
+            if (
+              meta?.version === 1 &&
+              typeof meta.style?.autoRows === "boolean"
+            )
+              data.autoRows = meta.style.autoRows;
+          } catch {
+            /* Optional editor behavior. */
+          }
+          data.header = false;
+          data.striped = false;
+          data.cells = rows.map(() => columns.map(() => ""));
+          data.cellStyles = rows.map(() => columns.map(() => null));
+          data.columnWidths = widths;
+          data.rowHeights = rowHeights;
+          data.merges = [];
+          for (const { el, row, column, columnSpan, span } of pendingCells) {
+            data.cells[row][column] = el.text ?? "";
+            data.cellStyles[row][column] = {
+              fill: el.fill ?? "transparent",
+              fillOpacity: el.fillOpacity,
+              textOpacity: el.textOpacity,
+              strokeOpacity: el.strokeOpacity,
+              color: el.color ?? data.color,
+              fontFamily: el.fontFamily ?? data.fontFamily,
+              fontSize: el.fontSize ?? data.fontSize,
+              bold: el.bold ?? false,
+              italic: el.italic ?? false,
+              underline: el.underline ?? false,
+              align: el.align ?? "left",
+              verticalAlign: el.verticalAlign ?? "top",
+              padding: 0,
+              textInsets: el.textInsets,
+              borders: el.borders,
+              paragraphs: el.paragraphs,
+            };
+            if (span > 1 || columnSpan > 1)
+              data.merges.push({ row, column, rowSpan: span, columnSpan });
+          }
+          addElement({
+            id: uid(),
+            type: "table",
+            ...geometry,
+            opacity: 1,
+            table: validateTable(data),
+          });
+          return;
+        } catch {
+          // Keep readable cells when a damaged/oversized table is not representable.
+        }
+      }
       for (const { el, row, span, x } of pendingCells) {
         const y = rowHeights.slice(0, row).reduce((a, b) => a + b, 0);
         el.y = geometry.y + y;
@@ -2416,8 +2819,8 @@ export async function importPptx(
             warn(
               "비균일 배율 안의 회전 그룹은 기울임 변환 일부가 생략될 수 있습니다.",
             );
-          warn("그룹은 개별 편집 가능한 개체로 해제됩니다.");
           const firstElement = slide.elements.length;
+          const groupId = uid();
           await walk(
             node,
             {
@@ -2439,6 +2842,11 @@ export async function importPptx(
             sourceRelationships,
             decorationsOnly,
           );
+          for (let i = firstElement; i < slide.elements.length; i++)
+            slide.elements[i].groups = [
+              groupId,
+              ...(slide.elements[i].groups ?? []),
+            ];
           if (rotation || flipH || flipV) {
             // Child coordinates are already translated/scaled into slide
             // space. Reflect and rotate their centers around this group's
@@ -2577,16 +2985,6 @@ export async function importPptx(
               links.every((link) => sameLink(link, candidate)) &&
               textClicks.every((link) => runClicks.includes(link));
             if (!click && fullyCovered) hyperlink = candidate;
-            else if (
-              !click ||
-              textClicks.some((link) => !runClicks.includes(link)) ||
-              links.some(
-                (link, index) => runClicks[index] && !sameLink(link, hyperlink),
-              )
-            )
-              warn(
-                "텍스트 일부에만 연결되거나 서로 다른 대상으로 연결된 하이퍼링크는 유지할 수 없어 제외했습니다. 텍스트는 유지됩니다.",
-              );
           }
           for (let i = elementStart; i < slide.elements.length; i++) {
             const state = readObjectState(node);

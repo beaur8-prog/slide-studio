@@ -233,7 +233,7 @@ test("native nondefault slide numbers preserve cached text even when app metadat
   ]);
 });
 
-test("native text links promote only complete matching runs and warn on partial or mixed targets", async ({
+test("native text links promote only complete matching runs and preserve partial or mixed targets", async ({
   page,
 }) => {
   await page.goto("http://127.0.0.1:5190");
@@ -321,6 +321,9 @@ test("native text links promote only complete matching runs and warn on partial 
         text: e.text,
         hyperlink: e.hyperlink,
       })),
+      runLinks: imported.deck.slides[0].elements.map((e) =>
+        e.paragraphs?.flatMap((p) => p.runs.map((r) => r.hyperlink)),
+      ),
       target: imported.deck.slides[1].id,
       secondUrl: again.deck.slides[0].elements[0].hyperlink?.url,
       secondTarget:
@@ -340,7 +343,13 @@ test("native text links promote only complete matching runs and warn on partial 
   ]);
   expect(result.secondUrl).toBe("https://example.com/native");
   expect(result.secondTarget).toBe(true);
-  expect(result.warnings).toEqual([
-    "텍스트 일부에만 연결되거나 서로 다른 대상으로 연결된 하이퍼링크는 유지할 수 없어 제외했습니다. 텍스트는 유지됩니다.",
+  expect(result.warnings).toEqual([]);
+  expect(result.runLinks[1]).toEqual([
+    { url: "https://example.com/native" },
+    undefined,
+  ]);
+  expect(result.runLinks[2]).toEqual([
+    { url: "https://example.com/native" },
+    { url: "https://example.com/different" },
   ]);
 });

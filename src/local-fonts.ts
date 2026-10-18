@@ -1,5 +1,6 @@
+import { collectionFaces } from "./font-collection";
 // Fonts added here belong to this device. Never copy them into a deck/export.
-export const MAX_LOCAL_FONT_BYTES = 16 * 1024 * 1024;
+export const MAX_LOCAL_FONT_BYTES = 64 * 1024 * 1024;
 export type LocalFont = {
   id: string;
   family: string;
@@ -14,7 +15,7 @@ export const localFontAlias = (family: string) =>
 // Read only bounded OpenType metadata; FontFace performs the actual font validation.
 export function fontMetadata(bytes: Uint8Array): Omit<LocalFont, "bytes"> {
   const invalid = () =>
-    new Error("올바른 TTF 또는 OTF 글꼴 파일을 선택하세요.");
+    new Error("올바른 TTF·OTF·TTC·OTC 글꼴 파일을 선택하세요.");
   if (bytes.byteLength < 12 || bytes.byteLength > MAX_LOCAL_FONT_BYTES)
     throw invalid();
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -171,10 +172,10 @@ export async function addLocalFont(bytes: Uint8Array) {
   if (
     others.length >= 24 ||
     others.reduce((n, f) => n + f.bytes.byteLength, bytes.byteLength) >
-      64 * 1024 * 1024
+      256 * 1024 * 1024
   )
     throw new Error(
-      "추가한 글꼴을 일부 제거한 뒤 다시 시도하세요. (최대 24개, 64MB)",
+      "추가한 글꼴을 일부 제거한 뒤 다시 시도하세요. (최대 24개, 256MB)",
     );
   const font = { ...metadata, bytes: new Uint8Array(bytes) };
   const face = await load(font);
@@ -203,4 +204,41 @@ export async function installLocalFonts() {
   } catch {
     /* Optional storage: editing remains available. */
   }
+}
+
+export async function addLocalFonts(bytes: Uint8Array) {
+  const faces = collectionFaces(bytes, MAX_LOCAL_FONT_BYTES);
+  const additions = faces.map((bytes) => ({
+    ...fontMetadata(bytes),
+    bytes: new Uint8Array(bytes),
+  }));
+  const unique = [
+    ...new Map(additions.map((font) => [font.id, font])).values(),
+  ];
+  const fonts = await storedFonts(),
+    others = fonts.filter((f) => !unique.some((a) => a.id === f.id));
+  if (
+    others.length + unique.length > 24 ||
+    [...others, ...unique].reduce((n, f) => n + f.bytes.byteLength, 0) >
+      256 * 1024 * 1024
+  )
+    throw new Error("최대 24개, 256MB까지 글꼴을 등록할 수 있습니다.");
+  // Validate every face before changing the local collection.
+  const loaded = await Promise.all(
+    unique.map(async (font) => ({ font, faces: await load(font) })),
+  );
+  const db = await database();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("fonts", "readwrite");
+      for (const font of unique) tx.objectStore("fonts").put(font);
+      tx.oncomplete = () => resolve();
+      tx.onerror = tx.onabort = () =>
+        reject(tx.error ?? new Error("글꼴 저장 실패"));
+    });
+  } finally {
+    db.close();
+  }
+  for (const { font, faces } of loaded) activate(font, faces);
+  return unique.map(({ bytes, ...metadata }) => metadata);
 }

@@ -1,3 +1,4 @@
+import { drawingGuides } from "./drawing-guides";
 import type { ShapePath } from "./types";
 
 const child = (n: Element, name: string) =>
@@ -10,6 +11,11 @@ export function drawingPaths(
   const paths = geometry && child(geometry, "pathLst");
   if (!paths) return undefined;
   try {
+    const resolve = drawingGuides(
+      geometry!,
+      fallback?.width ?? 21600,
+      fallback?.height ?? 21600,
+    );
     return Array.from(paths.children).map((path) => {
       const width = Number(path.getAttribute("w") ?? fallback?.width),
         height = Number(path.getAttribute("h") ?? fallback?.height);
@@ -24,8 +30,8 @@ export function drawingPaths(
         y = 0;
       const d: string[] = [];
       const point = (p: Element) => {
-        const a = Number(p.getAttribute("x")),
-          b = Number(p.getAttribute("y"));
+        const a = resolve(p.getAttribute("x")),
+          b = resolve(p.getAttribute("y"));
         if (
           !Number.isFinite(a) ||
           !Number.isFinite(b) ||
@@ -61,18 +67,21 @@ export function drawingPaths(
           d.push(names[command.localName] + " " + pts.flat().join(" "));
           [x, y] = pts.at(-1)!;
         } else if (command.localName === "arcTo") {
-          const rx = Number(command.getAttribute("wR")),
-            ry = Number(command.getAttribute("hR"));
+          const rx = resolve(command.getAttribute("wR")),
+            ry = resolve(command.getAttribute("hR"));
           const start =
-              ((Number(command.getAttribute("stAng")) / 60000) * Math.PI) / 180,
+              ((resolve(command.getAttribute("stAng")) / 60000) * Math.PI) /
+              180,
             swing =
-              ((Number(command.getAttribute("swAng")) / 60000) * Math.PI) / 180;
+              ((resolve(command.getAttribute("swAng")) / 60000) * Math.PI) /
+              180;
           if (
             ![rx, ry, start, swing].every(Number.isFinite) ||
-            rx <= 0 ||
-            ry <= 0
+            rx < 0 ||
+            ry < 0
           )
             throw Error("arc");
+          if (!rx || !ry) continue;
           const cx = x - rx * Math.cos(start),
             cy = y - ry * Math.sin(start);
           // Split full ellipses: SVG arcs with identical endpoints are empty.

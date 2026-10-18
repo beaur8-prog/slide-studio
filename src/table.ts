@@ -1,7 +1,9 @@
 import type { SlideElement, TableCellFormat, TableData } from "./types";
+import { validateParagraphs } from "./text-validation";
+import { paragraphText, editText, patchText } from "./text-layout";
 
-export const MAX_TABLE_ROWS = 20;
-export const MAX_TABLE_COLUMNS = 12;
+export const MAX_TABLE_ROWS = 100;
+export const MAX_TABLE_COLUMNS = 50;
 export const MAX_CELL_TEXT = 2000;
 const MAX_TABLE_TEXT = 50000;
 
@@ -20,6 +22,7 @@ export function createTable(rows = 4, columns = 3): TableData {
         r === 0 ? `제목 ${c + 1}` : "",
       ),
     ),
+    autoRows: true,
     header: true,
     striped: true,
     headerFill: "#233D35",
@@ -48,12 +51,19 @@ export function validateTableCellFormat(value: unknown): TableCellFormat {
   for (const key of ["fill", "color", "borderColor"] as const) {
     if (!has(key)) continue;
     const color = source[key];
-    if (typeof color !== "string" || !/^#[\da-f]{6}$/i.test(color))
+    if (
+      typeof color !== "string" ||
+      (!/^#[\da-f]{6}$/i.test(color) &&
+        !(key !== "color" && color === "transparent"))
+    )
       throw new Error(`표 셀 ${key}: HEX 색상이 필요합니다.`);
-    format[key] = color.toUpperCase();
+    format[key] = color === "transparent" ? color : color.toUpperCase();
   }
   for (const [key, minimum, maximum] of [
-    ["fontSize", 6, 144],
+    ["fillOpacity", 0, 1],
+    ["textOpacity", 0, 1],
+    ["strokeOpacity", 0, 1],
+    ["fontSize", 1, 1000],
     ["padding", 0, 60],
     ["borderWidth", 0, 12],
   ] as const) {
@@ -70,10 +80,59 @@ export function validateTableCellFormat(value: unknown): TableCellFormat {
       );
     format[key] = number;
   }
-  if (has("bold")) {
-    if (typeof source.bold !== "boolean")
-      throw new Error("표 셀 bold: 불리언 값이 필요합니다.");
-    format.bold = source.bold;
+  for (const key of ["bold", "italic", "underline"] as const) {
+    if (has(key)) {
+      if (typeof source[key] !== "boolean")
+        throw new Error(`표 셀 ${key}: 불리언 값이 필요합니다.`);
+      format[key] = source[key];
+    }
+  }
+  if (has("paragraphs"))
+    format.paragraphs = validateParagraphs(source.paragraphs);
+  if (has("textInsets")) {
+    if (
+      !Array.isArray(source.textInsets) ||
+      source.textInsets.length !== 4 ||
+      source.textInsets.some(
+        (n) =>
+          typeof n !== "number" || !Number.isFinite(n) || n < 0 || n > 10000,
+      )
+    )
+      throw new Error("잘못된 셀 여백");
+    format.textInsets = [...source.textInsets] as TableCellFormat["textInsets"];
+  }
+  if (has("borders")) {
+    if (!Array.isArray(source.borders) || source.borders.length !== 4)
+      throw new Error("잘못된 셀 테두리");
+    format.borders = source.borders.map((b) => {
+      if (
+        !b ||
+        typeof b !== "object" ||
+        typeof b.color !== "string" ||
+        !/^(?:#[\da-f]{6}|transparent)$/i.test(b.color) ||
+        typeof b.width !== "number" ||
+        !Number.isFinite(b.width) ||
+        b.width < 0 ||
+        b.width > 1000
+      )
+        throw new Error("잘못된 셀 테두리");
+      return {
+        color: b.color === "transparent" ? b.color : b.color.toUpperCase(),
+        width: b.width,
+        ...(b.opacity !== undefined
+          ? {
+              opacity:
+                typeof b.opacity === "number" &&
+                b.opacity >= 0 &&
+                b.opacity <= 1
+                  ? b.opacity
+                  : (() => {
+                      throw new Error("잘못된 테두리 불투명도");
+                    })(),
+            }
+          : {}),
+      };
+    }) as TableCellFormat["borders"];
   }
   if (has("fontFamily")) {
     if (
@@ -185,12 +244,62 @@ export function validateTable(value: unknown): TableData {
   if (source.cellStyles !== undefined) {
     if (!Array.isArray(source.cellStyles) || source.cellStyles.length !== rows)
       throw new Error("표 셀 서식의 행 수가 올바르지 않습니다.");
-    cellStyles = source.cellStyles.map((row) => {
+    cellStyles = source.cellStyles.map((row, r) => {
       if (!Array.isArray(row) || row.length !== columns)
         throw new Error("표 셀 서식의 열 수가 올바르지 않습니다.");
-      return row.map((cell: unknown) =>
-        cell === null ? null : validateTableCellFormat(cell),
-      );
+      return row.map((cell: unknown, c: number) => {
+        if (cell === null) return null;
+        const style = validateTableCellFormat(cell);
+        if (
+          style.paragraphs &&
+          paragraphText(style.paragraphs) !== cells[r][c]
+        ) {
+          style.paragraphs = editText(
+            {
+              text: paragraphText(style.paragraphs),
+              paragraphs: style.paragraphs,
+            } as SlideElement,
+            cells[r][c],
+          ).paragraphs;
+        }
+        return style;
+      });
+    });
+  }
+  let merges: TableData["merges"];
+  if (source.merges !== undefined) {
+    if (!Array.isArray(source.merges) || source.merges.length > rows * columns)
+      throw new Error("잘못된 표 병합 정보");
+    const used = new Set<string>();
+    merges = source.merges.map((m) => {
+      if (
+        !m ||
+        typeof m !== "object" ||
+        [m.row, m.column, m.rowSpan, m.columnSpan].some(
+          (n) => !Number.isInteger(n),
+        ) ||
+        m.row < 0 ||
+        m.column < 0 ||
+        m.rowSpan < 1 ||
+        m.columnSpan < 1 ||
+        m.row + m.rowSpan > rows ||
+        m.column + m.columnSpan > columns
+      )
+        throw new Error("병합 범위가 표를 벗어났습니다.");
+      for (let r = m.row; r < m.row + m.rowSpan; r++)
+        for (let c = m.column; c < m.column + m.columnSpan; c++) {
+          const key = `${r}:${c}`;
+          if (used.has(key)) throw new Error("병합 범위가 겹칩니다.");
+          if ((r !== m.row || c !== m.column) && cells[r][c])
+            throw new Error("병합된 가림 셀에 내용이 있습니다.");
+          used.add(key);
+        }
+      return {
+        row: m.row,
+        column: m.column,
+        rowSpan: m.rowSpan,
+        columnSpan: m.columnSpan,
+      };
     });
   }
   return {
@@ -212,6 +321,8 @@ export function validateTable(value: unknown): TableData {
     verticalAlign: source.verticalAlign as TableData["verticalAlign"],
     ...(columnWidths ? { columnWidths } : {}),
     ...(rowHeights ? { rowHeights } : {}),
+    ...(merges ? { merges } : {}),
+    ...(source.autoRows !== undefined ? { autoRows: bool("autoRows") } : {}),
   };
 }
 
@@ -224,6 +335,14 @@ export function resizeTable(
   count(columns, MAX_TABLE_COLUMNS);
   return {
     ...table,
+    merges: table.merges
+      ?.filter((m) => m.row < rows && m.column < columns)
+      .map((m) => ({
+        ...m,
+        rowSpan: Math.min(m.rowSpan, rows - m.row),
+        columnSpan: Math.min(m.columnSpan, columns - m.column),
+      }))
+      .filter((m) => m.rowSpan > 1 || m.columnSpan > 1),
     cells: Array.from({ length: rows }, (_, r) =>
       Array.from({ length: columns }, (_, c) => table.cells[r]?.[c] ?? ""),
     ),
@@ -265,6 +384,33 @@ export function changeTableAxis(
     axis === "row" ? MAX_TABLE_ROWS : MAX_TABLE_COLUMNS,
   );
   const next = structuredClone(table);
+  if (remove)
+    for (const merge of table.merges ?? []) {
+      const coordinate = axis === "row" ? merge.row : merge.column;
+      const spanCount = axis === "row" ? merge.rowSpan : merge.columnSpan;
+      if (coordinate === index && spanCount > 1) {
+        const r = merge.row + (axis === "row" ? 1 : 0),
+          c = merge.column + (axis === "column" ? 1 : 0);
+        next.cells[r][c] = next.cells[merge.row][merge.column];
+        if (next.cellStyles)
+          next.cellStyles[r][c] = next.cellStyles[merge.row][merge.column];
+      }
+    }
+  const start = axis === "row" ? "row" : "column",
+    span = axis === "row" ? "rowSpan" : "columnSpan";
+  next.merges = next.merges?.flatMap((m) => {
+    const result = { ...m };
+    if (remove) {
+      if (index < m[start]) result[start]--;
+      else if (index < m[start] + m[span]) result[span]--;
+    } else {
+      if (index <= m[start]) result[start]++;
+      else if (index < m[start] + m[span]) result[span]++;
+    }
+    return result[span] > 0 && (result.rowSpan > 1 || result.columnSpan > 1)
+      ? [result]
+      : [];
+  });
   const sizes = axis === "row" ? next.rowHeights : next.columnWidths;
   if (sizes)
     sizes.splice(
@@ -376,9 +522,10 @@ export function tableCellStyle(
   table: TableData,
   row: number,
   column = 0,
-): Required<TableCellFormat> {
+): Required<Omit<TableCellFormat, "paragraphs" | "textInsets" | "borders">> &
+  Pick<TableCellFormat, "paragraphs" | "textInsets" | "borders"> {
   const heading = table.header && row === 0;
-  return {
+  const style = {
     fill: heading
       ? table.headerFill
       : table.striped && (row - (table.header ? 1 : 0)) % 2 === 1
@@ -386,6 +533,11 @@ export function tableCellStyle(
         : table.fill,
     color: heading ? table.headerColor : table.color,
     bold: heading,
+    italic: false,
+    underline: false,
+    fillOpacity: 1,
+    textOpacity: 1,
+    strokeOpacity: 1,
     fontFamily: table.fontFamily,
     fontSize: table.fontSize,
     padding: table.padding,
@@ -395,6 +547,83 @@ export function tableCellStyle(
     verticalAlign: table.verticalAlign,
     ...table.cellStyles?.[row]?.[column],
   };
+  if (
+    style.paragraphs &&
+    paragraphText(style.paragraphs) !== table.cells[row][column]
+  )
+    style.paragraphs = editText(
+      {
+        text: paragraphText(style.paragraphs),
+        paragraphs: style.paragraphs,
+      } as SlideElement,
+      table.cells[row][column],
+    ).paragraphs;
+  return style;
+}
+
+/** Text-only projections for layout measurement and accessibility/export tools. */
+export function tableTextElements(element: SlideElement): SlideElement[] {
+  const table = element.table;
+  if (!table) return [];
+  const widths = tableSizes(
+      table.columnWidths,
+      table.cells[0].length,
+      element.width,
+    ),
+    heights = tableSizes(table.rowHeights, table.cells.length, element.height);
+  return visibleTableCells(table).map(({ row, column }) => {
+    const merge = tableMerge(table, row, column),
+      style = tableCellStyle(table, row, column);
+    const width = widths
+        .slice(column, column + (merge?.columnSpan ?? 1))
+        .reduce((a, b) => a + b, 0),
+      height = heights
+        .slice(row, row + (merge?.rowSpan ?? 1))
+        .reduce((a, b) => a + b, 0);
+    const x = widths.slice(0, column).reduce((a, b) => a + b, 0),
+      y = heights.slice(0, row).reduce((a, b) => a + b, 0),
+      angle = (element.rotation * Math.PI) / 180;
+    const dx = x + width / 2 - element.width / 2,
+      dy = y + height / 2 - element.height / 2;
+    const borders =
+      style.borders ??
+      (Array.from({ length: 4 }, () => ({
+        color: style.borderColor,
+        width: style.borderWidth,
+      })) as SlideElement["borders"]);
+    return {
+      ...element,
+      ...style,
+      id: `${element.id}-cell-${row}-${column}`,
+      type: "text",
+      table: undefined,
+      text: table.cells[row][column],
+      x:
+        element.x +
+        element.width / 2 +
+        dx * Math.cos(angle) -
+        dy * Math.sin(angle) -
+        width / 2,
+      y:
+        element.y +
+        element.height / 2 +
+        dx * Math.sin(angle) +
+        dy * Math.cos(angle) -
+        height / 2,
+      width,
+      height,
+      paragraphs: style.paragraphs,
+      textInsets: style.textInsets ?? [
+        style.padding,
+        style.padding,
+        style.padding,
+        style.padding,
+      ],
+      borders,
+      stroke: borders?.[0].color,
+      strokeWidth: borders?.[0].width,
+    };
+  });
 }
 
 export interface TableCellRange {
@@ -402,6 +631,98 @@ export interface TableCellRange {
   endRow: number;
   startColumn: number;
   endColumn: number;
+}
+export function tableMerge(table: TableData, row: number, column: number) {
+  return table.merges?.find(
+    (m) =>
+      row >= m.row &&
+      row < m.row + m.rowSpan &&
+      column >= m.column &&
+      column < m.column + m.columnSpan,
+  );
+}
+export function visibleTableCells(table: TableData) {
+  return table.cells.flatMap((row, r) =>
+    row.flatMap((_, c) => {
+      const m = tableMerge(table, r, c);
+      return !m || (m.row === r && m.column === c)
+        ? [{ row: r, column: c }]
+        : [];
+    }),
+  );
+}
+export function mergeTableCells(
+  table: TableData,
+  range: TableCellRange,
+  split = false,
+): TableData {
+  const next = structuredClone(table);
+  const intersects = (m: NonNullable<TableData["merges"]>[number]) =>
+    m.row <= range.endRow &&
+    m.row + m.rowSpan > range.startRow &&
+    m.column <= range.endColumn &&
+    m.column + m.columnSpan > range.startColumn;
+  if (split) {
+    next.merges = next.merges?.filter((m) => !intersects(m));
+    return next;
+  }
+  if (
+    next.merges?.some(
+      (m) =>
+        intersects(m) &&
+        (m.row < range.startRow ||
+          m.column < range.startColumn ||
+          m.row + m.rowSpan - 1 > range.endRow ||
+          m.column + m.columnSpan - 1 > range.endColumn),
+    )
+  )
+    throw new Error("병합된 셀 전체를 선택해 주세요.");
+  const texts: string[] = [];
+  const paragraphs: NonNullable<TableCellFormat["paragraphs"]> = [];
+  for (let r = range.startRow; r <= range.endRow; r++)
+    for (let c = range.startColumn; c <= range.endColumn; c++) {
+      if (next.cells[r][c]) {
+        texts.push(next.cells[r][c]);
+        const style = tableCellStyle(table, r, c);
+        for (const p of style.paragraphs ?? [
+          { runs: [{ text: next.cells[r][c] }] },
+        ])
+          paragraphs.push({
+            ...p,
+            runs: p.runs.map((run) => ({
+              fontFamily: style.fontFamily,
+              fontSize: style.fontSize,
+              color: style.color,
+              bold: style.bold,
+              italic: style.italic,
+              underline: style.underline,
+              ...run,
+            })),
+          });
+      }
+      next.cells[r][c] = "";
+      if (next.cellStyles?.[r]?.[c]?.paragraphs)
+        next.cellStyles[r][c] = {
+          ...next.cellStyles[r][c],
+          paragraphs: undefined,
+        };
+    }
+  next.cells[range.startRow][range.startColumn] = texts.join("\n");
+  next.cellStyles ??= next.cells.map((row) => row.map(() => null));
+  next.cellStyles[range.startRow][range.startColumn] = {
+    ...next.cellStyles[range.startRow][range.startColumn],
+    paragraphs: paragraphs.length ? paragraphs : [{ runs: [{ text: "" }] }],
+  };
+  next.merges = [
+    ...(next.merges?.filter((m) => !intersects(m)) ?? []),
+    {
+      row: range.startRow,
+      column: range.startColumn,
+      rowSpan: range.endRow - range.startRow + 1,
+      columnSpan: range.endColumn - range.startColumn + 1,
+    },
+  ].filter((m) => m.rowSpan > 1 || m.columnSpan > 1);
+  return validateTable(next);
 }
 
 export function applyTableCellFormat(
@@ -434,11 +755,26 @@ export function applyTableCellFormat(
       row.map((_, c) => {
         const existing = data.cellStyles?.[r]?.[c] ?? null;
         return r >= top && r <= bottom && c >= left && c <= right
-          ? { ...existing, ...format }
+          ? patchCellFormat(existing ?? {}, format)
           : existing;
       }),
     ),
   };
+}
+export function patchCellFormat(
+  existing: TableCellFormat,
+  patch: TableCellFormat,
+): TableCellFormat {
+  const next = { ...existing, ...patch };
+  if (patch.padding !== undefined) next.textInsets = undefined;
+  if (patch.borderColor !== undefined || patch.borderWidth !== undefined)
+    next.borders = undefined;
+  if (existing.paragraphs)
+    next.paragraphs = patchText(
+      { text: paragraphText(existing.paragraphs), ...existing } as SlideElement,
+      patch,
+    ).paragraphs;
+  return next;
 }
 
 export function tableElementSize(

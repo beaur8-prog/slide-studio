@@ -1,3 +1,4 @@
+import { alphaColor } from "./colors";
 import { useEffect, useRef, useState } from "react";
 import type {
   ClipboardEvent as ReactClipboardEvent,
@@ -5,6 +6,12 @@ import type {
 } from "react";
 import type { SlideElement, TableCellFormat, TableData } from "./types";
 import { fontStack } from "./text-layout";
+import { TextContent } from "./TextContent";
+import NumberInput from "./NumberInput";
+import EditableText from "./EditableText";
+import type { TextFormatRange } from "./text-formatting";
+import type { TextEdit } from "./text-layout";
+import { parseTableClipboard, pasteTableClipboard } from "./table-clipboard";
 import {
   changeTableAxis,
   applyTableCellFormat,
@@ -17,17 +24,31 @@ import {
   tableCellStyle,
   tableElementSize,
   tableSizes,
+  tableMerge,
+  mergeTableCells,
+  visibleTableCells,
+  patchCellFormat,
   validateTable,
 } from "./table";
 import type { TableCellRange } from "./table";
 import "./table.css";
 
+export type TableInlineEditing = {
+  row: number;
+  column: number;
+  onInput: (text: string, formats?: TextFormatRange[], edit?: TextEdit) => void;
+  onDone: () => void;
+  onNavigate: (backward: boolean) => void;
+};
+
 export function TableVisual({
   element,
   selection,
+  inlineEditing,
 }: {
   element: SlideElement;
   selection?: TableCellRange;
+  inlineEditing?: TableInlineEditing;
 }) {
   const table = element.table;
   if (!table) return null;
@@ -55,6 +76,8 @@ export function TableVisual({
       {table.cells.map((row, r) => (
         <div role="row" key={r} style={{ display: "contents" }}>
           {row.map((text, c) => {
+            const merge = tableMerge(table, r, c);
+            if (merge && (merge.row !== r || merge.column !== c)) return null;
             const style = tableCellStyle(table, r, c);
             const overrides = table.cellStyles?.[r]?.[c];
             const borderOverride =
@@ -74,7 +97,12 @@ export function TableVisual({
                 data-column={c}
                 className={selected ? "table-cell-selected" : undefined}
                 role={table.header && r === 0 ? "columnheader" : "cell"}
+                aria-rowspan={merge?.rowSpan}
+                aria-colspan={merge?.columnSpan}
                 style={{
+                  position: "relative",
+                  gridRow: `${r + 1} / span ${merge?.rowSpan ?? 1}`,
+                  gridColumn: `${c + 1} / span ${merge?.columnSpan ?? 1}`,
                   boxSizing: "border-box",
                   minWidth: 0,
                   minHeight: 0,
@@ -87,22 +115,32 @@ export function TableVisual({
                       : style.verticalAlign === "bottom"
                         ? "flex-end"
                         : "flex-start",
-                  padding:
-                    style.padding + (borderOverride ? style.borderWidth : 0),
+                  padding: style.textInsets
+                    ? style.textInsets.map((n) => `${n}px`).join(" ")
+                    : style.padding +
+                      (borderOverride && !style.borders
+                        ? style.borderWidth
+                        : 0),
                   fontSize: style.fontSize,
                   fontFamily: fontStack(style.fontFamily),
-                  background: style.fill,
-                  color: style.color,
+                  background: alphaColor(style.fill, style.fillOpacity),
+                  color: alphaColor(style.color, style.textOpacity),
                   fontWeight: style.bold ? 700 : 400,
+                  fontStyle: style.italic ? "italic" : "normal",
+                  textDecoration: style.underline ? "underline" : undefined,
                   textAlign: style.align,
-                  borderColor: style.borderColor,
+                  borderColor: alphaColor(
+                    style.borderColor,
+                    style.strokeOpacity,
+                  ),
                   borderStyle: "solid",
-                  borderWidth: borderOverride
-                    ? 0
-                    : `${r === 0 ? style.borderWidth : 0}px ${style.borderWidth}px ${style.borderWidth}px ${c === 0 ? style.borderWidth : 0}px`,
+                  borderWidth:
+                    borderOverride || style.borders
+                      ? 0
+                      : `${r === 0 ? style.borderWidth : 0}px ${style.borderWidth}px ${style.borderWidth}px ${c === 0 ? style.borderWidth : 0}px`,
                 }}
               >
-                {borderOverride && (
+                {borderOverride && !style.borders && (
                   <span
                     aria-hidden="true"
                     className="table-cell-border-override"
@@ -111,15 +149,88 @@ export function TableVisual({
                     }}
                   />
                 )}
+                {style.borders && (
+                  <svg
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      pointerEvents: "none",
+                      overflow: "visible",
+                    }}
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                  >
+                    {style.borders.map((b, i) => (
+                      <line
+                        key={i}
+                        x1={[0, 100, 0, 0][i]}
+                        y1={[0, 0, 100, 0][i]}
+                        x2={[100, 100, 100, 0][i]}
+                        y2={[0, 100, 100, 100][i]}
+                        stroke={b.color}
+                        strokeOpacity={b.opacity ?? style.strokeOpacity}
+                        strokeWidth={b.width}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    ))}
+                  </svg>
+                )}
                 <div
+                  className="table-cell-text"
                   style={{
                     minHeight: 0,
-                    overflow: "hidden",
+                    flexShrink: 0,
+                    overflow: "visible",
                     whiteSpace: "pre-wrap",
                     overflowWrap: "anywhere",
                   }}
                 >
-                  {text}
+                  {inlineEditing?.row === r && inlineEditing.column === c ? (
+                    <EditableText
+                      key={`${r}-${c}`}
+                      element={{
+                        ...element,
+                        ...style,
+                        type: "text",
+                        text,
+                        table: undefined,
+                        paragraphs: style.paragraphs,
+                        textInsets: undefined,
+                        fill: "transparent",
+                        strokeWidth: 0,
+                        borders: undefined,
+                        autoHeight: false,
+                        verticalAlign: "top",
+                      }}
+                      label={`${r + 1}행 ${c + 1}열 셀 텍스트 편집`}
+                      initialSelection="end"
+                      onInput={inlineEditing.onInput}
+                      onDone={inlineEditing.onDone}
+                      onNavigate={inlineEditing.onNavigate}
+                    />
+                  ) : style.paragraphs ? (
+                    <TextContent
+                      element={{
+                        ...element,
+                        type: "text",
+                        text,
+                        paragraphs: style.paragraphs,
+                        fontFamily: style.fontFamily,
+                        fontSize: style.fontSize,
+                        color: style.color,
+                        textOpacity: style.textOpacity,
+                        bold: style.bold,
+                        italic: style.italic,
+                        underline: style.underline,
+                        align: style.align,
+                      }}
+                    />
+                  ) : (
+                    text
+                  )}
                 </div>
               </div>
             );
@@ -158,6 +269,8 @@ export default function TableEditor({
     column: initialRange?.startColumn ?? 0,
   });
   const originalDraft = useRef(JSON.stringify(draft));
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const requestClose = () => {
     if (JSON.stringify(draft) !== originalDraft.current) {
       setError(
@@ -231,13 +344,26 @@ export default function TableEditor({
   const format = tableCellStyle(draft, selected.row, selected.column);
   const patchFormat = (value: TableCellFormat) =>
     setDraft((table) => {
+      if (["bold", "italic", "underline"].some((key) => key in value))
+        return applyTableCellFormat(
+          table,
+          formatTarget === "selection"
+            ? range
+            : {
+                startRow: 0,
+                endRow: rows - 1,
+                startColumn: 0,
+                endColumn: columns - 1,
+              },
+          value,
+        );
       if (formatTarget === "selection")
         return applyTableCellFormat(table, range, value);
       const keys = Object.keys(value) as (keyof TableCellFormat)[];
       const cellStyles = table.cellStyles?.map((row) =>
         row.map((style) => {
           if (!style) return null;
-          const next = { ...style };
+          const next = patchCellFormat(style, value);
           keys.forEach((key) => delete next[key]);
           return Object.keys(next).length ? next : null;
         }),
@@ -276,6 +402,7 @@ export default function TableEditor({
         )
         .join("\n"),
     );
+    event.clipboardData.setData("application/x-slide-studio-table", "1");
     if (event.type === "cut") clearCells();
   };
   const selectCell = (row: number, column: number) => {
@@ -403,21 +530,36 @@ export default function TableEditor({
     }));
     dragCleanup.current?.();
   };
-  const changeAxis = (axis: "row" | "column", remove = false) => {
+  const changeAxis = (
+    axis: "row" | "column",
+    remove = false,
+    before = false,
+  ) => {
     const index = axis === "row" ? selected.row : selected.column;
     setDraft((table) =>
       sizeDefaults(
-        changeTableAxis(table, axis, index + (remove ? 0 : 1), remove),
+        changeTableAxis(
+          table,
+          axis,
+          index + (remove || before ? 0 : 1),
+          remove,
+        ),
       ),
     );
     const nextCell = {
       row:
         axis === "row"
-          ? Math.min(remove ? index : index + 1, rows + (remove ? -2 : 0))
+          ? Math.min(
+              remove || before ? index : index + 1,
+              rows + (remove ? -2 : 0),
+            )
           : selected.row,
       column:
         axis === "column"
-          ? Math.min(remove ? index : index + 1, columns + (remove ? -2 : 0))
+          ? Math.min(
+              remove || before ? index : index + 1,
+              columns + (remove ? -2 : 0),
+            )
           : selected.column,
     };
     selectCell(nextCell.row, nextCell.column);
@@ -425,7 +567,7 @@ export default function TableEditor({
   };
   const apply = () => {
     try {
-      onApply(validateTable(draft));
+      onApply(validateTable(draftRef.current));
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
     }
@@ -497,26 +639,47 @@ export default function TableEditor({
           </button>
         </div>
         <div className="table-editor-toolbar">
+          <button
+            type="button"
+            disabled={selectionCount < 2}
+            onClick={() => {
+              try {
+                setDraft(mergeTableCells(draft, range));
+              } catch (error) {
+                setError((error as Error).message);
+              }
+            }}
+          >
+            셀 병합
+          </button>
+          <button
+            type="button"
+            disabled={!draft.merges?.length}
+            onClick={() =>
+              setDraft((table) => mergeTableCells(table, range, true))
+            }
+          >
+            셀 나누기
+          </button>
+
           <label>
             행{" "}
-            <input
+            <NumberInput
               aria-label="표 행 수"
-              type="number"
-              min="1"
+              min={1}
               max={MAX_TABLE_ROWS}
               value={rows}
-              onChange={(e) => resize(Number(e.target.value), columns)}
+              onChange={(n) => resize(n, columns)}
             />
           </label>
           <label>
             열{" "}
-            <input
+            <NumberInput
               aria-label="표 열 수"
-              type="number"
-              min="1"
+              min={1}
               max={MAX_TABLE_COLUMNS}
               value={columns}
-              onChange={(e) => resize(rows, Number(e.target.value))}
+              onChange={(n) => resize(rows, n)}
             />
           </label>
           <button
@@ -527,6 +690,12 @@ export default function TableEditor({
           </button>
           <button disabled={rows <= 1} onClick={() => changeAxis("row", true)}>
             행 삭제
+          </button>
+          <button
+            disabled={rows >= MAX_TABLE_ROWS}
+            onClick={() => changeAxis("row", false, true)}
+          >
+            위에 행 삽입
           </button>
           <button
             disabled={columns >= MAX_TABLE_COLUMNS}
@@ -541,6 +710,12 @@ export default function TableEditor({
             열 삭제
           </button>
           <button
+            disabled={columns >= MAX_TABLE_COLUMNS}
+            onClick={() => changeAxis("column", false, true)}
+          >
+            왼쪽에 열 삽입
+          </button>
+          <button
             onClick={() => {
               setAnchor({ row: 0, column: 0 });
               setSelected({ row: rows - 1, column: columns - 1 });
@@ -550,6 +725,17 @@ export default function TableEditor({
             전체 셀 선택
           </button>
           <button onClick={clearCells}>선택한 셀 내용 지우기</button>
+          <label>
+            <input
+              type="checkbox"
+              aria-label="내용에 맞춰 행 높이 늘리기"
+              checked={!!draft.autoRows}
+              onChange={(e) =>
+                setDraft((t) => ({ ...t, autoRows: e.target.checked }))
+              }
+            />
+            내용에 맞춰 행 높이 늘리기
+          </label>
         </div>
         <div
           className="table-selection-status"
@@ -594,6 +780,9 @@ export default function TableEditor({
             >
               {draft.cells.map((row, r) =>
                 row.map((text, c) => {
+                  const merge = tableMerge(draft, r, c);
+                  if (merge && (merge.row !== r || merge.column !== c))
+                    return null;
                   const style = tableCellStyle(draft, r, c);
                   return (
                     <textarea
@@ -611,14 +800,94 @@ export default function TableEditor({
                           : ""
                       }
                       style={{
-                        background: style.fill,
-                        color: style.color,
+                        gridColumn: `${c + 1} / span ${merge?.columnSpan ?? 1}`,
+                        gridRow: `${r + 1} / span ${merge?.rowSpan ?? 1}`,
+                        background: alphaColor(style.fill, style.fillOpacity),
+                        color: alphaColor(style.color, style.textOpacity),
                         fontWeight: style.bold ? 700 : 400,
+                        fontStyle: style.italic ? "italic" : "normal",
+                        textDecoration: style.underline ? "underline" : "none",
                         textAlign: style.align,
-                        borderColor: style.borderColor,
+                        borderColor: alphaColor(
+                          style.borderColor,
+                          style.strokeOpacity,
+                        ),
                         fontFamily: fontStack(style.fontFamily),
                       }}
                       value={text}
+                      onPaste={(event) => {
+                        const text = event.clipboardData.getData("text/plain");
+                        if (
+                          !text.includes("\t") &&
+                          !event.clipboardData
+                            .getData("text/html")
+                            .includes("<table") &&
+                          !event.clipboardData.getData(
+                            "application/x-slide-studio-table",
+                          )
+                        )
+                          return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        try {
+                          const source = parseTableClipboard(text);
+                          setDraft(pasteTableClipboard(draft, r, c, source));
+                          setAnchor({ row: r, column: c });
+                          setSelected({
+                            row: r + source.length - 1,
+                            column: c + source[0].length - 1,
+                          });
+                        } catch (error) {
+                          setError(
+                            error instanceof Error
+                              ? error.message
+                              : "표 데이터를 붙여넣지 못했습니다.",
+                          );
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.nativeEvent.isComposing || composing.current)
+                          return;
+                        if (event.key === "F6") {
+                          event.preventDefault();
+                          dialogRef.current
+                            ?.querySelector<HTMLElement>(
+                              ".table-editor-options select",
+                            )
+                            ?.focus();
+                          return;
+                        }
+                        if (
+                          event.key !== "Tab" ||
+                          event.ctrlKey ||
+                          event.metaKey ||
+                          event.altKey
+                        )
+                          return;
+                        const visible = visibleTableCells(draft),
+                          index = visible.findIndex(
+                            (cell) => cell.row === r && cell.column === c,
+                          ),
+                          target = visible[index + (event.shiftKey ? -1 : 1)];
+                        if (!target && event.shiftKey) return;
+                        if (!target && rows >= MAX_TABLE_ROWS) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const next = target ?? { row: rows, column: 0 };
+                        if (!target)
+                          setDraft((table) =>
+                            changeTableAxis(table, "row", rows),
+                          );
+                        setAnchor(next);
+                        setSelected(next);
+                        requestAnimationFrame(() =>
+                          gridRef.current
+                            ?.querySelector<HTMLTextAreaElement>(
+                              `textarea[data-row="${next.row}"][data-column="${next.column}"]`,
+                            )
+                            ?.focus(),
+                        );
+                      }}
                       onPointerDown={(event) => startSelection(event, r, c)}
                       onFocus={() => {
                         if (
@@ -648,6 +917,26 @@ export default function TableEditor({
             </div>
           </div>
           <div className="table-editor-options">
+            <div className="table-inline-format-controls">
+              {(
+                [
+                  ["bold", "셀 굵게"],
+                  ["italic", "셀 기울임"],
+                  ["underline", "셀 밑줄"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-label={label}
+                  aria-pressed={format[key]}
+                  onClick={() => patchFormat({ [key]: !format[key] })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <label>
               서식 적용 대상
               <select
@@ -741,16 +1030,14 @@ export default function TableEditor({
             ).map(([key, label, min, max]) => (
               <label key={key}>
                 {label}
-                <input
+                <NumberInput
                   aria-label={label}
-                  type="number"
                   min={min}
                   max={max}
                   value={
                     formatTarget === "selection" ? format[key] : draft[key]
                   }
-                  onChange={(e) => {
-                    const value = Number(e.target.value);
+                  onChange={(value) => {
                     if (
                       Number.isFinite(value) &&
                       value >= min &&
@@ -826,10 +1113,28 @@ export default function TableEditor({
         </p>
         {error && <p role="alert">{error}</p>}
         <div className="dialog-actions">
-          <button className="button" onClick={onCancel}>
+          <button
+            className="button"
+            onClick={onCancel}
+            onPointerDown={(event) => {
+              if (event.button === 0) {
+                event.preventDefault();
+                onCancel();
+              }
+            }}
+          >
             취소
           </button>
-          <button className="button primary" onClick={apply}>
+          <button
+            className="button primary"
+            onClick={apply}
+            onPointerDown={(event) => {
+              // Keep pointerup/click on this button while a number-field blur
+              // commits and recenters the dialog. Apply reads that new draft.
+              if (event.button === 0)
+                event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+          >
             {initial ? "표 적용" : "표 삽입"}
           </button>
         </div>

@@ -1,4 +1,14 @@
 import {
+  recordTextUndo,
+  textUndoCheckpoints,
+  type TextUndoSession,
+} from "./text-undo";
+import { usePresenterView } from "./PresenterView";
+import { duplicateSlides, moveSlides } from "./slide-operations";
+import type { InkStroke } from "./presentation-ink";
+import { fitTableRows } from "./table-layout";
+import { arrangeElements } from "./object-arrange";
+import {
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -84,6 +94,12 @@ import CommandSearch from "./CommandSearch";
 import TextColorPalette from "./TextColorPalette";
 import NumberInput from "./NumberInput";
 import {
+  copyElements,
+  expandGroups,
+  groupElements,
+  ungroupElements,
+} from "./object-groups";
+import {
   applyTextFormatRanges,
   cssColorHex,
   trackTextFormat,
@@ -103,7 +119,11 @@ import type {
   TableCellFormat,
 } from "./types";
 import { editText, patchText, scaleElement } from "./text-layout";
-import { hasTextBullets, toggleTextBullets } from "./text-bullets";
+import {
+  hasTextBullets,
+  toggleTextBullets,
+  toggleTextNumbering,
+} from "./text-bullets";
 import {
   blankDeck,
   duplicateSlide,
@@ -119,7 +139,14 @@ import SlideCanvas, { SlideVisual } from "./SlideCanvas";
 import { exportPptx, importPptx, parseDeckJson, serializeDeck } from "./io";
 import { listAutosaves, loadAutosave, saveAutosave } from "./storage";
 import TableEditor from "./TableEditor";
-import { createTableElement, tableCellStyle, validateTable } from "./table";
+import {
+  createTableElement,
+  tableCellStyle,
+  validateTable,
+  applyTableCellFormat,
+} from "./table";
+import { changeTableAxis, visibleTableCells, MAX_TABLE_ROWS } from "./table";
+import { parseTableClipboard, pasteTableClipboard } from "./table-clipboard";
 import type { TableCellRange } from "./table";
 import { selectionRange, type TableCellSelection } from "./table-selection";
 import { InsertContentDialog } from "./InsertContentDialog";
@@ -138,7 +165,12 @@ import { EXTRA_SHAPES } from "./shape-presets";
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const shortcut = (key: string) => (isMac ? `⌘${key}` : `Ctrl+${key}`);
 
-type History = { past: Deck[]; present: Deck; future: Deck[] };
+type History = {
+  past: Deck[];
+  present: Deck;
+  future: Deck[];
+  textUndo?: TextUndoSession;
+};
 type Tab = "home" | "insert" | "design" | "transitions" | "slideshow" | "view";
 type Modal =
   | "fonts"
@@ -361,6 +393,18 @@ export default function App() {
   );
   const slide = deck.slides[activeIndex];
   const [selected, setSelected] = useState<string[]>([]);
+  const [slideSelection, setSlideSelection] = useState<string[]>([]);
+  const selectedSlideIds = slideSelection.includes(activeId)
+    ? slideSelection.filter((id) => deck.slides.some((s) => s.id === id))
+    : [activeId];
+  const slideAnchor = useRef<string | null>(null);
+  const [slideMenu, setSlideMenu] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const dragSlideIds = useRef<string[]>([]);
+  const [alignScope, setAlignScope] = useState<"slide" | "selection">(
+    "selection",
+  );
   const [editing, setEditing] = useState<string | null>(null);
   const nudgeKey = useRef<string | null>(null);
   const [inlineFormat, setInlineFormat] = useState<
@@ -426,6 +470,41 @@ export default function App() {
   const tableRange = activeTableSelection
     ? selectionRange(activeTableSelection)
     : undefined;
+  const textCapable =
+    !!selectedElement &&
+    ["text", "shape", "table"].includes(selectedElement.type);
+  const selectedTextStyle = selectedElement?.table
+    ? tableCellStyle(
+        selectedElement.table,
+        activeTableSelection?.focus.row ?? 0,
+        activeTableSelection?.focus.column ?? 0,
+      )
+    : selectedElement;
+  const patchSelectedText = (patch: Partial<SlideElement>) =>
+    changeSlide((s) => ({
+      ...s,
+      elements: s.elements.map((el) => {
+        if (!selected.includes(el.id) || el.locked) return el;
+        if (!el.table) return patchText(el, patch);
+        const range =
+          el.id === activeTableSelection?.elementId && tableRange
+            ? tableRange
+            : {
+                startRow: 0,
+                endRow: el.table.cells.length - 1,
+                startColumn: 0,
+                endColumn: el.table.cells[0].length - 1,
+              };
+        return fitTableRows({
+          ...el,
+          table: applyTableCellFormat(
+            el.table,
+            range,
+            patch as TableCellFormat,
+          ),
+        });
+      }),
+    }));
   useEffect(() => {
     if (!activeTableSelection || !selectedElement?.table) {
       if (tableSelection) setTableSelection(null);
@@ -532,6 +611,11 @@ export default function App() {
   });
   const [presentNotes, setPresentNotes] = useState(false);
   const [blackout, setBlackout] = useState(false);
+  const [whiteout, setWhiteout] = useState(false);
+  const [pendingInk, setPendingInk] = useState<Record<
+    string,
+    InkStroke[]
+  > | null>(null);
   const [windowSize, setWindowSize] = useState({
     w: window.innerWidth,
     h: window.innerHeight,
@@ -552,6 +636,7 @@ export default function App() {
   const clipboard = useRef<{
     elements?: SlideElement[];
     slide?: Slide;
+    slides?: Slide[];
     cells?: string[][];
     cellStyles?: TableCellFormat[][];
   }>({});
@@ -595,15 +680,45 @@ export default function App() {
   const preview = useCallback((update: (d: Deck) => Deck) => {
     setHistory((h) => ({ ...h, present: update(h.present) }));
   }, []);
+  const previewText = useCallback(
+    (
+      update: (d: Deck) => Deck,
+      id: string,
+      inputType: string,
+      row?: number,
+      column?: number,
+    ) => {
+      setHistory((h) => {
+        const next = update(h.present);
+        return {
+          ...h,
+          present: next,
+          textUndo: recordTextUndo(
+            h.textUndo,
+            h.present,
+            next,
+            id,
+            inputType,
+            row,
+            column,
+          ),
+        };
+      });
+    },
+    [],
+  );
   const finish = useCallback(() => {
     const before = transaction.current;
     transaction.current = null;
     if (before)
       setHistory((h) =>
-        before === h.present
-          ? h
+        before === h.present || (h.textUndo?.cursor === 0 && !h.textUndo.atomic)
+          ? { ...h, textUndo: undefined }
           : {
-              past: [...h.past, before].slice(-LIMIT),
+              past: [
+                ...h.past,
+                ...(h.textUndo ? textUndoCheckpoints(h.textUndo) : [before]),
+              ].slice(-LIMIT),
               present: h.present,
               future: [],
             },
@@ -659,9 +774,41 @@ export default function App() {
         selected.includes(e.id) && !e.locked ? patchText(e, patch) : e,
       ),
     }));
-  const selectSlide = (id: string) => {
+  const selectSlide = (
+    id: string,
+    modifiers?: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean },
+  ) => {
+    if (modifiers?.shiftKey) {
+      const anchor = deck.slides.findIndex(
+          (s) => s.id === (slideAnchor.current ?? activeId),
+        ),
+        index = deck.slides.findIndex((s) => s.id === id);
+      setSlideSelection(
+        deck.slides
+          .slice(Math.min(anchor, index), Math.max(anchor, index) + 1)
+          .map((s) => s.id),
+      );
+    } else if (modifiers?.ctrlKey || modifiers?.metaKey) {
+      setSlideSelection(
+        selectedSlideIds.includes(id)
+          ? selectedSlideIds.length > 1
+            ? selectedSlideIds.filter((v) => v !== id)
+            : [id]
+          : [...selectedSlideIds, id],
+      );
+    } else {
+      setSlideSelection([id]);
+      slideAnchor.current = id;
+    }
+    setSlideMenu(null);
     finish();
-    setActiveId(id);
+    setActiveId(
+      (modifiers?.ctrlKey || modifiers?.metaKey) &&
+        selectedSlideIds.includes(id) &&
+        selectedSlideIds.length > 1
+        ? selectedSlideIds.find((v) => v !== id)!
+        : id,
+    );
     setSelected([]);
     setEditing(null);
     setMenu(null);
@@ -789,7 +936,7 @@ export default function App() {
       disposed = true;
     };
   }, [notify]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!ready || !loadedRef.current) return;
     setSaveStatus("saving");
     let live = true;
@@ -871,23 +1018,104 @@ export default function App() {
     setSorter(false);
   };
   const duplicateCurrentSlide = () => {
-    const next = duplicateSlide(slide);
-    commit((d) => {
-      const slides = [...d.slides];
-      slides.splice(activeIndex + 1, 0, next);
-      return { ...d, slides };
-    });
-    selectSlide(next.id);
-    notify("슬라이드를 복제했습니다.");
+    const copies = duplicateSlides(
+      deck.slides.filter((s) => selectedSlideIds.includes(s.id)),
+    );
+    if (deck.slides.length + copies.length > 500) {
+      notify("슬라이드는 500장까지 만들 수 있습니다.");
+      return;
+    }
+    commit((d) => ({
+      ...d,
+      slides: [
+        ...d.slides.slice(0, activeIndex + 1),
+        ...copies,
+        ...d.slides.slice(activeIndex + 1),
+      ],
+    }));
+    selectSlide(copies[0].id);
+    setSlideSelection(copies.map((s) => s.id));
+    notify(`${copies.length}개 슬라이드를 복제했습니다.`);
   };
-  const removeSlide = (id = slide.id) => {
-    if (deck.slides.length === 1) {
+  const removeSlide = (id?: string) => {
+    const ids = id ? [id] : selectedSlideIds,
+      remaining = deck.slides.filter((s) => !ids.includes(s.id));
+    if (!remaining.length) {
       notify("프레젠테이션에는 슬라이드가 하나 이상 필요합니다.");
       return;
     }
-    const idx = deck.slides.findIndex((s) => s.id === id);
-    commit((d) => ({ ...d, slides: d.slides.filter((s) => s.id !== id) }));
-    selectSlide(deck.slides[Math.max(0, idx - 1)].id);
+    commit((d) => ({
+      ...d,
+      slides: d.slides.filter((s) => !ids.includes(s.id)),
+    }));
+    selectSlide(remaining[Math.min(activeIndex, remaining.length - 1)].id);
+  };
+  const applySlideLayout = (layout: string) => {
+    finish();
+    setEditing(null);
+    setSelected([]);
+    changeSlide((s) => {
+      const next = newSlide(layout, deck.theme, deck.width, deck.height);
+      const content = s.elements.filter((e) => e.type === "text");
+      let index = 0;
+      const elements = next.elements.map((e) => {
+        if (e.type !== "text") return e;
+        const old = content[index++];
+        return old
+          ? {
+              ...e,
+              text: old.text,
+              paragraphs: old.paragraphs,
+              field: old.field,
+            }
+          : e;
+      });
+      // Preserve every source object; reflow text into the new slots and retain artwork.
+      return {
+        ...s,
+        elements:
+          layout === "blank"
+            ? s.elements
+            : [
+                ...elements,
+                ...s.elements.filter(
+                  (e) => !content.slice(0, index).includes(e),
+                ),
+              ],
+      };
+    });
+    setMenu(null);
+  };
+  const slideContext = (id: string, x: number, y: number) => {
+    if (!selectedSlideIds.includes(id)) selectSlide(id);
+    finish();
+    setEditing(null);
+    setSelected([]);
+    setObjectMenu(null);
+    setTextMenu(null);
+    setSlideMenu({ x, y });
+  };
+  const startSlideDrag = (
+    id: string,
+    index: number,
+    event: React.DragEvent,
+  ) => {
+    dragSlideIds.current = selectedSlideIds.includes(id)
+      ? selectedSlideIds
+      : [id];
+    setDragSlide(index);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", id);
+  };
+  const dropSlides = (id: string | null) => {
+    const ids = [...dragSlideIds.current];
+    commit((d) => ({
+      ...d,
+      slides: moveSlides(d.slides, ids, id),
+    }));
+    setDragSlide(null);
+    setDropSlide(null);
+    dragSlideIds.current = [];
   };
   const addElement = (type: SlideElement["type"], shape?: ShapeKind) => {
     const theme = THEMES.find((t) => t.id === deck.theme) || THEMES[0];
@@ -1016,15 +1244,11 @@ export default function App() {
       duplicateCurrentSlide();
       return;
     }
-    const copies = slide.elements
-      .filter((e) => selected.includes(e.id))
-      .map((e) => ({
-        ...clone(e),
-        id: uid(),
-        x: e.x + 24,
-        y: e.y + 24,
-        locked: false,
-      }));
+    const copies = copyElements(
+      slide.elements.filter((e) => selected.includes(e.id)),
+      24,
+      24,
+    ).map((e) => ({ ...e, locked: false }));
     changeSlide((s) => ({ ...s, elements: [...s.elements, ...copies] }));
     setSelected(copies.map((e) => e.id));
   };
@@ -1092,9 +1316,16 @@ export default function App() {
             slide.elements.filter((e) => selected.includes(e.id)),
           ),
         }
-      : { slide: clone(slide) };
+      : {
+          slides: clone(
+            deck.slides.filter((s) => selectedSlideIds.includes(s.id)),
+          ),
+        };
     const elements =
-      clipboard.current.elements ?? clipboard.current.slide?.elements ?? [];
+      clipboard.current.elements ??
+      clipboard.current.slides?.flatMap((s) => s.elements) ??
+      clipboard.current.slide?.elements ??
+      [];
     try {
       writeInternalClipboard(
         elements
@@ -1189,23 +1420,23 @@ export default function App() {
         );
       }
     } else if (clipboard.current.elements) {
-      const copies = clipboard.current.elements.map((e) => ({
-        ...clone(e),
-        id: uid(),
-        x: e.x + 24,
-        y: e.y + 24,
-        locked: false,
-      }));
+      const copies = copyElements(clipboard.current.elements, 24, 24).map(
+        (e) => ({ ...e, locked: false }),
+      );
       changeSlide((s) => ({ ...s, elements: [...s.elements, ...copies] }));
       setSelected(copies.map((e) => e.id));
-    } else if (clipboard.current.slide) {
-      const next = duplicateSlide(clipboard.current.slide);
+    } else if (clipboard.current.slides || clipboard.current.slide) {
+      const copies = duplicateSlides(
+        clipboard.current.slides ?? [clipboard.current.slide!],
+      );
+      const next = copies[0];
       commit((d) => {
         const slides = [...d.slides];
-        slides.splice(activeIndex + 1, 0, next);
+        slides.splice(activeIndex + 1, 0, ...copies);
         return { ...d, slides };
       });
       selectSlide(next.id);
+      setSlideSelection(copies.map((s) => s.id));
     }
   };
   const layerSelected = (where: "front" | "back" | "up" | "down") =>
@@ -1233,23 +1464,19 @@ export default function App() {
       }
       return { ...s, elements };
     });
-  const alignElements = (direction: "left" | "center" | "right") =>
+  const alignElements = (action: Parameters<typeof arrangeElements>[2]) =>
     changeSlide((s) => ({
       ...s,
-      elements: s.elements.map((e) =>
-        selected.includes(e.id) && !e.locked
-          ? {
-              ...e,
-              x:
-                direction === "left"
-                  ? 0
-                  : direction === "center"
-                    ? (deck.width - e.width) / 2
-                    : deck.width - e.width,
-            }
-          : e,
+      elements: arrangeElements(
+        s.elements,
+        selected,
+        action,
+        deck.width,
+        deck.height,
+        alignScope,
       ),
     }));
+
   const addImage = async (file: File) => {
     if (!/^image\/(png|jpeg|gif|webp)$/.test(file.type)) {
       notify("PNG, JPG, GIF, WebP 이미지를 선택해 주세요.");
@@ -1472,6 +1699,7 @@ export default function App() {
     setPresentIndex(index);
     setPresentEnded(ended);
     setBlackout(false);
+    setWhiteout(false);
     presentationNumber.current = "";
   };
   const startPresent = (fromBeginning = false) => {
@@ -1498,6 +1726,8 @@ export default function App() {
   };
   const leavePresentation = useCallback(() => {
     if (!presentationActive.current) return;
+    const ink = presentationInk.current?.snapshot();
+    if (ink && Object.keys(ink).length) setPendingInk(ink);
     presentationActive.current = false;
     const position = presentationPosition.current;
     // Completing the show restores the starting selection; interrupting it
@@ -1510,6 +1740,7 @@ export default function App() {
     setEditing(null);
     setPresenting(false);
     setBlackout(false);
+    setWhiteout(false);
     setPresentEnded(false);
     presentationNumber.current = "";
   }, []);
@@ -1549,8 +1780,9 @@ export default function App() {
   }, [leavePresentation]);
   const restorePresentation = () => {
     presentationNumber.current = "";
-    if (!blackout) return false;
+    if (!blackout && !whiteout) return false;
     setBlackout(false);
+    setWhiteout(false);
     return true;
   };
   const movePresent = (direction: number) => {
@@ -1666,6 +1898,31 @@ export default function App() {
       })),
     }));
   };
+  const openPresenter = usePresenterView(
+    {
+      slide: deck.slides[presentIndex] ?? slide,
+      next: deck.slides.slice(presentIndex + 1).find((s) => !s.hidden),
+      width: deck.width,
+      height: deck.height,
+      index: presentIndex,
+      total: deck.slides.length,
+      ended: !presenting || presentEnded,
+      blackout,
+      whiteout,
+    },
+    (command) => {
+      if (command === "end") stopPresent();
+      else if (command === "next") movePresent(1);
+      else if (command === "previous") movePresent(-1);
+      else if (command === "black") {
+        setWhiteout(false);
+        setBlackout((b) => !b);
+      } else {
+        setBlackout(false);
+        setWhiteout((b) => !b);
+      }
+    },
+  );
   const resizeDeck = (width: number, height: number) => {
     commit((d) => ({
       ...d,
@@ -1694,7 +1951,7 @@ export default function App() {
         if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
         if (
           e.target instanceof Element &&
-          e.target.closest(".presentation-link") &&
+          e.target.closest(".presentation-link, .presentation-run-link") &&
           (e.key === "Enter" || e.key === " ")
         ) {
           presentationNumber.current = "";
@@ -1706,11 +1963,13 @@ export default function App() {
           e.preventDefault();
           stopPresent();
         } else if (
-          ["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key)
+          ["ArrowRight", "ArrowDown", " ", "PageDown", "n", "N"].includes(e.key)
         ) {
           e.preventDefault();
           movePresent(1);
-        } else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) {
+        } else if (
+          ["ArrowLeft", "ArrowUp", "PageUp", "p", "P"].includes(e.key)
+        ) {
           e.preventDefault();
           movePresent(-1);
         } else if (e.key === "Home") {
@@ -1726,7 +1985,12 @@ export default function App() {
             presentationNumber.current += e.key;
         } else if (e.key === "Backspace") {
           e.preventDefault();
-          presentationNumber.current = presentationNumber.current.slice(0, -1);
+          if (presentationNumber.current)
+            presentationNumber.current = presentationNumber.current.slice(
+              0,
+              -1,
+            );
+          else movePresent(-1);
         } else if (e.key === "Enter") {
           e.preventDefault();
           const digits = presentationNumber.current;
@@ -1741,11 +2005,20 @@ export default function App() {
         } else if (e.key.toLowerCase() === "b" && !presentEnded) {
           e.preventDefault();
           presentationNumber.current = "";
+          setWhiteout(false);
           setBlackout((b) => !b);
+        } else if (e.key.toLowerCase() === "w" && !presentEnded) {
+          e.preventDefault();
+          setBlackout(false);
+          setWhiteout((b) => !b);
+        } else if (e.key.toLowerCase() === "o" && !presentEnded) {
+          e.preventDefault();
+          setPresentNotes((v) => !v);
         }
         return;
       }
-      if (objectMenu || textMenu || colorPalette) return;
+      if (objectMenu || textMenu || colorPalette || slideMenu || pendingInk)
+        return;
       const cmd = e.metaKey || e.ctrlKey;
       if (cmd && e.key === "F1") {
         e.preventDefault();
@@ -1777,6 +2050,42 @@ export default function App() {
       if (editingTarget(e.target) || modal) return;
       if (activeTableSelection && selectedElement?.table) {
         const table = selectedElement.table;
+        if (e.key === "Tab" && !cmd && !e.altKey) {
+          e.preventDefault();
+          const cells = visibleTableCells(table),
+            index = cells.findIndex(
+              (c) =>
+                c.row === activeTableSelection.focus.row &&
+                c.column === activeTableSelection.focus.column,
+            );
+          let focus = cells[index + (e.shiftKey ? -1 : 1)];
+          if (!focus && !e.shiftKey && table.cells.length < MAX_TABLE_ROWS) {
+            focus = { row: table.cells.length, column: 0 };
+            const next = changeTableAxis(table, "row", table.cells.length);
+            changeSlide((s) => ({
+              ...s,
+              elements: s.elements.map((el) =>
+                el.id === selectedElement.id
+                  ? {
+                      ...el,
+                      table: next,
+                      height: Math.min(
+                        100000,
+                        el.height * (next.cells.length / table.cells.length),
+                      ),
+                    }
+                  : el,
+              ),
+            }));
+          }
+          if (focus)
+            setTableSelection({
+              ...activeTableSelection,
+              anchor: focus,
+              focus,
+            });
+          return;
+        }
         if (cmd && ["c", "x"].includes(e.key.toLowerCase())) {
           e.preventDefault();
           copySelection();
@@ -1843,12 +2152,25 @@ export default function App() {
       } else if (cmd && e.key.toLowerCase() === "y") {
         e.preventDefault();
         redo();
+      } else if (cmd && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        changeSlide((s) => ({
+          ...s,
+          elements: e.shiftKey
+            ? ungroupElements(s.elements, selected)
+            : groupElements(s.elements, selected),
+        }));
       } else if (cmd && e.key.toLowerCase() === "d") {
         e.preventDefault();
         duplicateSelected();
       } else if (cmd && e.key.toLowerCase() === "a") {
         e.preventDefault();
-        setSelected(slide.elements.map((el) => el.id));
+        if (
+          e.target instanceof Element &&
+          e.target.closest(".thumbnail-list,.slide-sorter")
+        )
+          setSlideSelection(deck.slides.map((s) => s.id));
+        else setSelected(slide.elements.map((el) => el.id));
       } else if (cmd && e.key.toLowerCase() === "c") {
         e.preventDefault();
         copySelection();
@@ -1873,7 +2195,8 @@ export default function App() {
         startPresent(!e.shiftKey);
       } else if (
         e.key === "Enter" &&
-        selectedElement?.type === "text" &&
+        (selectedElement?.type === "text" ||
+          selectedElement?.type === "shape") &&
         !selectedElement.locked
       ) {
         e.preventDefault();
@@ -1971,7 +2294,8 @@ export default function App() {
         e.preventDefault();
         return;
       }
-      if (editingTarget(e.target) || modal) return;
+      if (e.defaultPrevented || editingTarget(e.target) || editing || modal)
+        return;
       const file = Array.from(e.clipboardData?.items || [])
         .find((i) => i.type.startsWith("image/"))
         ?.getAsFile();
@@ -1992,6 +2316,44 @@ export default function App() {
       const text = e.clipboardData?.getData("text/plain");
       if (text) {
         e.preventDefault();
+        if (
+          activeTableSelection &&
+          selectedElement?.table &&
+          !selectedElement.locked
+        ) {
+          try {
+            const data = parseTableClipboard(text),
+              next = pasteTableClipboard(
+                selectedElement.table,
+                activeTableSelection.focus.row,
+                activeTableSelection.focus.column,
+                data,
+              );
+            changeSlide((s) => ({
+              ...s,
+              elements: s.elements.map((el) =>
+                el.id === selectedElement.id
+                  ? {
+                      ...el,
+                      table: next,
+                      height: Math.min(
+                        100000,
+                        (el.height * next.cells.length) /
+                          selectedElement.table!.cells.length,
+                      ),
+                    }
+                  : el,
+              ),
+            }));
+          } catch (error) {
+            notify(
+              error instanceof Error
+                ? error.message
+                : "표 데이터를 붙여넣지 못했습니다.",
+            );
+          }
+          return;
+        }
         insertElements([
           element("text", {
             text,
@@ -2047,9 +2409,9 @@ export default function App() {
   });
 
   const toggleTextFormat = (format: InlineFormat) => {
-    if (selectedElement?.type !== "text" || selectedElement.locked) return;
+    if (!textCapable || selectedElement?.locked) return;
     if (!editing) {
-      updateSelected({ [format]: !selectedElement[format] });
+      patchSelectedText({ [format]: !selectedTextStyle?.[format] });
       return;
     }
     const host = document.querySelector<HTMLElement>(".editing-text");
@@ -2070,7 +2432,7 @@ export default function App() {
     selection?: TextMenuSelection,
     point?: { x: number; y: number },
   ) => {
-    if (selectedElement?.type !== "text" || selectedElement.locked) return;
+    if (!textCapable || selectedElement?.locked) return;
     const host = document.querySelector<HTMLElement>(".editing-text");
     const retained =
       selection ??
@@ -2119,7 +2481,7 @@ export default function App() {
         180,
       color:
         (parent ? cssColorHex(getComputedStyle(parent).color) : undefined) ??
-        selectedElement.color ??
+        selectedTextStyle?.color ??
         "#233D35",
       selection: retained,
       partial: !!host || !!selection,
@@ -2158,8 +2520,24 @@ export default function App() {
       changeSlide((s) => ({
         ...s,
         elements: s.elements.map((el) =>
-          colorPalette.ids.includes(el.id) && el.type === "text" && !el.locked
-            ? patchText(el, { color })
+          colorPalette.ids.includes(el.id) && !el.locked
+            ? el.table
+              ? {
+                  ...el,
+                  table: applyTableCellFormat(
+                    el.table,
+                    el.id === activeTableSelection?.elementId && tableRange
+                      ? tableRange
+                      : {
+                          startRow: 0,
+                          endRow: el.table.cells.length - 1,
+                          startColumn: 0,
+                          endColumn: el.table.cells[0].length - 1,
+                        },
+                    { color },
+                  ),
+                }
+              : patchText(el, { color })
             : el,
         ),
       }));
@@ -2178,9 +2556,9 @@ export default function App() {
     key: "fontFamily" | "fontSize" | "align",
     value: string | number,
   ) => {
-    if (selectedElement?.type !== "text" || selectedElement.locked) return;
+    if (!textCapable || selectedElement?.locked) return;
     if (!editing) {
-      updateSelected({ [key]: value });
+      patchSelectedText({ [key]: value });
       return;
     }
     const host = document.querySelector<HTMLElement>(".editing-text");
@@ -2227,14 +2605,14 @@ export default function App() {
           value={
             editing
               ? inlineTextStyle.fontFamily
-              : selectedElement?.fontFamily || "Arial"
+              : selectedTextStyle?.fontFamily || "Arial"
           }
-          disabled={selectedElement?.type !== "text"}
+          disabled={!textCapable || selectedElement?.locked}
           onChange={(e) => setTextStyle("fontFamily", e.target.value)}
         >
           {[
             ...new Set([
-              selectedElement?.fontFamily || "Arial",
+              selectedTextStyle?.fontFamily || "Arial",
               ...(editing ? [inlineTextStyle.fontFamily] : []),
               "Arial",
               "Calibri",
@@ -2262,9 +2640,11 @@ export default function App() {
           min={8}
           max={240}
           value={
-            editing ? inlineTextStyle.fontSize : selectedElement?.fontSize || 32
+            editing
+              ? inlineTextStyle.fontSize
+              : selectedTextStyle?.fontSize || 32
           }
-          disabled={selectedElement?.type !== "text"}
+          disabled={!textCapable || selectedElement?.locked}
           onChange={(fontSize) => setTextStyle("fontSize", fontSize)}
         />
       </div>
@@ -2274,8 +2654,10 @@ export default function App() {
           icon={<Bold size={17} />}
           title="굵게"
           preserveTextSelection
-          active={editing ? inlineFormat.bold : selectedElement?.bold || false}
-          disabled={selectedElement?.type !== "text" || selectedElement.locked}
+          active={
+            editing ? inlineFormat.bold : selectedTextStyle?.bold || false
+          }
+          disabled={!textCapable || selectedElement?.locked}
           onClick={() => toggleTextFormat("bold")}
         />
         <Tool
@@ -2284,9 +2666,9 @@ export default function App() {
           title="기울임"
           preserveTextSelection
           active={
-            editing ? inlineFormat.italic : selectedElement?.italic || false
+            editing ? inlineFormat.italic : selectedTextStyle?.italic || false
           }
-          disabled={selectedElement?.type !== "text" || selectedElement.locked}
+          disabled={!textCapable || selectedElement?.locked}
           onClick={() => toggleTextFormat("italic")}
         />
         <Tool
@@ -2297,9 +2679,9 @@ export default function App() {
           active={
             editing
               ? inlineFormat.underline
-              : selectedElement?.underline || false
+              : selectedTextStyle?.underline || false
           }
-          disabled={selectedElement?.type !== "text" || selectedElement.locked}
+          disabled={!textCapable || selectedElement?.locked}
           onClick={() => toggleTextFormat("underline")}
         />
         <button
@@ -2307,7 +2689,7 @@ export default function App() {
           title="글자 색"
           aria-label="글자 색"
           data-text-format-trigger
-          disabled={selectedElement?.type !== "text" || selectedElement.locked}
+          disabled={!textCapable || selectedElement?.locked}
           onPointerDown={() => {
             const host = document.querySelector<HTMLElement>(".editing-text");
             colorSelection.current = host
@@ -2323,7 +2705,7 @@ export default function App() {
             style={{
               background: editing
                 ? inlineTextStyle.color
-                : selectedElement?.color || "#233D35",
+                : selectedTextStyle?.color || "#233D35",
             }}
           />
         </button>
@@ -2424,6 +2806,30 @@ export default function App() {
     );
     objectMenuActions.push(
       {
+        label: "그룹화",
+        icon: <Layers size={16} />,
+        disabled: locked || selected.length < 2,
+        run: () =>
+          changeSlide((s) => ({
+            ...s,
+            elements: groupElements(s.elements, selected),
+          })),
+      },
+      {
+        label: "그룹 해제",
+        icon: <Layers size={16} />,
+        disabled:
+          locked ||
+          !slide.elements.some(
+            (e) => selected.includes(e.id) && e.groups?.length,
+          ),
+        run: () =>
+          changeSlide((s) => ({
+            ...s,
+            elements: ungroupElements(s.elements, selected),
+          })),
+      },
+      {
         label: "잘라내기",
         icon: <Scissors size={16} />,
         disabled: locked,
@@ -2436,7 +2842,10 @@ export default function App() {
       {
         label: "붙여넣기",
         icon: <ClipboardPaste size={16} />,
-        disabled: !clipboard.current.elements && !clipboard.current.slide,
+        disabled:
+          !clipboard.current.elements &&
+          !clipboard.current.slide &&
+          !clipboard.current.slides,
         run: pasteSelection,
       },
       { label: "복제", icon: <Copy size={16} />, run: duplicateSelected },
@@ -2447,7 +2856,7 @@ export default function App() {
         run: removeSelected,
       },
     );
-    if (selectedElement.type === "text")
+    if (["text", "shape"].includes(selectedElement.type))
       objectMenuActions.push({
         label: "글자 색",
         icon: <Type size={16} />,
@@ -2455,7 +2864,10 @@ export default function App() {
         disabled: locked,
         run: () => openTextColor(),
       });
-    if (selected.length === 1 && selectedElement.type === "text")
+    if (
+      selected.length === 1 &&
+      ["text", "shape"].includes(selectedElement.type)
+    )
       objectMenuActions.push({
         label: "텍스트 편집",
         icon: <Type size={16} />,
@@ -2918,7 +3330,8 @@ export default function App() {
                     disabled={
                       !clipboard.current.cells &&
                       !clipboard.current.elements &&
-                      !clipboard.current.slide
+                      !clipboard.current.slide &&
+                      !clipboard.current.slides
                     }
                     onClick={pasteSelection}
                   >
@@ -2999,16 +3412,20 @@ export default function App() {
                       active={
                         (editing
                           ? inlineTextStyle.align
-                          : selectedElement?.align) === align
+                          : selectedTextStyle?.align) === align
                       }
-                      disabled={selectedElement?.type !== "text"}
+                      disabled={!textCapable}
                       onClick={() => setTextStyle("align", align)}
                     />
                   ))}
                 </div>
                 <button
                   className="ribbon-text-action"
-                  disabled={selectedElement?.type !== "text"}
+                  disabled={
+                    !textCapable ||
+                    selectedElement?.locked ||
+                    (selectedElement?.type === "table" && !editing)
+                  }
                   data-text-selection-control
                   onPointerDown={(event) => {
                     if (editing) event.preventDefault();
@@ -3033,7 +3450,7 @@ export default function App() {
                       elements: s.elements.map((e) =>
                         selected.includes(e.id) &&
                         !e.locked &&
-                        e.type === "text"
+                        (e.type === "text" || e.type === "shape")
                           ? toggleTextBullets(e)
                           : e,
                       ),
@@ -3041,6 +3458,34 @@ export default function App() {
                   }}
                 >
                   • 글머리 기호
+                </button>
+                <button
+                  className="ribbon-text-action"
+                  disabled={!textCapable || selectedElement?.type === "table"}
+                  data-text-selection-control
+                  onPointerDown={(e) => {
+                    if (editing) e.preventDefault();
+                  }}
+                  onClick={() => {
+                    if (editing) {
+                      document
+                        .querySelector(".editing-text")
+                        ?.dispatchEvent(
+                          new Event("slide-studio:toggle-numbering"),
+                        );
+                      return;
+                    }
+                    changeSlide((s) => ({
+                      ...s,
+                      elements: s.elements.map((e) =>
+                        selected.includes(e.id) && !e.locked
+                          ? toggleTextNumbering(e)
+                          : e,
+                      ),
+                    }));
+                  }}
+                >
+                  1. 번호 매기기
                 </button>
                 <span className="group-label">단락</span>
               </div>
@@ -3457,6 +3902,21 @@ export default function App() {
                 </div>
                 <span className="group-label">발표 준비</span>
               </div>
+              <div className="ribbon-group slideshow-tools">
+                <Tool
+                  icon={<PanelRight size={25} />}
+                  onClick={() => {
+                    if (openPresenter()) startPresent(true);
+                    else
+                      notify(
+                        "발표자 창을 열 수 없습니다. 팝업 허용을 확인하세요.",
+                      );
+                  }}
+                >
+                  발표자 보기
+                </Tool>
+                <span className="group-label">별도 창</span>
+              </div>
               <div className="ribbon-hint">
                 <Keyboard size={19} />
                 <span>
@@ -3486,13 +3946,13 @@ export default function App() {
               {deck.slides.map((s, i) => (
                 <div
                   key={s.id}
-                  className={`thumbnail-row ${s.id === slide.id ? "active" : ""} ${s.hidden ? "hidden-slide" : ""} ${dropSlide === i ? "drop-before" : ""}`}
+                  className={`thumbnail-row ${selectedSlideIds.includes(s.id) ? "active" : ""} ${s.hidden ? "hidden-slide" : ""} ${dropSlide === i ? "drop-before" : ""}`}
                   draggable
-                  onDragStart={(e) => {
-                    setDragSlide(i);
-                    e.dataTransfer.effectAllowed = "move";
-                    e.dataTransfer.setData("text/plain", s.id);
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    slideContext(s.id, e.clientX, e.clientY);
                   }}
+                  onDragStart={(e) => startSlideDrag(s.id, i, e)}
                   onDragOver={(e) => {
                     e.preventDefault();
                     setDropSlide(i);
@@ -3503,17 +3963,7 @@ export default function App() {
                   }}
                   onDrop={(e) => {
                     e.preventDefault();
-                    if (dragSlide !== null && dragSlide !== i)
-                      commit((d) => ({
-                        ...d,
-                        slides: reorder(
-                          d.slides,
-                          dragSlide,
-                          dragSlide < i ? i - 1 : i,
-                        ),
-                      }));
-                    setDragSlide(null);
-                    setDropSlide(null);
+                    dropSlides(s.id);
                   }}
                 >
                   <span
@@ -3526,7 +3976,8 @@ export default function App() {
                     className="thumbnail-button"
                     aria-label={`슬라이드 ${i + 1}: ${slideTitle(s)}${s.hidden ? " (숨김)" : ""}`}
                     aria-current={s.id === slide.id ? "true" : undefined}
-                    onClick={() => selectSlide(s.id)}
+                    aria-pressed={selectedSlideIds.includes(s.id)}
+                    onClick={(e) => selectSlide(s.id, e)}
                   >
                     <div
                       className="thumbnail-preview"
@@ -3565,8 +4016,28 @@ export default function App() {
                 {deck.slides.map((s, i) => (
                   <button
                     key={s.id}
-                    className={s.id === slide.id ? "chosen" : ""}
-                    onClick={() => {
+                    className={`${selectedSlideIds.includes(s.id) ? "chosen" : ""} ${dropSlide === i ? "drop-before" : ""}`}
+                    draggable
+                    onDragStart={(e) => startSlideDrag(s.id, i, e)}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDropSlide(i);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      dropSlides(s.id);
+                    }}
+                    onDragEnd={() => {
+                      setDragSlide(null);
+                      setDropSlide(null);
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      slideContext(s.id, e.clientX, e.clientY);
+                    }}
+                    aria-pressed={selectedSlideIds.includes(s.id)}
+                    onClick={(e) => selectSlide(s.id, e)}
+                    onDoubleClick={() => {
                       selectSlide(s.id);
                       setSorter(false);
                     }}
@@ -3641,7 +4112,11 @@ export default function App() {
                           finish();
                           setEditing(null);
                         }
-                        setSelected(selected.includes(id) ? selected : [id]);
+                        setSelected(
+                          selected.includes(id)
+                            ? selected
+                            : expandGroups(slide.elements, [id]),
+                        );
                         setTableSelection(null);
                         setMenu(null);
                         setObjectMenu({ x, y });
@@ -3696,6 +4171,30 @@ export default function App() {
                           };
                         })
                       }
+                      appendTableRow={(id) =>
+                        changeSlide((s) => ({
+                          ...s,
+                          elements: s.elements.map((e) =>
+                            e.id === id &&
+                            e.table &&
+                            e.table.cells.length < MAX_TABLE_ROWS
+                              ? {
+                                  ...e,
+                                  table: changeTableAxis(
+                                    e.table,
+                                    "row",
+                                    e.table.cells.length,
+                                  ),
+                                  height: Math.min(
+                                    100000,
+                                    (e.height * (e.table.cells.length + 1)) /
+                                      e.table.cells.length,
+                                  ),
+                                }
+                              : e,
+                          ),
+                        }))
+                      }
                       begin={begin}
                       finish={finish}
                       resizeText={(id, height) =>
@@ -3734,39 +4233,127 @@ export default function App() {
                         }))
                       }
                       changeText={(id, text, formats, edit) =>
-                        preview((d) => ({
-                          ...d,
-                          slides: d.slides.map((s) =>
-                            s.id === slide.id
-                              ? {
-                                  ...s,
-                                  elements: s.elements.map((el) =>
-                                    el.id === id
-                                      ? {
-                                          ...(formats
-                                            ? applyTextFormatRanges(
-                                                editText(
+                        previewText(
+                          (d) => ({
+                            ...d,
+                            slides: d.slides.map((s) =>
+                              s.id === slide.id
+                                ? {
+                                    ...s,
+                                    elements: s.elements.map((el) =>
+                                      el.id === id
+                                        ? {
+                                            ...(formats
+                                              ? applyTextFormatRanges(
+                                                  editText(
+                                                    el,
+                                                    text,
+                                                    edit?.softBreak,
+                                                    edit,
+                                                  ),
+                                                  formats,
+                                                )
+                                              : editText(
                                                   el,
                                                   text,
                                                   edit?.softBreak,
                                                   edit,
+                                                )),
+                                            field: undefined,
+                                          }
+                                        : el,
+                                    ),
+                                  }
+                                : s,
+                            ),
+                          }),
+                          id,
+                          edit?.inputType ?? "",
+                        )
+                      }
+                      changeCell={(id, row, column, text, formats, edit) =>
+                        previewText(
+                          (d) => ({
+                            ...d,
+                            slides: d.slides.map((s) =>
+                              s.id !== slide.id
+                                ? s
+                                : {
+                                    ...s,
+                                    elements: s.elements.map((el) => {
+                                      if (
+                                        el.id !== id ||
+                                        !el.table ||
+                                        el.locked
+                                      )
+                                        return el;
+                                      const table = el.table,
+                                        style = tableCellStyle(
+                                          table,
+                                          row,
+                                          column,
+                                        );
+                                      const content = {
+                                        ...el,
+                                        ...style,
+                                        type: "text" as const,
+                                        table: undefined,
+                                        text: table.cells[row][column],
+                                        paragraphs: style.paragraphs,
+                                      };
+                                      const changed = editText(
+                                          content,
+                                          text,
+                                          edit?.softBreak,
+                                          edit,
+                                        ),
+                                        next = formats
+                                          ? applyTextFormatRanges(
+                                              changed,
+                                              formats,
+                                            )
+                                          : changed;
+                                      return fitTableRows(
+                                        {
+                                          ...el,
+                                          table: {
+                                            ...table,
+                                            cells: table.cells.map((r, ri) =>
+                                              r.map((v, ci) =>
+                                                ri === row && ci === column
+                                                  ? text
+                                                  : v,
+                                              ),
+                                            ),
+                                            cellStyles: table.cells.map(
+                                              (r, ri) =>
+                                                r.map((_, ci) =>
+                                                  ri === row && ci === column
+                                                    ? {
+                                                        ...table.cellStyles?.[
+                                                          ri
+                                                        ]?.[ci],
+                                                        paragraphs:
+                                                          next.paragraphs,
+                                                      }
+                                                    : (table.cellStyles?.[ri]?.[
+                                                        ci
+                                                      ] ?? null),
                                                 ),
-                                                formats,
-                                              )
-                                            : editText(
-                                                el,
-                                                text,
-                                                edit?.softBreak,
-                                                edit,
-                                              )),
-                                          field: undefined,
-                                        }
-                                      : el,
-                                  ),
-                                }
-                              : s,
-                          ),
-                        }))
+                                            ),
+                                          },
+                                        },
+                                        row,
+                                      );
+                                    }),
+                                  },
+                            ),
+                          }),
+                          id,
+                          edit?.inputType ?? "",
+                          row,
+                          column,
+                        )
                       }
                       showGuides={guides}
                       grid={grid}
@@ -4003,7 +4590,25 @@ export default function App() {
                     </div>
                   )}
                   <div className="inspector-section">
-                    <h4>슬라이드에 맞춰 정렬</h4>
+                    <h4>개체 정렬</h4>
+                    <label>
+                      정렬 기준{" "}
+                      <select
+                        aria-label="개체 정렬 기준"
+                        value={selected.length > 1 ? alignScope : "slide"}
+                        onChange={(e) =>
+                          setAlignScope(e.target.value as "slide" | "selection")
+                        }
+                      >
+                        <option value="slide">슬라이드</option>
+                        <option
+                          value="selection"
+                          disabled={selected.length < 2}
+                        >
+                          선택 개체
+                        </option>
+                      </select>
+                    </label>
                     <div className="inspector-tools">
                       <Tool
                         small
@@ -4023,6 +4628,37 @@ export default function App() {
                         title="오른쪽 가장자리 맞춤"
                         onClick={() => alignElements("right")}
                       />
+                      <Tool
+                        small
+                        icon={<ArrowUp size={17} />}
+                        title="위쪽 가장자리 맞춤"
+                        onClick={() => alignElements("top")}
+                      />
+                      <Tool
+                        small
+                        icon={<Minus size={17} />}
+                        title="세로 가운데 맞춤"
+                        onClick={() => alignElements("middle")}
+                      />
+                      <Tool
+                        small
+                        icon={<ArrowDown size={17} />}
+                        title="아래쪽 가장자리 맞춤"
+                        onClick={() => alignElements("bottom")}
+                      />
+                      <button
+                        disabled={selected.length < 3}
+                        onClick={() => alignElements("horizontal")}
+                      >
+                        가로 간격 동일
+                      </button>
+                      <button
+                        disabled={selected.length < 3}
+                        onClick={() => alignElements("vertical")}
+                      >
+                        세로 간격 동일
+                      </button>
+
                       <Tool
                         small
                         icon={<ArrowUp size={17} />}
@@ -4101,7 +4737,11 @@ export default function App() {
                           style={{ background: color }}
                           className={slide.background === color ? "chosen" : ""}
                           onClick={() =>
-                            changeSlide((s) => ({ ...s, background: color }))
+                            changeSlide((s) => ({
+                              ...s,
+                              background: color,
+                              backgroundGradient: undefined,
+                            }))
                           }
                         >
                           {slide.background === color && (
@@ -4143,7 +4783,7 @@ export default function App() {
                         ["two-column", "두 단"],
                         ["blank", "빈 화면"],
                       ].map(([id, label]) => (
-                        <button key={id} onClick={() => addSlide(id)}>
+                        <button key={id} onClick={() => applySlideLayout(id)}>
                           <div className={`layout-mini ${id}`}>
                             <i />
                             <i />
@@ -4154,7 +4794,8 @@ export default function App() {
                       ))}
                     </div>
                     <p className="section-note">
-                      선택한 레이아웃으로 새 슬라이드를 추가합니다.
+                      현재 슬라이드의 레이아웃을 바꿉니다. 기존 내용은
+                      유지됩니다.
                     </p>
                   </div>
                   <div className="inspector-section">
@@ -4360,13 +5001,17 @@ export default function App() {
               changeSlide((s) => ({
                 ...s,
                 elements: s.elements.map((el) =>
-                  el.id === tableEditId && !el.locked ? { ...el, table } : el,
+                  el.id === tableEditId && !el.locked
+                    ? fitTableRows({ ...el, table })
+                    : el,
                 ),
               }));
               setModal(null);
             } else
               insertElements([
-                createTableElement(table, deck.width, deck.height),
+                fitTableRows(
+                  createTableElement(table, deck.width, deck.height),
+                ),
               ]);
           }}
         />
@@ -4600,7 +5245,7 @@ export default function App() {
       )}
       {presenting && (
         <div
-          className={`presentation-view ${blackout ? "blackout" : ""}`}
+          className={`presentation-view ${blackout || whiteout ? "blackout" : ""} ${whiteout ? "whiteout" : ""}`}
           ref={presentationView}
           tabIndex={-1}
           data-testid="presentation-view"
@@ -4638,12 +5283,24 @@ export default function App() {
               (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
             )}
             ended={presentEnded}
-            blackout={blackout}
+            blackout={blackout || whiteout}
             onSlideLink={(slideId) => {
               const index = deck.slides.findIndex((s) => s.id === slideId);
               if (index >= 0) showPresentationSlide(index);
             }}
           />
+          {!presentEnded && (
+            <button
+              className="present-notes-toggle"
+              aria-pressed={presentNotes}
+              onClick={(e) => {
+                e.stopPropagation();
+                setPresentNotes((v) => !v);
+              }}
+            >
+              발표자 노트 (O)
+            </button>
+          )}
           {presentNotes && !presentEnded && (
             <div className="present-notes" onClick={(e) => e.stopPropagation()}>
               <strong>발표자 노트</strong>
@@ -4653,6 +5310,144 @@ export default function App() {
               </p>
             </div>
           )}
+        </div>
+      )}
+      {slideMenu && (
+        <ObjectContextMenu
+          x={slideMenu.x}
+          y={slideMenu.y}
+          onClose={() => setSlideMenu(null)}
+          actions={[
+            {
+              icon: <Copy size={16} />,
+              label: `슬라이드 복제 (${selectedSlideIds.length})`,
+              run: () => {
+                duplicateCurrentSlide();
+                setSlideMenu(null);
+              },
+            },
+            {
+              icon: <Copy size={16} />,
+              label: "슬라이드 복사",
+              run: () => {
+                copySelection();
+                setSlideMenu(null);
+              },
+            },
+            {
+              icon: <EyeOff size={16} />,
+              label: deck.slides
+                .filter((s) => selectedSlideIds.includes(s.id))
+                .every((s) => s.hidden)
+                ? "숨김 해제"
+                : "슬라이드 숨기기",
+              run: () => {
+                const hidden = !deck.slides
+                  .filter((s) => selectedSlideIds.includes(s.id))
+                  .every((s) => s.hidden);
+                commit((d) => ({
+                  ...d,
+                  slides: d.slides.map((s) =>
+                    selectedSlideIds.includes(s.id) ? { ...s, hidden } : s,
+                  ),
+                }));
+                setSlideMenu(null);
+              },
+            },
+            {
+              icon: <Trash2 size={16} />,
+              label: "슬라이드 삭제",
+              run: () => {
+                removeSlide();
+                setSlideMenu(null);
+              },
+            },
+          ]}
+        />
+      )}
+      {pendingInk && (
+        <div className="modal-backdrop">
+          <section
+            className="dialog"
+            role="dialog"
+            aria-label="발표 판서 보관"
+            aria-modal="true"
+          >
+            <h2>발표 중 그린 내용을 보관할까요?</h2>
+            <p>펜과 형광펜을 편집 가능한 도형으로 슬라이드에 추가합니다.</p>
+            <div className="dialog-actions">
+              <button onClick={() => setPendingInk(null)}>판서 버리기</button>
+              <button
+                className="primary"
+                autoFocus
+                onClick={() => {
+                  if (
+                    deck.slides.some(
+                      (s) =>
+                        s.elements.length + (pendingInk[s.id]?.length ?? 0) >
+                        1000,
+                    ) ||
+                    deck.slides.reduce((n, s) => n + s.elements.length, 0) +
+                      Object.values(pendingInk).reduce(
+                        (n, s) => n + s.length,
+                        0,
+                      ) >
+                      10000
+                  ) {
+                    notify("보관할 판서가 개체 수 한도를 초과했습니다.");
+                    return;
+                  }
+                  commit((d) => ({
+                    ...d,
+                    slides: d.slides.map((s) => {
+                      const strokes = pendingInk[s.id];
+                      if (!strokes) return s;
+                      const group = uid();
+                      const elements = strokes.map((stroke) => {
+                        const xs = stroke.points.map((p) => p[0]),
+                          ys = stroke.points.map((p) => p[1]),
+                          x = Math.min(...xs),
+                          y = Math.min(...ys),
+                          width = Math.max(1, Math.max(...xs) - x),
+                          height = Math.max(1, Math.max(...ys) - y);
+                        return element("shape", {
+                          shape: "custom",
+                          groups: [group],
+                          x,
+                          y,
+                          width,
+                          height,
+                          opacity: stroke.opacity ?? 1,
+                          fill: "transparent",
+                          stroke: stroke.color,
+                          strokeCap: "round",
+                          strokeWidth: stroke.width,
+                          paths: [
+                            {
+                              d: stroke.points
+                                .map(
+                                  (p, i) =>
+                                    `${i ? "L" : "M"} ${p[0] - x} ${p[1] - y}`,
+                                )
+                                .join(" "),
+                              width,
+                              height,
+                              fill: false,
+                              stroke: true,
+                            },
+                          ],
+                        });
+                      });
+                      return { ...s, elements: [...s.elements, ...elements] };
+                    }),
+                  }));
+                  setPendingInk(null);
+                }}
+              >
+                슬라이드에 보관
+              </button>
+            </div>
+          </section>
         </div>
       )}
       <div className="print-deck">

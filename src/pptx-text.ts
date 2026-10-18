@@ -1,3 +1,4 @@
+import { listNumberLabel } from "./list-numbering";
 import type { SlideElement, TextParagraph, TextRun } from "./types";
 import { paragraphText } from "./text-layout";
 
@@ -26,6 +27,7 @@ interface Context {
     node: Element | undefined,
   ) => { color: string; opacity: number } | undefined;
   defaultColor: string;
+  link?: (node: Element | undefined) => TextRun["hyperlink"];
   geometry: {
     x: number;
     y: number;
@@ -67,7 +69,7 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
   const numbering = new Map<number, { type: string; value: number }>();
   const paragraphs: TextParagraph[] = sourceParagraphs.map((p, index) => {
     const pPr = child(p, "pPr"),
-      level = Math.min(8, Math.max(0, num([pPr], "lvl", 0))) + 1;
+      level = Math.min(8, Math.max(0, Math.floor(num([pPr], "lvl", 0)))) + 1;
     const props = [
       pPr,
       child(child(body, "lstStyle"), `lvl${level}pPr`),
@@ -111,6 +113,9 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
       const under = firstAttribute(nodes, "u", "none");
       return {
         text,
+        ...(ctx.link?.(child(r, "hlinkClick"))
+          ? { hyperlink: ctx.link(child(r, "hlinkClick")) }
+          : {}),
         fontFamily: ctx.font(latin, text, language),
         fontFamilyEastAsian: ctx.font(eastAsian, text, language),
         ...(language ? { language } : {}),
@@ -129,6 +134,7 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
         italic: ["1", "true", "on"].includes(firstAttribute(nodes, "i", "0")),
         underline: under !== "none",
         color: color?.color ?? ctx.defaultColor,
+        opacity: color?.opacity ?? 1,
         ...(num(nodes, "baseline", 0)
           ? { baseline: num(nodes, "baseline", 0) }
           : {}),
@@ -149,6 +155,7 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
       .flatMap((n) => Array.from(n?.children ?? []))
       .find((n) => ["buNone", "buChar", "buAutoNum"].includes(n.localName));
     let bulletPrefix: string | undefined;
+    let numberStyle: TextParagraph["numbering"];
     if (
       bulletNode?.localName !== "buNone" &&
       bulletNode &&
@@ -166,7 +173,8 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
         numbering.set(level, { type, value });
         for (const nested of numbering.keys())
           if (nested > level) numbering.delete(nested);
-        prefix = `${value}.`;
+        numberStyle = { type, value };
+        prefix = listNumberLabel(type, value);
       }
       bulletPrefix = prefix + " ";
       const bulletProperty = (...names: string[]) =>
@@ -233,6 +241,8 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
     return {
       runs,
       ...(bulletPrefix ? { bulletPrefix } : {}),
+      ...(numberStyle ? { numbering: numberStyle } : {}),
+      ...(level > 1 || pPr?.hasAttribute("lvl") ? { level: level - 1 } : {}),
       align: align === "ctr" ? "center" : align === "r" ? "right" : "left",
       fontSize: size,
       ...(linePt
@@ -303,7 +313,6 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
     id: crypto.randomUUID(),
     type: "text",
     ...g,
-    opacity: textOpacity ?? 1,
     ...(cp || ctx.preserveBox
       ? { textInsets: insets }
       : {
@@ -313,6 +322,8 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
           height: Math.max(1, g.height - insets[0] - insets[2]),
         }),
     ...first,
+    hyperlink: undefined,
+    opacity: 1,
     text: paragraphText(paragraphs),
     paragraphs,
     ...(num(bodyProps, "numCol", 1) > 1

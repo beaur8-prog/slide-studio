@@ -1,3 +1,4 @@
+import { copyElements } from "./object-groups";
 import type { Deck, Slide, SlideElement, ShapeKind } from "./types";
 
 export const uid = () => crypto.randomUUID();
@@ -310,7 +311,7 @@ export function duplicateSlide(slide: Slide): Slide {
   return {
     ...structuredClone(slide),
     id: uid(),
-    elements: slide.elements.map((e) => ({ ...e, id: uid() })),
+    elements: copyElements(slide.elements),
   };
 }
 export function reorder<T>(array: T[], from: number, to: number): T[] {

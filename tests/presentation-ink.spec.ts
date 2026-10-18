@@ -112,7 +112,7 @@ test("Windows slideshow ribbon icons and labels fit without clipping at supporte
           };
         });
       });
-    expect(bounds.length).toBe(4);
+    expect(bounds.length).toBe(5);
     expect(
       bounds.every((b) => b.inside && b.visible && b.horizontal),
       JSON.stringify(bounds),
@@ -283,6 +283,8 @@ test("session ink is not saved to the project and never remains in the next show
   await page.keyboard.press("ArrowRight");
   await expect(page.getByTestId("ink-stroke")).toHaveCount(1);
   await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog",{name:"발표 판서 보관"})).toBeVisible();
+  await page.getByRole("button",{name:"판서 버리기",exact:true}).click();
   await page.keyboard.press("Control+s");
   expect(await page.evaluate(() => (window as any).__saved)).toEqual(before);
   await page.keyboard.press("F5");
@@ -357,4 +359,8 @@ test("eraser intersection covers sparse fast crossings, nearby lines and separat
     ];
   });
   expect(results).toEqual([true, true, false, true]);
+});
+
+test('highlighter can be retained as editable slide artwork and undone without losing the deck',async({page})=>{
+  await open(page);await page.keyboard.press('F5');await page.keyboard.press('Control+h');const ink=page.getByTestId('presentation-ink');await expect(ink).toHaveAttribute('data-tool','highlighter');await draw(page,ink);await expect(page.getByTestId('ink-stroke')).toHaveAttribute('opacity','0.35');await page.keyboard.press('Escape');await page.getByRole('button',{name:'슬라이드에 보관',exact:true}).click();const artwork=page.locator('.editable-slide [data-type="shape"]');await expect(artwork).toHaveCount(1);await expect(artwork).toHaveCSS('opacity','0.35');await page.keyboard.press('Control+z');await expect(artwork).toHaveCount(0);await page.keyboard.press('Control+y');await expect(artwork).toHaveCount(1);await expect(page.locator('.save-indicator')).toHaveText('저장됨');await page.reload();await expect(artwork).toHaveCount(1);
 });

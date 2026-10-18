@@ -203,3 +203,55 @@ test("fallback metrics cover extended Latin, Greek and Cyrillic consistently", a
   });
   for (const ratio of result) expect(ratio).toBeCloseTo(0.988, 3);
 });
+
+test("TTC collection registers every face locally with valid standalone checksums and survives restart", async ({
+  page,
+}) => {
+  const normal = namedFixture("Col Regular", 400),
+    light = namedFixture("Col Light", 300),
+    offsets = [20, 20 + ((normal.length + 3) & ~3)],
+    collection = Buffer.alloc(offsets[1] + light.length);
+  collection.write("ttcf", 0, "ascii");
+  collection.writeUInt32BE(0x10000, 4);
+  collection.writeUInt32BE(2, 8);
+  for (const [i, font] of [normal, light].entries()) {
+    collection.writeUInt32BE(offsets[i], 12 + i * 4);
+    font.copy(collection, offsets[i]);
+    for (let t = 0; t < font.readUInt16BE(4); t++) {
+      const at = offsets[i] + 12 + t * 16;
+      collection.writeUInt32BE(
+        collection.readUInt32BE(at + 8) + offsets[i],
+        at + 8,
+      );
+    }
+  }
+  await page.goto("http://127.0.0.1:5190");
+  const r = await page.evaluate(async (encoded) => {
+    const { collectionFaces } = await import("/src/font-collection.ts"),
+      { addLocalFonts, listLocalFonts, MAX_LOCAL_FONT_BYTES } = await import(
+        "/src/local-fonts.ts"
+      );
+    const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0)),
+      faces = collectionFaces(bytes, MAX_LOCAL_FONT_BYTES);
+    const sums = faces.map((face) => {
+      const v = new DataView(face.buffer);
+      let sum = 0;
+      for (let i = 0; i < face.length; i += 4)
+        sum = (sum + v.getUint32(i)) >>> 0;
+      return sum;
+    });
+    await addLocalFonts(bytes);
+    return { fonts: listLocalFonts(), sums };
+  }, collection.toString("base64"));
+  expect(r.sums).toEqual([0xb1b0afba, 0xb1b0afba]);
+  expect(r.fonts.map((f) => [f.family, f.weight])).toEqual([
+    ["Col Regular", 400],
+    ["Col Light", 300],
+  ]);
+  await page.reload();
+  expect(
+    await page.evaluate(async () =>
+      (await import("/src/local-fonts.ts")).listLocalFonts(),
+    ),
+  ).toHaveLength(2);
+});

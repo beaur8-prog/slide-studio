@@ -57,6 +57,7 @@ export function LineShape({ element: e }: { element: SlideElement }) {
       height={Math.max(1, e.height)}
       viewBox={`0 0 ${Math.max(1, e.width)} ${Math.max(1, e.height)}`}
       preserveAspectRatio="none"
+      opacity={e.strokeOpacity}
     >
       <line
         x1={Math.min(e.width / 2, trim(e.lineStart))}
@@ -65,6 +66,8 @@ export function LineShape({ element: e }: { element: SlideElement }) {
         y2={e.height / 2}
         stroke={stroke}
         strokeWidth={thickness}
+        strokeDasharray={e.strokeDash?.join(" ")}
+        strokeLinecap={e.strokeCap}
       />
       {marker(e.lineStart, true)}
       {marker(e.lineEnd, false)}

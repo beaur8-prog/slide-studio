@@ -111,14 +111,14 @@ Calibri and Calibri Light styles are registered separately with their actual
 weights and italics; original faces do not receive Carlito's size/vertical
 adjustments. Startup loads saved faces before the first slide is rendered.
 
-**File → 원본 글꼴 추가** accepts individual TTF/OTF files. The app reads their
+**File → 원본 글꼴 추가** accepts TTF/OTF files and TTC/OTC collections in the current source build. The app reads their
 family (including localized Korean names), weight and italic metadata and validates them with Chromium's FontFace
 loader. Add the regular/bold/italic files needed by the document. Faces are
 stored in a separate local IndexedDB database and restored on restart; removing
-a face restores normal font fallback. Limits are 16 MiB per file, 24 faces and
-64 MiB total. Fonts are neither installed in the OS nor sent over the network,
+a face restores normal font fallback. Limits are 64 MiB per file, 24 faces and
+256 MiB total. Fonts are neither installed in the OS nor sent over the network,
 embedded in `.slide`/PPTX exports, or added to public installers. Each viewing
-PC needs its own source fonts. Collections (TTC/OTC) are not supported.
+PC needs its own source fonts. Collection faces are extracted into bounded standalone sfnt files, with relocated table offsets and recomputed checksums. Every face must load successfully before the collection is stored; no operating-system fonts are changed.
 
 Optional automatic Calibri discovery checks fixed Office FontCache locations on
 Windows and macOS, plus the font resources in installed macOS PowerPoint, Word

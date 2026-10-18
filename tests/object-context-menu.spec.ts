@@ -52,7 +52,7 @@ test("right click selects its target; copy, paste, delete and undo use the chose
   await item(page, "shape-a").click({ button: "right" });
   await expect(item(page, "shape-a")).toHaveClass(/selected/);
   await expect(item(page, "text-b")).not.toHaveClass(/selected/);
-  await expect(action(page, "텍스트 편집")).toHaveCount(0);
+  await expect(action(page, "텍스트 편집")).toBeEnabled();
   await expect(action(page, "붙여넣기")).toBeDisabled();
   await action(page, "복사").click();
   await item(page, "shape-a").click({ button: "right" });

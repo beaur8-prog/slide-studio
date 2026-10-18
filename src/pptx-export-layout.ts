@@ -1,3 +1,4 @@
+import { writeGradient } from "./gradient";
 import type { SlideElement, TextParagraph, TextRun } from "./types";
 import { paragraphBullet } from "./text-layout";
 import { arcCubics } from "./svg-arc";
@@ -39,6 +40,76 @@ export function restoreLayoutXml(
   for (const el of elements) {
     const node = names.get(el.id);
     if (!node) continue;
+    const properties = child(node, "spPr");
+    if (properties && el.gradient)
+      writeGradient(
+        doc,
+        properties,
+        el.gradient,
+        el.opacity * (el.fillOpacity ?? 1),
+      );
+    const outline = child(properties, "ln");
+    if (outline && el.strokeDash) {
+      child(outline, "prstDash")?.remove();
+      child(outline, "custDash")?.remove();
+      const dash = make("custDash");
+      for (let i = 0; i < el.strokeDash.length; i += 2)
+        make(
+          "ds",
+          {
+            d: Math.round(
+              (el.strokeDash[i] / Math.max(0.01, el.strokeWidth ?? 1)) * 100000,
+            ),
+            sp: Math.round(
+              (el.strokeDash[(i + 1) % el.strokeDash.length] /
+                Math.max(0.01, el.strokeWidth ?? 1)) *
+                100000,
+            ),
+          },
+          dash,
+        );
+      outline.insertBefore(
+        dash,
+        Array.from(outline.children).find((n) =>
+          ["round", "bevel", "miter", "headEnd", "tailEnd", "extLst"].includes(
+            n.localName,
+          ),
+        ) ?? null,
+      );
+    }
+    if (outline && el.strokeCap)
+      outline.setAttribute(
+        "cap",
+        el.strokeCap === "round"
+          ? "rnd"
+          : el.strokeCap === "square"
+            ? "sq"
+            : "flat",
+      );
+    if (properties && el.shadow) {
+      const effects =
+          child(properties, "effectLst") ?? make("effectLst", {}, properties),
+        s = el.shadow;
+      const shadow = make(
+          "outerShdw",
+          {
+            blurRad: Math.round(s.blur * 9525),
+            dist: Math.round(Math.hypot(s.dx, s.dy) * 9525),
+            dir: Math.round(
+              (((Math.atan2(s.dy, s.dx) * 180) / Math.PI + 360) % 360) * 60000,
+            ),
+            algn: "ctr",
+            rotWithShape: 1,
+          },
+          effects,
+        ),
+        color = make("srgbClr", { val: s.color.slice(1) }, shadow);
+      make(
+        "alpha",
+        { val: Math.round(s.opacity * el.opacity * 100000) },
+        color,
+      );
+    }
     if (
       (el.shape === "line" || el.shape === "arrow") &&
       (el.lineStart || el.lineEnd)
@@ -151,7 +222,14 @@ export function restoreLayoutXml(
         node.parentElement?.insertBefore(shape, node.nextSibling);
       });
     }
-    if (el.type === "text") {
+    if (el.type === "shape" && el.text !== undefined) {
+      const template = names.get(`${el.id}-textbody`),
+        body = child(template ?? undefined, "txBody");
+      child(node, "txBody")?.remove();
+      if (body) node.appendChild(body);
+      template?.remove();
+    }
+    if (el.type === "text" || (el.type === "shape" && el.text !== undefined)) {
       const body = child(node, "txBody");
       if (!body) continue;
       const bp = child(body, "bodyPr");
@@ -206,6 +284,8 @@ export function restoreLayoutXml(
           },
           parent,
         );
+        if (run.hyperlink && name === "rPr")
+          n.setAttribute("data-ss-link", JSON.stringify(run.hyperlink));
         if (run.baseline) n.setAttribute("baseline", String(run.baseline));
         if (run.letterSpacing !== undefined)
           n.setAttribute("spc", String(Math.round(run.letterSpacing * 75)));
@@ -216,8 +296,9 @@ export function restoreLayoutXml(
           { val: (run.color ?? el.color ?? "#172033").slice(1) },
           make("solidFill", {}, n),
         );
-        if (el.opacity !== 1)
-          make("alpha", { val: Math.round(el.opacity * 100000) }, color);
+        const alpha = el.opacity * (run.opacity ?? el.textOpacity ?? 1);
+        if (alpha !== 1)
+          make("alpha", { val: Math.round(alpha * 100000) }, color);
         for (const family of ["latin", "ea", "cs"])
           make(
             family,
@@ -249,6 +330,8 @@ export function restoreLayoutXml(
             },
             p,
           );
+        if (paragraph.level !== undefined)
+          pr.setAttribute("lvl", String(Math.round(paragraph.level)));
         const paragraphAttrs = {
           marL: paragraph.marginLeft,
           marR: paragraph.marginRight,
@@ -310,10 +393,13 @@ export function restoreLayoutXml(
             pr,
           );
           const numbered = bullet.label.match(/^([1-9]\d*)\.$/);
-          if (numbered)
+          if (numbered || paragraph.numbering)
             make(
               "buAutoNum",
-              { type: "arabicPeriod", startAt: Number(numbered[1]) },
+              {
+                type: paragraph.numbering?.type ?? "arabicPeriod",
+                startAt: paragraph.numbering?.value ?? Number(numbered![1]),
+              },
               pr,
             );
           else make("buChar", { char: bullet.label }, pr);
@@ -366,7 +452,17 @@ export function restoreLayoutXml(
       make("gdLst", {}, geom);
       make("ahLst", {}, geom);
       make("cxnLst", {}, geom);
-      make("rect", { l: "l", t: "t", r: "r", b: "b" }, geom);
+      const frame = el.textFrame ?? [0, 0, 1, 1];
+      make(
+        "rect",
+        {
+          l: Math.round(frame[0] * el.width * 9525),
+          t: Math.round(frame[1] * el.height * 9525),
+          r: Math.round((frame[0] + frame[2]) * el.width * 9525),
+          b: Math.round((frame[1] + frame[3]) * el.height * 9525),
+        },
+        geom,
+      );
       const list = make("pathLst", {}, geom);
       for (const source of el.paths) {
         const path = make(

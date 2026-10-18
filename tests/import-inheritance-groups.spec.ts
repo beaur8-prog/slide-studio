@@ -313,7 +313,7 @@ test("public CMU defaults and flipped annotation match native reference geometry
     };
   });
   expect(result.noteSize).toBe(48);
-  expect(result.label.y).toBeCloseTo(1547086 / 9525 + 4.8, 3);
+  expect(result.label.y).toBeCloseTo(1547086 / 9525, 3);
   expect(result.label.fontSize).toBe(32);
   expect(result.arrow.rotation).toBeGreaterThan(150);
   expect(result.arrow.rotation).toBeLessThan(160);

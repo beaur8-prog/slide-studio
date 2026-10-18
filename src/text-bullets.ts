@@ -1,3 +1,4 @@
+import { listNumberLabel } from "./list-numbering";
 import type { SlideElement, TextParagraph, TextRun } from "./types";
 import { editableText, paragraphText } from "./text-layout";
 
@@ -57,6 +58,7 @@ export function toggleTextBullets(
       return {
         ...p,
         bulletPrefix: undefined,
+        numbering: undefined,
         marginLeft: margin,
         indent: 0,
         runs: body,
@@ -65,6 +67,7 @@ export function toggleTextBullets(
     return {
       ...p,
       bulletPrefix: "• ",
+      numbering: undefined,
       marginLeft: margin + hanging,
       indent: -hanging,
       runs: [{ ...(oldPrefix ? p.runs[0] : body[0]), text: "• " }, ...body],
@@ -142,7 +145,8 @@ export function continueTextBullet(
   element: SlideElement,
 ): boolean {
   const source = paragraphs(element);
-  if (!source.some((p) => isBulletPrefix(prefix(p)))) return false;
+  if (!source.some((p) => isBulletPrefix(prefix(p)) || p.numbering))
+    return false;
   const selection = getSelection();
   if (!selection?.rangeCount) return false;
   const range = selection.getRangeAt(0);
@@ -160,9 +164,58 @@ export function continueTextBullet(
     }
     const marker = prefix(p);
     // This command continues bulleted paragraphs; imported numbering is separate.
-    if (!isBulletPrefix(marker) || offset < marker.length) return false;
+    if ((!isBulletPrefix(marker) && !p.numbering) || offset < marker.length)
+      return false;
     // One native edit keeps selection, character formatting and undo/redo intact.
-    return document.execCommand("insertText", false, "\n" + marker);
+    return document.execCommand(
+      "insertText",
+      false,
+      "\n" +
+        (p.numbering
+          ? listNumberLabel(p.numbering.type, p.numbering.value + 1) + " "
+          : marker),
+    );
   }
   return false;
+}
+
+export function toggleTextNumbering(
+  element: SlideElement,
+  indices?: number[],
+): SlideElement {
+  const source = paragraphs(element),
+    enabled = !source
+      .filter((_, i) => !indices || indices.includes(i))
+      .every((p) => !!p.numbering);
+  let value = 0;
+  const next = source.map((p, i) => {
+    if (indices && !indices.includes(i)) return p;
+    const old = prefix(p),
+      body = withoutPrefix(p.runs, old.length),
+      hanging =
+        -(p.indent ?? 0) || Math.max(20, (element.fontSize ?? 32) * 0.8);
+    if (!enabled)
+      return {
+        ...p,
+        numbering: undefined,
+        bulletPrefix: undefined,
+        runs: body,
+        indent: 0,
+      };
+    const marker = listNumberLabel("arabicPeriod", ++value) + " ";
+    return {
+      ...p,
+      numbering: { type: "arabicPeriod", value },
+      bulletPrefix: marker,
+      marginLeft: Math.max(p.marginLeft ?? 0, hanging),
+      indent: -hanging,
+      runs: [{ ...body[0], text: marker }, ...body],
+    };
+  });
+  return {
+    ...element,
+    text: paragraphText(next),
+    paragraphs: next,
+    field: undefined,
+  };
 }

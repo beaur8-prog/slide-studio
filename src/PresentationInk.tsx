@@ -10,6 +10,7 @@ import {
   MousePointer2,
   CircleDot,
   PenLine,
+  Highlighter,
   Eraser,
   Trash2,
   Undo2,
@@ -21,7 +22,7 @@ import type { Slide } from "./types";
 import { touchesInk, type InkPoint, type InkStroke } from "./presentation-ink";
 import "./presentation-ink.css";
 
-type Tool = "arrow" | "laser" | "pen" | "eraser";
+type Tool = "arrow" | "laser" | "pen" | "highlighter" | "eraser";
 type Drawing = {
   strokes: InkStroke[];
   undo: InkStroke[][];
@@ -35,12 +36,14 @@ type Gesture = {
   before: InkStroke[];
   color: string;
   width: number;
+  opacity?: number;
 };
 export interface PresentationInkHandle {
   openMenu(x: number, y: number): void;
   handleKey(event: KeyboardEvent): boolean;
   command(action: string): void;
   consumeClick(): boolean;
+  snapshot(): Record<string, InkStroke[]>;
 }
 const colors = [
   ["#FF3434", "빨강"],
@@ -54,6 +57,7 @@ const tools = [
   ["arrow", "화살표", MousePointer2, "A"],
   ["laser", "레이저 포인터", CircleDot, "L"],
   ["pen", "펜", PenLine, "P"],
+  ["highlighter", "형광펜", Highlighter, "H"],
   ["eraser", "지우개", Eraser, "E"],
 ] as const;
 
@@ -130,7 +134,7 @@ const PresentationInk = forwardRef<
             : g.points;
         d.strokes = [
           ...d.strokes,
-          { points: p, color: g.color, width: g.width },
+          { points: p, color: g.color, width: g.width, opacity: g.opacity },
         ];
       }
     }
@@ -166,7 +170,7 @@ const PresentationInk = forwardRef<
   };
   const command = (action: string) => {
     if (ended || blackout) return;
-    if (["arrow", "laser", "pen", "eraser"].includes(action))
+    if (["arrow", "laser", "pen", "highlighter", "eraser"].includes(action))
       selectTool(action as Tool);
     else if (action === "undo" || action === "redo") undo(action === "redo");
     else if (action === "clear") clear();
@@ -183,6 +187,14 @@ const PresentationInk = forwardRef<
   useImperativeHandle(ref, () => ({
     openMenu,
     command,
+    snapshot() {
+      finish();
+      return Object.fromEntries(
+        Object.entries(drawings.current)
+          .filter(([, d]) => d.strokes.length)
+          .map(([id, d]) => [id, structuredClone(d.strokes)]),
+      );
+    },
     consumeClick() {
       if (menu) {
         setMenu(null);
@@ -201,7 +213,7 @@ const PresentationInk = forwardRef<
       }
       const cmd = event.ctrlKey || event.metaKey,
         key = event.key.toLowerCase();
-      if (cmd && ["a", "l", "p", "e", "z", "y"].includes(key)) {
+      if (cmd && ["a", "l", "p", "h", "e", "z", "y"].includes(key)) {
         event.preventDefault();
         if (!event.repeat)
           command(
@@ -210,6 +222,7 @@ const PresentationInk = forwardRef<
                 a: "arrow",
                 l: "laser",
                 p: "pen",
+                h: "highlighter",
                 e: "eraser",
                 z: event.shiftKey ? "redo" : "undo",
                 y: "redo",
@@ -343,7 +356,7 @@ const PresentationInk = forwardRef<
               }
               if (
                 gesture.current ||
-                !["pen", "eraser"].includes(toolRef.current)
+                !["pen", "highlighter", "eraser"].includes(toolRef.current)
               )
                 return;
               const p = point(event);
@@ -354,13 +367,22 @@ const PresentationInk = forwardRef<
                 points: [p],
                 before: d.strokes,
                 color,
-                width: penWidth,
+                width:
+                  toolRef.current === "highlighter" ? penWidth * 5 : penWidth,
+                opacity: toolRef.current === "highlighter" ? 0.35 : 1,
               };
               svg.current!.setPointerCapture(event.pointerId);
               if (toolRef.current === "eraser") erase(p, p);
               else {
                 draft.current?.setAttribute("stroke", color);
-                draft.current?.setAttribute("stroke-width", String(penWidth));
+                draft.current?.setAttribute(
+                  "stroke-width",
+                  String(gesture.current.width),
+                );
+                draft.current?.setAttribute(
+                  "opacity",
+                  String(gesture.current.opacity ?? 1),
+                );
                 draft.current?.setAttribute(
                   "points",
                   `${p.join(",")} ${p[0] + 0.01},${p[1]}`,
@@ -386,6 +408,7 @@ const PresentationInk = forwardRef<
                 fill="none"
                 stroke={stroke.color}
                 strokeWidth={stroke.width}
+                opacity={stroke.opacity}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -527,7 +550,7 @@ const PresentationInk = forwardRef<
           <p>
             그리기는 슬라이드별로 유지되며
             <br />
-            발표를 종료하면 사라집니다.
+            발표 종료 후 슬라이드에 보관할 수 있습니다.
           </p>
         </div>
       )}

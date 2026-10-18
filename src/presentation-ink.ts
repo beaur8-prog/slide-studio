@@ -1,5 +1,10 @@
 export type InkPoint = [number, number];
-export type InkStroke = { points: InkPoint[]; color: string; width: number };
+export type InkStroke = {
+  points: InkPoint[];
+  color: string;
+  width: number;
+  opacity?: number;
+};
 
 function pointDistance(p: InkPoint, a: InkPoint, b: InkPoint) {
   const dx = b[0] - a[0],

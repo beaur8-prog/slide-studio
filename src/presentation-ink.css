@@ -10,7 +10,7 @@
   touch-action: none;
   user-select: none;
 }
-.presentation-ink.tool-pen {
+.presentation-ink.tool-pen, .presentation-ink.tool-highlighter {
   cursor: crosshair;
 }
 .presentation-ink.tool-eraser {

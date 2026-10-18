@@ -276,8 +276,8 @@ test("table helpers preserve cells and reject malformed or oversized project dat
       null,
       { ...table, cells: [] },
       { ...table, cells: [["1"], ["2", "3"]] },
-      { ...table, cells: Array.from({ length: 21 }, () => [""]) },
-      { ...table, cells: [Array.from({ length: 13 }, () => "")] },
+      { ...table, cells: Array.from({ length: 101 }, () => [""]) },
+      { ...table, cells: [Array.from({ length: 51 }, () => "")] },
       { ...table, cells: [["x".repeat(2001)]] },
       { ...table, cells: [["\u0000"]] },
       { ...table, fontSize: Infinity },
@@ -457,9 +457,9 @@ test("inserted tables export native editable cells and reimport geometry, styles
       ],
     });
     expect(result.roundTrip[0].table).toEqual(result.imported[0].table);
-    expect(result.modified).toHaveLength(6);
-    expect(result.modified[0].type).toBe("text");
-    expect(result.modified[0].color).toBe("#FF0000");
-    expect(result.modified[0].text).toBe("PowerPoint 편집");
+    expect(result.modified).toHaveLength(1);
+    expect(result.modified[0].type).toBe("table");
+    expect(result.modified[0].table!.cellStyles![0][0]!.color).toBe("#FF0000");
+    expect(result.modified[0].table!.cells[0][0]).toBe("PowerPoint 편집");
   }
 });

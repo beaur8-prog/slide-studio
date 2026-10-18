@@ -1,0 +1,2 @@
+# Preserve the vendored Apache POI geometry resource byte for byte.
+src/assets/preset-shapes.xml -text whitespace=cr-at-eol

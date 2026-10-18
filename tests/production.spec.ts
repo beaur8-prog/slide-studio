@@ -97,7 +97,12 @@ test("production assets decode TIFF, load bundled fonts, restore Korean layout a
   await page.locator(".thumbnail-button").nth(5).click();
   await expect(page.locator(".editable-slide")).toContainText("고충처리위원회");
   await page.locator(".thumbnail-button").nth(11).click();
-  await expect(page.locator(".editable-slide .text-borders")).toHaveCount(4);
+  await expect(page.locator('.editable-slide [data-type="table"]')).toHaveCount(
+    1,
+  );
+  await expect(
+    page.locator(".editable-slide .inserted-table [data-row][data-column]"),
+  ).toHaveCount(4);
   const fonts = await page.evaluate(async () => {
     await document.fonts.load('24px "Carlito"');
     const korean = await document.fonts.load(

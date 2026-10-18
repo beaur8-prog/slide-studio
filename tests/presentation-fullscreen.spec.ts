@@ -51,8 +51,10 @@ test("Windows slideshow covers the display and restores normal, maximized, and f
       const display = (await windowState()).display;
       await expect(page.getByTestId("presentation-view")).toBeVisible();
       await expect(
-        page.getByTestId("presentation-view").getByRole("button"),
-      ).toHaveCount(0);
+        page
+          .getByTestId("presentation-view")
+          .getByRole("button", { name: "발표자 노트 (O)", exact: true }),
+      ).toHaveCount(1);
       await expect
         .poll(() => page.getByTestId("presentation-view").boundingBox())
         .toEqual({
@@ -159,8 +161,10 @@ test("browser slideshow enters fullscreen automatically and follows native fulls
     .poll(() => page.evaluate(() => !!document.fullscreenElement))
     .toBe(true);
   await expect(
-    page.getByTestId("presentation-view").getByRole("button"),
-  ).toHaveCount(0);
+    page
+      .getByTestId("presentation-view")
+      .getByRole("button", { name: "발표자 노트 (O)", exact: true }),
+  ).toHaveCount(1);
   await page.getByTestId("presentation-view").click();
   await expect(page.getByTestId("presentation-view")).toHaveAttribute(
     "aria-label",

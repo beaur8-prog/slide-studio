@@ -1,3 +1,4 @@
+import { listNumberLabel } from "./list-numbering";
 import { localFontAlias } from "./local-fonts";
 import type { SlideElement, TextParagraph, TextRun } from "./types";
 
@@ -136,6 +137,7 @@ export function paragraphLines(paragraph: TextParagraph): TextRun[][] {
 // Preserve surrounding character styles when an edit inserts/deletes text.
 // The editable DOM stays untouched during IME composition; only the model changes.
 export interface TextEdit {
+  inputType?: string;
   start: number;
   end: number;
   softBreak: boolean;
@@ -266,6 +268,22 @@ export function editText(
     paragraphs.push(p);
     offset = boundary + 1;
   }
+  const counters = new Map<number, number>();
+  for (const p of paragraphs)
+    if (p.numbering) {
+      const level = p.level ?? 0,
+        expected = (counters.get(level) ?? p.numbering.value - 1) + 1,
+        label = listNumberLabel(p.numbering.type, expected) + " ";
+      const raw = p.runs.map((r) => r.text).join("");
+      if (raw.startsWith(label)) {
+        p.numbering = { ...p.numbering, value: expected };
+        p.bulletPrefix = label;
+        counters.set(level, expected);
+      } else if (p.bulletPrefix && !raw.startsWith(p.bulletPrefix)) {
+        p.numbering = undefined;
+        p.bulletPrefix = undefined;
+      } else counters.set(level, p.numbering.value);
+    }
   return { ...element, text, paragraphs };
 }
 
@@ -273,6 +291,8 @@ export function patchText(
   element: SlideElement,
   patch: Partial<SlideElement>,
 ): SlideElement {
+  if (patch.fill !== undefined && patch.gradient === undefined)
+    element = { ...element, gradient: undefined };
   if (typeof patch.text === "string" && patch.text !== element.text)
     element = editText(element, patch.text);
   if (!element.paragraphs) return { ...element, ...patch };
@@ -321,6 +341,15 @@ export function scaleElement(
     letterSpacing: scaled(element.letterSpacing, sx),
     kerning: scaled(element.kerning),
     strokeWidth: scaled(element.strokeWidth),
+    strokeDash: element.strokeDash?.map((n) => n * scale),
+    shadow: element.shadow
+      ? {
+          ...element.shadow,
+          blur: element.shadow.blur * scale,
+          dx: element.shadow.dx * sx,
+          dy: element.shadow.dy * sy,
+        }
+      : undefined,
     cornerRadius: scaled(element.cornerRadius),
     ...(element.table
       ? {
@@ -344,6 +373,45 @@ export function scaleElement(
                         ? null
                         : {
                             ...style,
+                            ...(style.paragraphs
+                              ? {
+                                  paragraphs: style.paragraphs.map((p) => ({
+                                    ...p,
+                                    fontSize: scaled(p.fontSize),
+                                    lineSpacing: scaled(p.lineSpacing, sy),
+                                    spaceBefore: scaled(p.spaceBefore, sy),
+                                    spaceAfter: scaled(p.spaceAfter, sy),
+                                    marginLeft: scaled(p.marginLeft, sx),
+                                    marginRight: scaled(p.marginRight, sx),
+                                    indent: scaled(p.indent, sx),
+                                    tabSize: scaled(p.tabSize, sx),
+                                    runs: p.runs.map((r) => ({
+                                      ...r,
+                                      fontSize: scaled(r.fontSize),
+                                      letterSpacing: scaled(
+                                        r.letterSpacing,
+                                        sx,
+                                      ),
+                                      kerning: scaled(r.kerning),
+                                    })),
+                                  })),
+                                }
+                              : {}),
+                            ...(style.textInsets
+                              ? {
+                                  textInsets: style.textInsets.map(
+                                    (n, i) => n * (i % 2 ? sx : sy),
+                                  ) as [number, number, number, number],
+                                }
+                              : {}),
+                            ...(style.borders
+                              ? {
+                                  borders: style.borders.map((b) => ({
+                                    ...b,
+                                    width: b.width * scale,
+                                  })) as NonNullable<SlideElement["borders"]>,
+                                }
+                              : {}),
                             ...(style.fontSize === undefined
                               ? {}
                               : {

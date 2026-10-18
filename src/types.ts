@@ -18,9 +18,13 @@ export interface TextRun {
   italic?: boolean;
   underline?: boolean;
   color?: string;
+  hyperlink?: ElementLink;
   baseline?: number;
+  opacity?: number;
 }
 export interface TextParagraph {
+  level?: number;
+  numbering?: { type: string; value: number };
   runs: TextRun[];
   // Imported list label, including its plain-text separator. Keep editable
   // text intact while painting the label in the paragraph's hanging indent.
@@ -47,6 +51,7 @@ export interface ShapePath {
   stroke: boolean;
 }
 export interface TextBorder {
+  opacity?: number;
   color: string;
   width: number;
 }
@@ -60,9 +65,17 @@ export interface ElementLink {
   slideId?: string;
 }
 export interface TableCellFormat {
+  fillOpacity?: number;
+  textOpacity?: number;
+  strokeOpacity?: number;
   fill?: string;
   color?: string;
   bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  paragraphs?: TextParagraph[];
+  textInsets?: [number, number, number, number];
+  borders?: [TextBorder, TextBorder, TextBorder, TextBorder];
   fontFamily?: string;
   fontSize?: number;
   padding?: number;
@@ -91,9 +104,30 @@ export interface TableData {
   // Relative sizes; resizing the element scales the table grid as a whole.
   columnWidths?: number[];
   rowHeights?: number[];
+  merges?: {
+    row: number;
+    column: number;
+    rowSpan: number;
+    columnSpan: number;
+  }[];
+  autoRows?: boolean;
+}
+export interface GradientFill {
+  kind: "linear" | "radial";
+  angle: number;
+  stops: { offset: number; color: string; opacity?: number }[];
+}
+export interface ObjectShadow {
+  color: string;
+  opacity: number;
+  blur: number;
+  dx: number;
+  dy: number;
 }
 export interface SlideElement {
   id: string;
+  // Outer group first. Coordinates remain in slide space for fast editing.
+  groups?: string[];
   type: "text" | "shape" | "image" | "table";
   table?: TableData;
   hyperlink?: ElementLink;
@@ -104,6 +138,9 @@ export interface SlideElement {
   height: number;
   rotation: number;
   opacity: number;
+  fillOpacity?: number;
+  strokeOpacity?: number;
+  textOpacity?: number;
   locked?: boolean;
   text?: string;
   fontFamily?: string;
@@ -126,6 +163,8 @@ export interface SlideElement {
   textOverflow?: "visible" | "hidden";
   writingMode?: "horizontal" | "vertical" | "vertical270" | "stacked";
   textInsets?: [number, number, number, number];
+  // Relative text rectangle inside the shape: left, top, width, height.
+  textFrame?: [number, number, number, number];
   borders?: [TextBorder, TextBorder, TextBorder, TextBorder];
   paths?: ShapePath[];
   flipH?: boolean;
@@ -136,6 +175,10 @@ export interface SlideElement {
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
+  strokeDash?: number[];
+  strokeCap?: "butt" | "round" | "square";
+  gradient?: GradientFill;
+  shadow?: ObjectShadow;
   lineStart?: LineEnd;
   lineEnd?: LineEnd;
   src?: string;
@@ -145,6 +188,7 @@ export interface Slide {
   id: string;
   hidden?: boolean;
   background: string;
+  backgroundGradient?: GradientFill;
   notes: string;
   elements: SlideElement[];
   transition: "none" | "fade";

@@ -8,6 +8,7 @@ test("merged table cells retain grid positions, text, fill and borders", async (
   await page.goto("http://127.0.0.1:5190");
   const result = await page.evaluate(async () => {
     const { blankDeck } = await import("/src/model.ts");
+    const { tableTextElements } = await import("/src/table.ts");
     const { exportPptx, importPptx } = await import("/src/io.ts");
     const { default: JSZip } = await import(
       "/node_modules/.vite/deps/jszip.js"
@@ -30,11 +31,19 @@ test("merged table cells retain grid positions, text, fill and borders", async (
       await importPptx(await zip.generateAsync({ type: "uint8array" }))
     ).deck;
     return {
-      elements: imported.slides[0].elements,
-      roundTrip: (await importPptx(await exportPptx(imported))).deck.slides[0]
-        .elements,
+      native: imported.slides[0].elements.map((e) => e.type),
+      merges: imported.slides[0].elements[0].table?.merges,
+      elements: tableTextElements(imported.slides[0].elements[0]),
+      roundTrip: tableTextElements(
+        (await importPptx(await exportPptx(imported))).deck.slides[0]
+          .elements[0],
+      ),
     };
   });
+  expect(result.native).toEqual(["table"]);
+  expect(result.merges).toEqual([
+    { row: 0, column: 0, rowSpan: 1, columnSpan: 2 },
+  ]);
   expect(result.elements.map((e: any) => e.text)).toEqual([
     "merged",
     "B",
@@ -372,7 +381,9 @@ for (const item of [
     const canvas = page.getByTestId("canvas-frame");
     const details = await page.evaluate(({ kind }) => {
       const root = document.querySelector(".editable-slide")!;
-      const texts = Array.from(root.querySelectorAll(".element-text"));
+      const texts = Array.from(
+        root.querySelectorAll(".element-text, .table-cell-text"),
+      );
       const rangeBounds = (el: Element) => {
         const r = document.createRange();
         r.selectNodeContents(el);
@@ -401,10 +412,14 @@ for (const item of [
       if (kind === "cell-height") {
         const el = plain("사회복무요원")!,
           text = rangeBounds(el),
-          box = el.getBoundingClientRect();
+          box = (
+            el.classList.contains("table-cell-text") ? el.parentElement! : el
+          ).getBoundingClientRect();
         return {
           inside: text.top >= box.top - 1 && text.bottom <= box.bottom + 1,
-          cells: root.querySelectorAll(".text-borders").length,
+          cells: root.querySelectorAll(
+            ".text-borders, .inserted-table [role=cell]",
+          ).length,
         };
       }
       if (kind === "diagram") {
@@ -453,7 +468,9 @@ for (const item of [
       }
       if (kind === "table")
         return {
-          cells: root.querySelectorAll(".text-borders").length,
+          cells: root.querySelectorAll(
+            ".text-borders, .inserted-table [role=cell]",
+          ).length,
           zeroes: texts.filter((t) => t.textContent === "0").length,
           images: root.querySelectorAll("img").length,
         };

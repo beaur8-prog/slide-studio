@@ -52,7 +52,10 @@ test("Korean composition, mixed-language input, undo/redo and autosave survive a
   await expect(input).toHaveText(expected, { useInnerText: true });
   await page.getByRole("textbox", { name: "발표자 노트", exact: true }).click();
   await page.getByRole("button", { name: "실행 취소", exact: true }).click();
-  await expect(page.getByTestId("slide-element")).toContainText("입력 전");
+  await expect(page.getByTestId("slide-element")).toHaveText(
+    "한글 입력 정상 — Hello 123",
+    { useInnerText: true },
+  );
   await page.getByRole("button", { name: "다시 실행", exact: true }).click();
   await expect(page.getByTestId("slide-element")).toHaveText(expected, {
     useInnerText: true,

@@ -49,7 +49,20 @@ test("round presets retain ring thickness and inscribed text bounds through PPTX
   });
   expect(result.restored).toEqual(result.imported);
   for (const key of ["imported", "roundTrip"] as const) {
-    const texts = result[key].filter((e) => e.type === "text");
+    expect(result[key]).toHaveLength(5);
+    const texts = result[key]
+      .filter((e) => e.text !== undefined)
+      .map((e) => {
+        const f = e.textFrame ?? [0, 0, 1, 1],
+          ins = e.textInsets ?? [0, 0, 0, 0];
+        return {
+          ...e,
+          x: e.x + e.width * f[0] + ins[3],
+          y: e.y + e.height * f[1] + ins[0],
+          width: e.width * f[2] - ins[1] - ins[3],
+          height: e.height * f[3] - ins[0] - ins[2],
+        };
+      });
     expect(texts).toHaveLength(5);
     for (const text of texts) {
       expect(text.x).toBeCloseTo(139.28932, 3);

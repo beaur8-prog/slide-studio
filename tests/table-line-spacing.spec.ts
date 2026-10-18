@@ -54,14 +54,19 @@ test("table default line advance matches PowerPoint and preserves explicit spaci
       requestAnimationFrame(() => requestAnimationFrame(resolve)),
     );
     await document.fonts.ready;
-    const text = host.querySelector(".element-text")!;
+    const text = host.querySelector(".table-cell-text")!;
     const range = document.createRange();
     range.selectNodeContents(text);
     const bounds = range.getBoundingClientRect();
-    const box = text.getBoundingClientRect();
+    const box = text.parentElement!.getBoundingClientRect();
     return {
-      paragraphs: imported.slides[0].elements.map((e) => e.paragraphs),
-      exportedParagraphs: roundTrip.slides[0].elements.map((e) => e.paragraphs),
+      paragraphs: imported.slides[0].elements[0].table!.cellStyles![0].map(
+        (s) => s?.paragraphs,
+      ),
+      exportedParagraphs:
+        roundTrip.slides[0].elements[0].table!.cellStyles![0].map(
+          (s) => s?.paragraphs,
+        ),
       bottomOverflow: bounds.bottom - box.bottom,
     };
   });

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import {
-  addLocalFont,
+  addLocalFonts,
   listLocalFonts,
   MAX_LOCAL_FONT_BYTES,
   removeLocalFont,
@@ -57,8 +57,9 @@ export default function FontManager({ onClose }: { onClose: () => void }) {
         </button>
         <h2 id="font-manager-title">원본 글꼴 추가</h2>
         <p>
-          원본 문서에 사용된 TTF·OTF 글꼴을 추가하면 대체 글꼴 대신 사용하여
-          줄바꿈 차이를 줄입니다. 일반·굵게·기울임 파일을 각각 추가하세요.
+          원본 문서에 사용된 TTF·OTF·TTC·OTC 글꼴을 추가하면 대체 글꼴 대신
+          사용하여 줄바꿈 차이를 줄입니다. 일반·굵게·기울임 파일을 각각
+          추가하세요.
         </p>
         <p>
           추가한 글꼴은 이 기기에 저장되어 다음 실행에도 적용됩니다. 다른
@@ -67,7 +68,7 @@ export default function FontManager({ onClose }: { onClose: () => void }) {
         <input
           ref={input}
           type="file"
-          accept=".ttf,.otf"
+          accept=".ttf,.otf,.ttc,.otc"
           multiple
           hidden
           aria-label="원본 글꼴 파일"
@@ -84,13 +85,14 @@ export default function FontManager({ onClose }: { onClose: () => void }) {
               for (const file of files) {
                 try {
                   if (file.size > MAX_LOCAL_FONT_BYTES)
-                    throw new Error("글꼴 파일은 16MB 이하여야 합니다.");
-                  const font = await addLocalFont(
+                    throw new Error("글꼴 파일은 64MB 이하여야 합니다.");
+                  const fonts = await addLocalFonts(
                     new Uint8Array(await file.arrayBuffer()),
                   );
-                  messages.push(
-                    `${font.family} (${font.weight}, ${font.style}) 적용됨`,
-                  );
+                  for (const font of fonts)
+                    messages.push(
+                      `${font.family} (${font.weight}, ${font.style}) 적용됨`,
+                    );
                 } catch (error) {
                   messages.push(
                     `${file.name}: ${error instanceof Error ? error.message : "글꼴 추가 실패"}`,

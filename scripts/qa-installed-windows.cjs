@@ -173,6 +173,55 @@ const { execFile } = require('node:child_process');
       await fonts.getByRole('button', { name: '글꼴 관리 닫기', exact: true }).click();
     }
     console.log('Native app: source font import, reload and removal verified');
+    const longTextFeatures = version.localeCompare('1.5.7', undefined, { numeric: true }) >= 0;
+    if (longTextFeatures) {
+      // Import a clean fixture through the real project input. This runner's
+      // profile is disposable; no user's open document is involved.
+      const fixture = path.join(output, 'blank-long-text.slide');
+      await fs.writeFile(fixture, JSON.stringify({
+        version: 1, id: 'qa-long-text', name: '긴 한글 표시 확인', width: 1280, height: 720, theme: 'studio',
+        slides: [{ id: 'qa-slide', background: '#FAF8F2', notes: '', transition: 'none', elements: [] }],
+      }));
+      await page.locator('input[accept=".slide,.json,.pptx"]').setInputFiles(fixture);
+      await expect(page.getByTestId('slide-element')).toHaveCount(0);
+      await page.getByRole('button', { name: '삽입', exact: true }).click();
+      await page.getByRole('button', { name: '텍스트 상자', exact: true }).click();
+      const text = page.getByTestId('slide-element');
+      await text.dblclick();
+      const editor = page.getByRole('textbox', { name: '슬라이드 텍스트 편집', exact: true });
+      const longText = '긴 한글 문장이 상자 너비에 맞춰 줄바꿈되고 마지막 글자까지 표시되는지 확인합니다. '.repeat(3);
+      await editor.fill(longText);
+      await expect.poll(() => text.evaluate(el => el.offsetHeight)).toBeGreaterThan(70);
+      const complete = () => text.evaluate(el => {
+        const host = el.querySelector('.element-text'), box = host.getBoundingClientRect();
+        const range = document.createRange(); range.selectNodeContents(host);
+        return Array.from(range.getClientRects()).filter(r => r.width).every(r =>
+          r.left >= box.left - 1 && r.right <= box.right + 1 && r.top >= box.top - 1 && r.bottom <= box.bottom + 1);
+      });
+      await expect.poll(complete).toBe(true);
+      await editor.press('Escape');
+      await page.getByRole('button', { name: '서식', exact: true }).click();
+      await expect(page.getByLabel('상자 너비에 맞춰 자동 줄바꿈')).toBeChecked();
+      const automatic = page.getByLabel('내용에 맞춰 상자 높이 자동 조절');
+      await expect(automatic).toBeChecked();
+      await page.getByLabel('높이', { exact: true }).fill('70');
+      await expect(automatic).not.toBeChecked();
+      await automatic.check();
+      await expect.poll(complete).toBe(true);
+      await page.screenshot({ path: path.join(output, 'long-text.png') });
+      await expect(page.locator('.save-indicator')).toHaveText('저장됨');
+      await page.reload();
+      await expect(text).toHaveText(longText);
+      await expect.poll(complete).toBe(true);
+      await page.getByRole('button', { name: '삽입', exact: true }).click();
+      await page.getByRole('button', { name: '차트', exact: true }).click();
+      const chart = page.getByRole('dialog', { name: '차트 삽입', exact: true });
+      await expect(chart).toContainText('데이터 연동 안 됨');
+      await expect(chart).toContainText('자동 갱신되지 않습니다');
+      await page.screenshot({ path: path.join(output, 'chart-notice.png') });
+      await chart.getByRole('button', { name: '취소', exact: true }).click();
+      console.log('Native app: long Korean auto-height, persistence and chart notice verified');
+    }
     // A silent update must fail rather than kill a running app or overwrite it.
     const busyExit = await new Promise((resolve, reject) => {
       execFile(process.env.SETUP_PATH, ['/S'], { timeout: 45000 }, error => {
@@ -184,7 +233,8 @@ const { execFile } = require('node:child_process');
     await expect(page.locator('.save-indicator')).toHaveText('저장됨');
     await page.screenshot({ path: path.join(output, 'installed-app.png') });
     await fs.writeFile(path.join(output, 'native-app.json'), JSON.stringify({
-      version, objectContext, ...(textFormatting ? { textContextSelection: true, nativeTextClipboard: true, partialTextColor: true, nativeTextColorUndo: true, sourceFontImportPersistenceRemoval: true } : {}), installedApplicationLaunched: true, editorRendered: true,
+      version, objectContext, ...(textFormatting ? { textContextSelection: true, nativeTextClipboard: true, partialTextColor: true, nativeTextColorUndo: true, sourceFontImportPersistenceRemoval: true } : {}),
+      ...(longTextFeatures ? { nativeLongTextAutoHeight: true, nativeHeightSettingsAndPersistence: true, chartDataNotice: true } : {}), installedApplicationLaunched: true, editorRendered: true,
       slideshowWheel: true, escapeRestoresEditor: true,
       runningAppBlocksSilentUpdate: true, runningApplicationPreserved: true,
       ...(pointerTools ? { ribbonLayouts, unclippedNotes: true, laserPointer: true, penDrawing: true, eraser: true, nativeInkUndoRedo: true, contextTools: true } : {}),

@@ -418,6 +418,39 @@ test("boundary keyboard resizing uses one or ten pixels and stops after Escape c
   await expect(undo(page)).toBeDisabled();
 });
 
+test("merged cell centers receive clicks instead of invisible row and column resize handles", async ({
+  page,
+}) => {
+  await seedTable(page);
+  await page.evaluate(async () => {
+    const { loadAutosave, saveAutosave } = await import("/src/storage.ts");
+    const { mergeTableCells } = await import("/src/table.ts");
+    const deck = (await loadAutosave())!;
+    const e = deck.slides[0].elements[0];
+    e.table = mergeTableCells(e.table!, {
+      startRow: 0,
+      endRow: 1,
+      startColumn: 0,
+      endColumn: 1,
+    });
+    await saveAutosave(deck);
+  });
+  await page.reload();
+  const table = tableOnSlide(page);
+  const before = await table.boundingBox();
+  await table.locator('[data-row="0"][data-column="0"]').click();
+  await page.keyboard.press("Enter");
+  const editor = page.getByRole("textbox", {
+    name: "1행 1열 셀 텍스트 편집",
+    exact: true,
+  });
+  await expect(editor).toBeFocused();
+  await editor.fill("병합 셀 가운데 입력");
+  await editor.press("Escape");
+  await expect(table).toContainText("병합 셀 가운데 입력");
+  expect(await table.boundingBox()).toEqual(before);
+});
+
 test("dragged unequal row and column sizes survive project and native PowerPoint table round trips", async ({
   page,
 }) => {

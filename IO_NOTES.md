@@ -28,14 +28,13 @@ still show a hidden slide explicitly.
 PPTX import reads the presentation relationship list for slide order, not file
 name sorting. It reads slide size, text, supported shapes, embedded raster images,
 speaker notes, theme colors/fonts, basic placeholder inheritance from layouts and
-masters, and group scale/translation, rotation, and reflection. Nested groups are
-flattened from the inside out; rotated groups under a nonuniform parent scale
+masters, and group scale/translation, rotation, and reflection. Group hierarchy is
+retained while child geometry is resolved into slide coordinates; rotated groups under a nonuniform parent scale
 can require shear that the editable element model cannot represent and produce
 a warning. Master/layout decorative artwork uses
 its own image relationships and respects the slide's master-artwork visibility.
-Simple text within a shape is split into a separate editable shape and text box.
-Text box insets are folded into plain text geometry, or retained as padding for
-filled/bordered text and table cells. Text body vertical alignment, wrapping,
+Text within a shape stays in one editable shape with its native text body.
+Text box outer geometry and four insets are retained. Text body vertical alignment, wrapping,
 insets, explicit normAutofit fontScale and line-spacing reduction inherit through
 slide/layout/master placeholders. Paragraph alignment, spacing, indentation and
 run fonts/sizes/colors/bold/italic/underline are retained. Latin/East Asian font inheritance, language, character spacing, kerning thresholds, default tabs and paragraph line-break flags survive project/PPTX round trips. Group geometry does not multiply authored text point sizes a second time. Text can overflow its
@@ -43,8 +42,7 @@ source box unless the source explicitly clips it. East Asian vertical text uses
 upright glyphs. Diagonal straight connectors retain their endpoints through
 length and rotation. Straight lines preserve their independent start/end markers
 (none, triangle, stealth, diamond, oval or open arrow), marker width/length and
-horizontal direction through project save and PPTX round trips. Curved connectors
-remain outside this straight-line implementation.
+horizontal direction through project save and PPTX round trips. Bent/curved connectors use their saved preset geometry, without live endpoint attachment to other objects.
 First/last paragraph spacing follows `spcFirstLastPara` (off by default), so
 inherited paragraph gaps do not displace single-line captions below the slide.
 Absent paragraph line spacing uses the same 1.2 baseline as explicit 100%, with
@@ -55,11 +53,9 @@ including fixed point spacing and the size of each individual blank line.
 
 Automatic list numbers count nonempty list items by level. Paragraph-level
 `startAt` restarts a sequence, while an inherited start initializes it. The
-current importer resolves labels into editable text and approximates non-Arabic
-numbering formats as decimal labels. Imported hanging labels reserve the indent
+importer resolves labels into editable text while preserving the numbering type and level. Arabic, alphabetic and Roman labels are rendered; some East Asian/special labels remain approximate. Imported hanging labels reserve the indent
 without inserting an extra visible space. Project files preserve the label
-metadata; PPTX exports these resolved labels as literal bullets, so automatic
-renumbering after edits in PowerPoint is not preserved. Editing away a label in
+metadata; PPTX exports automatic lists with their `buAutoNum` type and start value. Editing away a label in
 Slide Studio returns that paragraph to ordinary text layout.
 Bullet point/percentage sizes, fonts, and colors are resolved independently from
 the body text, including explicit follow-text overrides. The resolved marker
@@ -85,12 +81,11 @@ a terminal stop/comma to hang when it avoids an extra line, without changing the
 text or widening its box. This fallback currently covers horizontal terminal
 punctuation, not full line-edge punctuation rules for vertical or mixed writing.
 
-Native tables exported by this app can reopen as editable tables. Their
-extension is used only when current XML geometry and formatting match the
-supported model; actual cell text is read from the table XML. Unsupported edits
-in another editor fall back to the existing cell importer to retain their
-appearance. Other external tables are flattened into editable cells, preserving supported merged-cell
-geometry, row/column styling, fills, text and edge borders. When saved row heights
+Ordinary imported and newly created tables reopen as native editable tables,
+including supported merges, rich cell paragraphs, insets and asymmetric edges.
+The app extension retains editor-specific options; actual text and formatting
+are read from the standard XML. Damaged tables or tables beyond 100 rows × 50 columns
+fall back to individual cell objects where possible. When saved row heights
 sum to less than the table frame, the extra height is allocated to multiline
 cells first. Explicit line breaks retain their own run sizes, including blank
 lines. Cells without an explicit paragraph line-spacing value use a 1.2 multiplier,
@@ -107,8 +102,10 @@ arbitrary embedded SVG is still excluded.
 The app bundles Carlito as a Calibri substitute and NAVER Nanum Barun Gothic.
 Calibri Light uses a measured approximate fallback; other missing fonts use local
 substitutes. See [font provenance and metrics](FONT_NOTES.md). Glyph appearance and line wrapping can
-therefore differ, even with matching geometry. Gradients, advanced bullets,
-formula-defined paths, effects, and flipped/rotated groups remain partial.
+therefore differ, even with matching geometry. Linear/centered radial gradients,
+dash patterns, outer shadows and 187 formula-defined presets are supported.
+Picture/pattern fills, advanced bullets, inner/3D effects, radial focus details
+and sheared groups remain partial or unsupported.
 The known layout regressions and current limits are documented in
 [the corpus report](qa/REPORT.md).
 
@@ -120,9 +117,8 @@ labels preserve their field kind in this app; automatic dates refresh here and
 export their current text rather than an Office automatic-date field.
 Web links accept only HTTP(S) without embedded credentials. Whole-object web and
 internal-slide links survive export/import and work during presentation. Partial
-text-run links cannot be represented independently in the current object model;
-complete text with the same link is promoted to an object link, while partial or
-mixed links produce a warning. Imported slide numbers with a nondefault starting
+text-run links retain distinct targets; only linked words activate during a show.
+Complete text with the same link can also be promoted to an object link. Imported slide numbers with a nondefault starting
 number preserve their displayed text and report that automatic renumbering was
 not retained.
 
@@ -159,4 +155,4 @@ Implementation references:
 - [Microsoft DrawingML extension specification](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-odrawxml/06cff208-c6e1-4db7-bb68-665135e5f0de)
 - [DrawingML preset shape definitions (ellipse and donut)](https://github.com/LibreOffice/core/blob/master/oox/source/drawingml/customshapes/presetShapeDefinitions.xml)
 
-UTIF, Carlito and Nanum Barun Gothic license texts are included in the app's `dist/licenses/` folder.
+UTIF, Carlito, Nanum Barun Gothic and Apache POI preset geometry license texts are included in the app's `dist/licenses/` folder.

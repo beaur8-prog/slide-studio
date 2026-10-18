@@ -1,10 +1,10 @@
 {
   "name": "slide-studio",
-  "version": "1.5.9",
+  "version": "1.6.0",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
-  "description": "An independent, local-first presentation editor for macOS and Windows",
+  "description": "An independent, local-first presentation editor for macOS, Windows and Linux",
   "author": "Slide Studio",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5190",

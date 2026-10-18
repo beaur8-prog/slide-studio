@@ -101,18 +101,22 @@ async function packageMac() {
     run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', '--timestamp=none', bundle]);
     run('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle]);
     await fs.mkdir(release, { recursive: true });
-    // Replace only the generated app. Keep any unrelated files in release intact.
-    const backup = `${destination}.previous`;
-    await fs.rm(backup, { recursive: true, force: true });
-    if (fsSync.existsSync(destination)) await fs.rename(destination, backup);
-    try {
-      await fs.cp(bundle, destination, { recursive: true, dereference: false, verbatimSymlinks: true });
-    } catch (error) {
-      await fs.rm(destination, { recursive: true, force: true });
-      if (fsSync.existsSync(backup)) await fs.rename(backup, destination);
-      throw error;
+    // Release builds can keep the running local app/document intact until verified.
+    if (!process.argv.includes('--no-install')) {
+      const backup = `${destination}.previous`;
+      await fs.rm(backup, { recursive: true, force: true });
+      if (fsSync.existsSync(destination)) await fs.rename(destination, backup);
+      try {
+        await fs.cp(bundle, destination, { recursive: true, dereference: false, verbatimSymlinks: true });
+      } catch (error) {
+        await fs.rm(destination, { recursive: true, force: true });
+        if (fsSync.existsSync(backup)) await fs.rename(backup, destination);
+        throw error;
+      }
+      await fs.rm(backup, { recursive: true, force: true });
+      run('/usr/bin/xattr', ['-cr', destination]);
+      run('/usr/bin/codesign', ['--verify', '--deep', '--strict', destination]);
     }
-    await fs.rm(backup, { recursive: true, force: true });
     const archive = path.join(release, `Slide-Studio-mac-${process.arch}.zip`);
     run('/usr/bin/ditto', ['-c', '-k', '--keepParent', bundle, archive]);
     await fs.copyFile(icon, path.join(release, 'SlideStudio.icns'));
@@ -123,7 +127,7 @@ async function packageMac() {
       verifiedBundle: bundle,
     }, null, 2));
     preserveVerifiedBundle = true;
-    console.log(`\nBuilt ${destination}\nArchive ${archive}\nVerified app ${bundle}`);
+    console.log(`\n${process.argv.includes('--no-install') ? 'Prepared ' + bundle : 'Built ' + destination}\nArchive ${archive}\nVerified app ${bundle}`);
   } finally {
     if (preserveVerifiedBundle) {
       await fs.rm(path.join(work, 'app-source'), { recursive: true, force: true });

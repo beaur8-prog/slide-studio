@@ -170,25 +170,64 @@ export function TableResizer({
       100,
     );
     let offset = 0;
-    return sizes.slice(0, -1).map((size, index) => {
+    const across = tableSizes(
+      axis === "column" ? table.rowHeights : table.columnWidths,
+      axis === "column" ? table.cells.length : table.cells[0].length,
+      100,
+    );
+    return sizes.slice(0, -1).flatMap((size, index) => {
       offset += size;
       const label = axis === "column" ? "열 너비" : "행 높이";
-      return (
+      // Merged cells have no internal boundary. Only the visible runs of this
+      // divider may receive pointer input; the cell interior stays editable.
+      const segments: { start: number; length: number }[] = [];
+      let position = 0;
+      across.forEach((length, track) => {
+        const blocked = table.merges?.some((m) =>
+          axis === "column"
+            ? m.column <= index &&
+              m.column + m.columnSpan > index + 1 &&
+              track >= m.row &&
+              track < m.row + m.rowSpan
+            : m.row <= index &&
+              m.row + m.rowSpan > index + 1 &&
+              track >= m.column &&
+              track < m.column + m.columnSpan,
+        );
+        if (!blocked) {
+          const previous = segments.at(-1);
+          if (
+            previous &&
+            Math.abs(previous.start + previous.length - position) < 1e-6
+          )
+            previous.length += length;
+          else segments.push({ start: position, length });
+        }
+        position += length;
+      });
+      return segments.map((segment, segmentIndex) => (
         <div
-          key={`${axis}-${index}`}
+          key={`${axis}-${index}-${segment.start}`}
           className={`table-${axis}-resize-handle${active === `${axis}-${index}` ? " resizing" : ""}`}
           data-boundary-index={index}
-          role="separator"
-          aria-label={`${index + 1}번째 ${label} 조절`}
+          role={segmentIndex === 0 ? "separator" : undefined}
+          aria-hidden={segmentIndex > 0 ? true : undefined}
+          aria-label={
+            segmentIndex === 0 ? `${index + 1}번째 ${label} 조절` : undefined
+          }
           aria-orientation={axis === "column" ? "vertical" : "horizontal"}
           aria-valuenow={Math.round(offset)}
           aria-valuemin={0}
           aria-valuemax={100}
-          tabIndex={selected ? 0 : -1}
+          tabIndex={selected && segmentIndex === 0 ? 0 : -1}
           title={`${label} 조절 · 드래그 또는 방향키`}
           style={
             {
               [axis === "column" ? "left" : "top"]: `${offset}%`,
+              [axis === "column" ? "top" : "left"]:
+                `calc(${segment.start}% + ${segment.start < 1e-6 ? 4 / scale : 0}px)`,
+              [axis === "column" ? "height" : "width"]:
+                `calc(${segment.length}% - ${((segment.start < 1e-6 ? 4 : 0) + (segment.start + segment.length > 100 - 1e-6 ? 4 : 0)) / scale}px)`,
               // Keep a selectable cell interior even on a very small/zoomed-out table.
               [axis === "column" ? "width" : "height"]: Math.min(
                 8 / scale,
@@ -234,7 +273,7 @@ export function TableResizer({
             if (next !== element.table) onCommit(element.table!, next);
           }}
         />
-      );
+      ));
     });
   };
 

@@ -145,6 +145,8 @@ const output = path.resolve('qa/results/linux-native');
     if (process.env.EXPECTED_APP_VERSION.localeCompare('1.5.8', undefined, { numeric: true }) >= 0) {
       await require('./qa-editing-regressions.cjs')(page, output);
     }
+    if (process.env.EXPECTED_APP_VERSION.localeCompare('1.6.0', undefined, { numeric: true }) >= 0)
+      await require('./qa-remaining-regressions.cjs')(page, output);
     await fs.writeFile(path.join(output, 'native-app.json'), JSON.stringify({
       version: process.env.EXPECTED_APP_VERSION, protection, installedApp: true, pptxImport: true,
       koreanText: true, systemKoreanFallback: true, objectContext: true, selectedTextColorAndSelection: true,

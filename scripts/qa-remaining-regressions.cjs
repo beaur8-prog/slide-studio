@@ -104,6 +104,7 @@ module.exports = async function verifyRemaining(page, output) {
   await page.reload();
   await expect(page.locator('.editable-slide .slide-element')).toHaveCount(4);
   await expect(shape).toContainText('Beta only');
+  await expect(page.locator('.save-indicator')).toHaveText('저장됨');
   await page.screenshot({ path: path.join(output, 'remaining-editor.png') });
   await fs.writeFile(path.join(output, 'remaining-regressions.json'), JSON.stringify({
     shapeTextPaste: true, pasteDoesNotDuplicateObjects: true, groupSelectionAndDuplicateUndo: true,

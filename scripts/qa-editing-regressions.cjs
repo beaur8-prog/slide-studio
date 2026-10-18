@@ -101,6 +101,9 @@ module.exports = async function verifyEditing(page, output) {
   }
   await expect(text.locator('.element-text')).toHaveCSS('font-size', '24px');
   await expect.poll(styles).toEqual(expected);
+  // Reload schedules a fresh autosave. A native caller must not quit while
+  // that write is pending, or the application's unsaved-work dialog blocks it.
+  await expect(page.locator('.save-indicator')).toHaveText('저장됨');
   const result = { partialItalic: true, selectionPreserved: true, nativeTextUndoRedo: true,
     sevenSlides: true, numericTypes: ['text', 'shape', 'image'], width: 200, height: 200,
     rotation: -15, fontSize: 24, draftsPreserved: true, reloadPersistence: true, firstSlideUntouched: true };

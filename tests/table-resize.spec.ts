@@ -74,18 +74,37 @@ async function localGeometry(page: Page) {
 
 async function savedTable(page: Page) {
   await expect(page.locator(".save-indicator")).toHaveText("저장됨");
-  return page.evaluate(async () => {
-    const { loadAutosave } = await import("/src/storage.ts");
-    const { tableSizes } = await import("/src/table.ts");
-    const deck = (await loadAutosave())!;
-    const element = deck.slides[0].elements.find((e) => e.type === "table")!;
-    const table = element.table!;
-    return {
-      element,
-      columns: tableSizes(table.columnWidths, 4, element.width),
-      rows: tableSizes(table.rowHeights, 4, element.height),
-    };
-  });
+  const visible = await localGeometry(page);
+  const read = () =>
+    page.evaluate(async () => {
+      const { loadAutosave } = await import("/src/storage.ts");
+      const { tableSizes } = await import("/src/table.ts");
+      const deck = (await loadAutosave())!;
+      const element = deck.slides[0].elements.find((e) => e.type === "table")!;
+      const table = element.table!;
+      return {
+        element,
+        columns: tableSizes(table.columnWidths, 4, element.width),
+        rows: tableSizes(table.rowHeights, 4, element.height),
+      };
+    });
+  // Mouseup can precede React's saving-status update. Wait for the actual
+  // persisted tracks rather than accepting the previous "saved" label.
+  let saved = await read();
+  await expect
+    .poll(async () => {
+      saved = await read();
+      return {
+        columns: saved.columns.map(Math.round),
+        rows: saved.rows.map(Math.round),
+      };
+    })
+    .toEqual({
+      columns: visible.columns.map(Math.round),
+      rows: visible.rows.map(Math.round),
+    });
+  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  return saved;
 }
 
 function expectTracks(actual: number[], expected: number[]) {

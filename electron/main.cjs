@@ -428,6 +428,15 @@ async function createWindow() {
   if (process.platform === 'win32') mainWindow.setMenuBarVisibility(false);
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    // Native Edit/Print accelerators otherwise consume these before the
+    // renderer can choose a slideshow pointer or undo a session ink stroke.
+    if (!presentationWindowState || input.type !== 'keyDown' || input.alt ||
+        !(input.control || input.meta)) return;
+    const command = { a: 'arrow', l: 'laser', p: 'pen', e: 'eraser',
+      z: input.shift ? 'redo' : 'undo', y: 'redo' }[input.key.toLowerCase()];
+    if (command) { event.preventDefault(); if (!input.isAutoRepeat) sendMenuAction('presentation-' + command); }
+  });
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!isTrustedURL(url)) event.preventDefault();
   });

@@ -180,6 +180,9 @@ require(${JSON.stringify(path.resolve("electron/main.cjs"))});
         page.evaluate(() => typeof window.desktop?.listCaptureSources),
       )
       .toBe("function");
+    // The IPC checks can finish before the initial autosave. Closing at that
+    // point correctly opens the unsaved-work dialog and blocks headless cleanup.
+    await expect(page.locator(".save-indicator")).toHaveText("저장됨");
     const list = () =>
       page.evaluate(() => window.desktop!.listCaptureSources!());
     const take = (id: string) =>

@@ -1,0 +1,148 @@
+.presentation-ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.presentation-ink:not(.tool-arrow) {
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+.presentation-ink.tool-pen {
+  cursor: crosshair;
+}
+.presentation-ink.tool-eraser {
+  cursor: cell;
+}
+.presentation-ink.tool-laser {
+  cursor: none;
+}
+.laser-pointer {
+  pointer-events: none;
+  filter: drop-shadow(0 0 5px #ff2525) drop-shadow(0 0 2px white);
+}
+.presentation-tools {
+  position: fixed;
+  z-index: 95;
+  width: 282px;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 10px;
+  background: #292929;
+  color: #f2f2f2;
+  border: 1px solid #666;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px #0009;
+  cursor: default;
+  font:
+    13px "Segoe UI",
+    "Malgun Gothic",
+    sans-serif;
+}
+.presentation-tools button {
+  color: inherit;
+  border-radius: 4px;
+}
+.presentation-tools button:not(:disabled):hover {
+  background: #484848;
+}
+.presentation-tools button:focus-visible,
+.presentation-tools select:focus-visible {
+  outline: 2px solid #ffb494;
+  outline-offset: 1px;
+}
+.presentation-tools-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px 6px 8px;
+}
+.presentation-tools-heading > button {
+  display: flex;
+  padding: 6px;
+}
+.presentation-tool-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 8px;
+}
+.presentation-tool-option[aria-pressed="true"] {
+  background: #543b33;
+  box-shadow: inset 2px 0 #ffb494;
+}
+.presentation-tool-option kbd {
+  margin-left: auto;
+  font-size: 11px;
+  color: #ccc;
+}
+.presentation-ink-colors {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 8px;
+  border-top: 1px solid #555;
+  margin-top: 6px;
+}
+.presentation-ink-colors > button {
+  width: 25px;
+  height: 25px;
+  border: 1px solid #aaa;
+  border-radius: 50%;
+}
+.presentation-ink-colors > button[aria-pressed="true"] {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+.presentation-pen-width {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 8px 12px;
+}
+.presentation-pen-width select {
+  border: 1px solid #777;
+  border-radius: 4px;
+  padding: 3px 6px;
+  background: #333;
+  color: white;
+  color-scheme: dark;
+}
+.presentation-ink-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-top: 1px solid #555;
+  padding-top: 8px;
+}
+.presentation-ink-actions button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px;
+  font-size: 11px;
+}
+.presentation-ink-actions kbd {
+  margin-left: auto;
+  color: #ccc;
+}
+.presentation-tools p {
+  font-size: 11px;
+  color: #c3c3c3;
+  line-height: 1.6;
+  margin: 8px 8px 2px;
+}
+.presentation-ink-message {
+  position: fixed;
+  bottom: 20px;
+  background: #292929;
+  color: white;
+  border: 1px solid #888;
+  padding: 12px 18px;
+  border-radius: 6px;
+  font-size: 13px;
+  pointer-events: none;
+}

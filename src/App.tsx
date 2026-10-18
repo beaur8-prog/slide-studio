@@ -117,6 +117,7 @@ import {
 } from "./InsertExtras";
 import { applyFooters, resolveDeckFields } from "./insert-fields";
 import ScreenshotDialog from "./ScreenshotDialog";
+import PresentationInk, { type PresentationInkHandle } from "./PresentationInk";
 import { EXTRA_SHAPES } from "./shape-presets";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -423,6 +424,7 @@ export default function App() {
   const [presenting, setPresenting] = useState(false);
   const presentationActive = useRef(false);
   const presentationView = useRef<HTMLDivElement>(null);
+  const presentationInk = useRef<PresentationInkHandle>(null);
   const browserPresentationFullscreen = useRef(false);
   const [presentIndex, setPresentIndex] = useState(0);
   const [presentEnded, setPresentEnded] = useState(false);
@@ -1436,7 +1438,7 @@ export default function App() {
         !event.deltaY ||
         Math.abs(event.deltaX) > Math.abs(event.deltaY) ||
         (event.target instanceof Element &&
-          event.target.closest(".present-notes"))
+          event.target.closest(".present-notes, .presentation-tools"))
       )
         return;
       event.preventDefault();
@@ -1537,6 +1539,12 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (presenting) {
+        if (presentationInk.current?.handleKey(e)) return;
+        if (
+          e.target instanceof Element &&
+          e.target.closest(".presentation-tools")
+        )
+          return;
         // Modifier shortcuts must not become slide numbers or navigation.
         if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
         if (
@@ -1822,6 +1830,9 @@ export default function App() {
     window.desktop?.onMenu((action) => {
       if (presentationActive.current) {
         if (action === "present") movePresent(1);
+        if (action === "print") presentationInk.current?.command("pen");
+        if (action.startsWith("presentation-"))
+          presentationInk.current?.command(action.slice(13));
         return;
       }
       if (action === "new") setModal("new");
@@ -1842,7 +1853,11 @@ export default function App() {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
         event.preventDefault();
         event.stopPropagation();
-        if (!event.repeat && !presentationActive.current) void printDeck();
+        if (!event.repeat) {
+          if (presentationActive.current)
+            presentationInk.current?.command("pen");
+          else void printDeck();
+        }
       }
     };
     window.addEventListener("keydown", onPrintKey, true);
@@ -2895,23 +2910,25 @@ export default function App() {
                 <span className="group-label">슬라이드 쇼 시작</span>
               </div>
               <div className="ribbon-group">
-                <Tool
-                  icon={<StickyNote size={25} />}
-                  active={notesVisible}
-                  onClick={() => setNotesVisible(!notesVisible)}
-                >
-                  발표자 노트
-                </Tool>
-                <Tool
-                  icon={<EyeOff size={25} />}
-                  active={!!slide.hidden}
-                  title={slide.hidden ? "숨김 해제" : "슬라이드 숨기기"}
-                  onClick={() =>
-                    changeSlide((s) => ({ ...s, hidden: !s.hidden }))
-                  }
-                >
-                  {slide.hidden ? "숨김 해제" : "슬라이드 숨기기"}
-                </Tool>
+                <div className="tools-row">
+                  <Tool
+                    icon={<StickyNote size={25} />}
+                    active={notesVisible}
+                    onClick={() => setNotesVisible(!notesVisible)}
+                  >
+                    발표자 노트
+                  </Tool>
+                  <Tool
+                    icon={<EyeOff size={25} />}
+                    active={!!slide.hidden}
+                    title={slide.hidden ? "숨김 해제" : "슬라이드 숨기기"}
+                    onClick={() =>
+                      changeSlide((s) => ({ ...s, hidden: !s.hidden }))
+                    }
+                  >
+                    {slide.hidden ? "숨김 해제" : "슬라이드 숨기기"}
+                  </Tool>
+                </div>
                 <span className="group-label">발표 준비</span>
               </div>
               <div className="ribbon-hint">
@@ -2919,7 +2936,7 @@ export default function App() {
                 <span>
                   방향키 / Space로 다음 슬라이드 · B로 검은 화면
                   <br />
-                  숫자 + Enter로 이동 · Esc로 편집 화면 복귀
+                  숫자 + Enter로 이동 · Esc로 종료 · 우클릭 / F1: 레이저·펜
                 </span>
               </div>
             </>
@@ -3891,6 +3908,10 @@ export default function App() {
                     ["처음부터 / 현재부터 발표", "F5 / Shift + F5"],
                     ["발표 중 이동 / 종료", "방향키 / Esc"],
                     ["발표 중 검은 화면", "B"],
+                    ["발표 도구", "우클릭 / F1"],
+                    ["발표 레이저 / 펜", "⌘ / Ctrl + L / P"],
+                    ["발표 화살표 / 지우개", "⌘ / Ctrl + A / E"],
+                    ["현재 슬라이드의 그리기 지우기", "E"],
                     ["발표 중 슬라이드 번호로 이동", "숫자 + Enter"],
                   ].map(([label, key]) => (
                     <div key={label}>
@@ -3933,47 +3954,40 @@ export default function App() {
               ? "슬라이드 쇼 종료 안내"
               : `발표 슬라이드 ${presentIndex + 1} / ${deck.slides.length}`
           }
-          onClick={() => movePresent(1)}
+          onClick={() => {
+            if (!presentationInk.current?.consumeClick()) movePresent(1);
+          }}
+          onContextMenu={(event) => {
+            if (
+              event.target instanceof Element &&
+              event.target.closest(".present-notes, .presentation-tools")
+            )
+              return;
+            event.preventDefault();
+            presentationInk.current?.openMenu(event.clientX, event.clientY);
+          }}
         >
-          {presentEnded ? (
+          {presentEnded && (
             <p className="presentation-end" data-testid="presentation-end">
               슬라이드 쇼가 끝났습니다. 클릭하거나 Esc 키를 눌러 종료하세요.
             </p>
-          ) : (
-            <div
-              key={presentIndex}
-              className={`present-slide ${deck.slides[presentIndex].transition === "fade" ? "fade-in" : ""}`}
-              style={{
-                width:
-                  deck.width *
-                  Math.min(
-                    windowSize.w / deck.width,
-                    (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
-                  ),
-                height:
-                  deck.height *
-                  Math.min(
-                    windowSize.w / deck.width,
-                    (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
-                  ),
-              }}
-            >
-              <SlideVisual
-                slide={deck.slides[presentIndex]}
-                interactive={!blackout}
-                onSlideLink={(slideId) => {
-                  const index = deck.slides.findIndex((s) => s.id === slideId);
-                  if (index >= 0) showPresentationSlide(index);
-                }}
-                width={deck.width}
-                height={deck.height}
-                scale={Math.min(
-                  windowSize.w / deck.width,
-                  (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
-                )}
-              />
-            </div>
           )}
+          <PresentationInk
+            ref={presentationInk}
+            slide={deck.slides[presentIndex]}
+            width={deck.width}
+            height={deck.height}
+            scale={Math.min(
+              windowSize.w / deck.width,
+              (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
+            )}
+            ended={presentEnded}
+            blackout={blackout}
+            onSlideLink={(slideId) => {
+              const index = deck.slides.findIndex((s) => s.id === slideId);
+              if (index >= 0) showPresentationSlide(index);
+            }}
+          />
           {presentNotes && !presentEnded && (
             <div className="present-notes" onClick={(e) => e.stopPropagation()}>
               <strong>발표자 노트</strong>

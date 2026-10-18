@@ -101,6 +101,40 @@ module.exports = async function verifyEditing(page, output) {
   }
   await expect(text.locator('.element-text')).toHaveCSS('font-size', '24px');
   await expect.poll(styles).toEqual(expected);
+  // Exercise the bullet regression through the installed/production renderer,
+  // using a separate document after the numeric-persistence assertions above.
+  const bulletFixture = path.join(output, 'bullet-list.slide');
+  await fs.writeFile(bulletFixture, JSON.stringify({
+    version: 1, id: 'qa-bullets-159', name: '글머리표 확인', width: 1280, height: 720, theme: 'studio',
+    slides: [{ id: 'bullets', background: '#FAF8F2', notes: '', transition: 'none', elements: [
+      { ...base, id: 'list', type: 'text', text: 'One\nTwo', width: 800, height: 400,
+        fontSize: 32, fontFamily: 'Arial', color: '#233D35', align: 'left', verticalAlign: 'top' },
+    ] }],
+  }));
+  await page.locator('input[accept=".slide,.json,.pptx"]').setInputFiles(bulletFixture);
+  const list = page.locator('[data-element-id="list"]');
+  const bulletButton = page.getByRole('button', { name: '• 글머리 기호', exact: true });
+  const plain = () => list.locator('.element-text').innerText();
+  await list.click();
+  await bulletButton.click();
+  await list.dblclick();
+  await editor.press(process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End');
+  await editor.press('Enter');
+  await editor.pressSequentially('Three');
+  await expect.poll(plain).toBe('• One\n• Two\n• Three');
+  await editor.press('Escape');
+  await bulletButton.click();
+  await expect.poll(plain).toBe('One\nTwo\nThree');
+  await bulletButton.click();
+  await expect(list.locator('[data-bullet]')).toHaveCount(3);
+  await expect(page.locator('.save-indicator')).toHaveText('저장됨');
+  await page.reload();
+  await expect(list.locator('[data-bullet]')).toHaveCount(3);
+  await expect(list.locator('.element-text')).toContainText('Three');
+  await page.screenshot({ path: path.join(output, 'bullet-list.png') });
+  await fs.writeFile(path.join(output, 'bullet-regressions.json'), JSON.stringify({
+    enterContinues: true, wholeBoxOffOn: true, markersAfterReload: 3, reloadPersistence: true,
+  }, null, 2) + '\n');
   // Reload schedules a fresh autosave. A native caller must not quit while
   // that write is pending, or the application's unsaved-work dialog blocks it.
   await expect(page.locator('.save-indicator')).toHaveText('저장됨');

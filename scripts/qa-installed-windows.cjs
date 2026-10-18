@@ -16,6 +16,9 @@ const { execFile } = require('node:child_process');
   const app = await electron.launch({ executablePath: executable, env, timeout: 45000 });
   try {
     const page = await app.firstWindow();
+    page.setDefaultTimeout(20000);
+    page.setDefaultNavigationTimeout(30000);
+    console.log("Native app: window opened");
     await expect(page.locator('.save-indicator')).toHaveText('저장됨', { timeout: 30000 });
     const version = await app.evaluate(({ app }) => app.getVersion());
     expect(version).toBe(process.env.EXPECTED_APP_VERSION);
@@ -47,6 +50,7 @@ const { execFile } = require('node:child_process');
       }
       await page.screenshot({ path: path.join(output, 'windows-ribbon-fixed.png') });
     }
+    console.log('Native app: ribbon verified');
     await page.keyboard.press('F5');
     const presentation = page.getByTestId('presentation-view');
     await expect(presentation).toHaveAttribute('aria-label', /^발표 슬라이드 1 \//);
@@ -106,6 +110,7 @@ const { execFile } = require('node:child_process');
       await page.keyboard.press('Control+z');
       await expect(page.getByTestId('slide-element')).toHaveCount(count);
     }
+    console.log('Native app: presentation and object context verified');
     const textFormatting = version.localeCompare('1.5.5', undefined, { numeric: true }) >= 0;
     if (textFormatting) {
       await page.getByRole('button', { name: '홈', exact: true }).click();
@@ -145,15 +150,16 @@ const { execFile } = require('node:child_process');
       await editor.press('Control+z');
       expect(await editor.innerText()).toBe(originalText);
       await expect.poll(async () => page.evaluate(() => getComputedStyle(getSelection().getRangeAt(0).startContainer.parentElement).color)).toBe(originalColor);
+      console.log('Native app: selection, clipboard and partial color verified');
       await editor.press('Escape');
       await page.getByRole('button', { name: '파일', exact: true }).click();
       await page.getByRole('button', { name: '원본 글꼴 추가', exact: true }).click();
       const fonts = page.getByRole('dialog', { name: '원본 글꼴 추가', exact: true });
       await expect(fonts).toBeVisible();
       await page.screenshot({ path: path.join(output, 'source-fonts.png') });
-      const chooser = page.waitForEvent('filechooser');
-      await fonts.getByRole('button', { name: '글꼴 파일 선택', exact: true }).click();
-      await (await chooser).setFiles(path.resolve('public/fonts/NanumBarunGothic.ttf'));
+      // Supply the file directly to the real input. An OS dialog can block
+      // Electron's remote filechooser interception on a hosted desktop.
+      await fonts.getByLabel('원본 글꼴 파일', { exact: true }).setInputFiles(path.resolve('public/fonts/NanumBarunGothic.ttf'));
       await expect(fonts.getByRole('status')).toContainText('적용됨');
       await fonts.getByRole('button', { name: '글꼴 관리 닫기', exact: true }).click();
       await page.reload();
@@ -165,6 +171,7 @@ const { execFile } = require('node:child_process');
       await expect(fonts.getByRole('status')).toContainText('제거했습니다');
       await fonts.getByRole('button', { name: '글꼴 관리 닫기', exact: true }).click();
     }
+    console.log('Native app: source font import, reload and removal verified');
     // A silent update must fail rather than kill a running app or overwrite it.
     const busyExit = await new Promise((resolve, reject) => {
       execFile(process.env.SETUP_PATH, ['/S'], { timeout: 45000 }, error => {

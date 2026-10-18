@@ -82,7 +82,12 @@ import {
 import FontManager from "./FontManager";
 import CommandSearch from "./CommandSearch";
 import TextColorPalette from "./TextColorPalette";
-import { applyTextColorRanges, cssColorHex } from "./text-color";
+import {
+  applyTextFormatRanges,
+  cssColorHex,
+  trackTextFormat,
+  type InlineFormat,
+} from "./text-formatting";
 import { captureTextSelection, restoreTextSelection } from "./text-selection";
 import TextContextMenu from "./TextContextMenu";
 import type { TextMenuSelection } from "./text-selection";
@@ -178,6 +183,7 @@ function Tool({
   disabled,
   title,
   small = false,
+  preserveTextSelection = false,
 }: {
   icon: ReactNode;
   children?: ReactNode;
@@ -186,11 +192,16 @@ function Tool({
   disabled?: boolean;
   title?: string;
   small?: boolean;
+  preserveTextSelection?: boolean;
 }) {
   return (
     <button
       className={`tool ${small ? "small" : ""} ${active ? "active" : ""}`}
       onClick={onClick}
+      data-text-selection-control={preserveTextSelection || undefined}
+      onMouseDown={
+        preserveTextSelection ? (event) => event.preventDefault() : undefined
+      }
       disabled={disabled}
       title={title}
       aria-label={typeof children === "string" ? children : title}
@@ -352,6 +363,28 @@ export default function App() {
   const slide = deck.slides[activeIndex];
   const [selected, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
+  const [inlineFormat, setInlineFormat] = useState<
+    Record<InlineFormat, boolean>
+  >({ bold: false, italic: false, underline: false });
+  useEffect(() => {
+    if (!editing) return;
+    const read = () => {
+      const host = document.querySelector<HTMLElement>(".editing-text");
+      if (!host || !captureTextSelection(host)) return;
+      setInlineFormat({
+        bold: document.queryCommandState("bold"),
+        italic: document.queryCommandState("italic"),
+        underline: document.queryCommandState("underline"),
+      });
+    };
+    read();
+    document.addEventListener("selectionchange", read);
+    document.addEventListener("input", read);
+    return () => {
+      document.removeEventListener("selectionchange", read);
+      document.removeEventListener("input", read);
+    };
+  }, [editing]);
   const selectedElement = slide.elements.find((e) => e.id === selected[0]);
   const [tableSelection, setTableSelection] =
     useState<TableCellSelection | null>(null);
@@ -1909,6 +1942,26 @@ export default function App() {
     return () => window.removeEventListener("keydown", onPrintKey, true);
   });
 
+  const toggleTextFormat = (format: InlineFormat) => {
+    if (selectedElement?.type !== "text" || selectedElement.locked) return;
+    if (!editing) {
+      updateSelected({ [format]: !selectedElement[format] });
+      return;
+    }
+    const host = document.querySelector<HTMLElement>(".editing-text");
+    const selection = host ? captureTextSelection(host) : undefined;
+    // A missing DOM selection while editing must never format the whole box.
+    if (!selection) return;
+    restoreTextSelection(selection);
+    const inputType = `format${format[0].toUpperCase()}${format.slice(1)}`;
+    trackTextFormat(selection.host, inputType);
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand(format);
+    selection.host.dispatchEvent(
+      new InputEvent("input", { bubbles: true, inputType }),
+    );
+  };
+
   const openTextColor = (
     selection?: TextMenuSelection,
     point?: { x: number; y: number },
@@ -1985,7 +2038,7 @@ export default function App() {
       const selection = colorPalette.selection;
       if (!selection?.host.isConnected || selection.range.collapsed) return;
       restoreTextSelection(selection);
-      selection.host.dataset.colorFormatting = "true";
+      trackTextFormat(selection.host, "formatFontColor");
       document.execCommand("styleWithCSS", false, "true");
       document.execCommand("foreColor", false, color);
       selection.host.dispatchEvent(
@@ -2058,27 +2111,34 @@ export default function App() {
           small
           icon={<Bold size={17} />}
           title="굵게"
-          active={selectedElement?.bold || false}
-          disabled={selectedElement?.type !== "text"}
-          onClick={() => updateSelected({ bold: !selectedElement?.bold })}
+          preserveTextSelection
+          active={editing ? inlineFormat.bold : selectedElement?.bold || false}
+          disabled={selectedElement?.type !== "text" || selectedElement.locked}
+          onClick={() => toggleTextFormat("bold")}
         />
         <Tool
           small
           icon={<Italic size={17} />}
           title="기울임"
-          active={selectedElement?.italic || false}
-          disabled={selectedElement?.type !== "text"}
-          onClick={() => updateSelected({ italic: !selectedElement?.italic })}
+          preserveTextSelection
+          active={
+            editing ? inlineFormat.italic : selectedElement?.italic || false
+          }
+          disabled={selectedElement?.type !== "text" || selectedElement.locked}
+          onClick={() => toggleTextFormat("italic")}
         />
         <Tool
           small
           icon={<Underline size={17} />}
           title="밑줄"
-          active={selectedElement?.underline || false}
-          disabled={selectedElement?.type !== "text"}
-          onClick={() =>
-            updateSelected({ underline: !selectedElement?.underline })
+          preserveTextSelection
+          active={
+            editing
+              ? inlineFormat.underline
+              : selectedElement?.underline || false
           }
+          disabled={selectedElement?.type !== "text" || selectedElement.locked}
+          onClick={() => toggleTextFormat("underline")}
         />
         <button
           className="toolbar-color"
@@ -3479,7 +3539,7 @@ export default function App() {
                           ),
                         }))
                       }
-                      changeText={(id, text, colors) =>
+                      changeText={(id, text, formats) =>
                         preview((d) => ({
                           ...d,
                           slides: d.slides.map((s) =>
@@ -3489,10 +3549,10 @@ export default function App() {
                                   elements: s.elements.map((el) =>
                                     el.id === id
                                       ? {
-                                          ...(colors
-                                            ? applyTextColorRanges(
+                                          ...(formats
+                                            ? applyTextFormatRanges(
                                                 editText(el, text),
-                                                colors,
+                                                formats,
                                               )
                                             : editText(el, text)),
                                           field: undefined,

@@ -15,7 +15,11 @@ import {
   paragraphLines,
   scriptRuns,
 } from "./text-layout";
-import { editableColorRanges, type TextColorRange } from "./text-color";
+import {
+  editableTextFormatRanges,
+  trackTextFormat,
+  type TextFormatRange,
+} from "./text-formatting";
 import type { TextMenuSelection } from "./text-selection";
 import { LineShape } from "./LineShape";
 import { TableVisual } from "./TableEditor";
@@ -161,11 +165,7 @@ function TextLine({
                     ? "italic"
                     : "normal",
               textDecoration:
-                r.underline === undefined
-                  ? undefined
-                  : r.underline
-                    ? "underline"
-                    : "none",
+                (r.underline ?? e.underline) ? "underline" : "none",
               color: r.color,
               verticalAlign: r.baseline ? `${r.baseline / 1000}%` : undefined,
             }}
@@ -203,7 +203,9 @@ export function TextContent({
     // Direct children of the column-flex editor would become separate rows.
     content = (
       <div data-text-plain style={{ flexShrink: 0, minBlockSize: "1lh" }}>
-        {e.text}
+        <span style={{ textDecoration: e.underline ? "underline" : "none" }}>
+          {e.text}
+        </span>
       </div>
     );
   else
@@ -477,7 +479,9 @@ export function textStyle(e: SlideElement): CSSProperties {
     fontWeight: e.bold ? 700 : /Light$/i.test(e.fontFamily ?? "") ? 300 : 400,
     fontStyle: e.italic ? "italic" : "normal",
     fontSynthesis: "style",
-    textDecoration: e.underline ? "underline" : "none",
+    // Put underline on runs so it can be removed from a partial selection.
+    // An ancestor's text decoration cannot be cancelled by a child span.
+    textDecoration: "none",
     color: e.color || "#233D35",
     textAlign: e.align || "left",
     whiteSpace: e.wrap === false ? "pre" : "pre-wrap",
@@ -580,7 +584,7 @@ function EditableText({
   onHeight,
 }: {
   element: SlideElement;
-  onInput: (text: string, colors?: TextColorRange[]) => void;
+  onInput: (text: string, formats?: TextFormatRange[]) => void;
   onDone: () => void;
   onHeight: (id: string, height: number) => void;
 }) {
@@ -625,12 +629,10 @@ function EditableText({
       onInput={(e) => {
         const host = e.currentTarget;
         const type = (e.nativeEvent as InputEvent).inputType || "";
-        if (type.startsWith("format")) host.dataset.colorFormatting = "true";
+        trackTextFormat(host, type);
         onInput(
           editableText(host),
-          host.dataset.colorFormatting || type.startsWith("history")
-            ? editableColorRanges(host)
-            : undefined,
+          host.dataset.textFormats ? editableTextFormatRanges(host) : undefined,
         );
       }}
       onKeyDown={(e) => {
@@ -721,7 +723,7 @@ interface Props {
   begin: () => void;
   preview: (elements: SlideElement[]) => void;
   finish: () => void;
-  changeText: (id: string, text: string, colors?: TextColorRange[]) => void;
+  changeText: (id: string, text: string, formats?: TextFormatRange[]) => void;
   resizeText: (id: string, height: number) => void;
   showGuides: boolean;
   grid: boolean;
@@ -1139,7 +1141,7 @@ export default function SlideCanvas({
                 <EditableText
                   element={e}
                   onHeight={resizeText}
-                  onInput={(text, colors) => changeText(e.id, text, colors)}
+                  onInput={(text, formats) => changeText(e.id, text, formats)}
                   onDone={() => {
                     finish();
                     edit(null);

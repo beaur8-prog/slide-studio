@@ -1,6 +1,57 @@
 import type { SlideElement, TextParagraph, TextRun } from "./types";
 import { editableText } from "./text-layout";
-export type TextColorRange = { start: number; end: number; color: string };
+export type InlineFormat = "bold" | "italic" | "underline";
+type TextFormat = InlineFormat | "color";
+type RunStyle = Pick<TextRun, TextFormat>;
+export type TextFormatRange = { start: number; end: number; style: RunStyle };
+
+// Keep reading every format touched in this edit session, including after
+// native undo/redo and subsequent typing. Leave unrelated imported styles alone.
+export function trackTextFormat(host: HTMLElement, inputType: string) {
+  const format = (
+    {
+      formatBold: "bold",
+      formatItalic: "italic",
+      formatUnderline: "underline",
+      formatFontColor: "color",
+    } as Record<string, TextFormat>
+  )[inputType];
+  if (!format) return;
+  const formats = new Set(
+    (host.dataset.textFormats || "").split(" ").filter(Boolean),
+  );
+  formats.add(format);
+  host.dataset.textFormats = [...formats].join(" ");
+}
+
+function readStyle(
+  node: Node,
+  host: HTMLElement,
+  formats: Set<string>,
+): RunStyle {
+  const parent = node.parentElement!;
+  const css = getComputedStyle(parent);
+  const style: RunStyle = {};
+  if (formats.has("color")) style.color = cssColorHex(css.color);
+  if (formats.has("bold")) style.bold = Number(css.fontWeight) >= 600;
+  if (formats.has("italic")) style.italic = css.fontStyle !== "normal";
+  if (formats.has("underline")) {
+    style.underline = false;
+    // Text decorations propagate through ancestors, unlike font-style.
+    for (
+      let ancestor: HTMLElement | null = parent;
+      ancestor;
+      ancestor = ancestor.parentElement
+    ) {
+      if (getComputedStyle(ancestor).textDecorationLine.includes("underline")) {
+        style.underline = true;
+        break;
+      }
+      if (ancestor === host) break;
+    }
+  }
+  return style;
+}
 
 export function cssColorHex(value: string): string | undefined {
   if (/^#[\da-f]{6}$/i.test(value)) return value.toUpperCase();
@@ -18,14 +69,18 @@ export function cssColorHex(value: string): string | undefined {
   );
 }
 
-// Read colors without replacing the live editable DOM or disturbing IME/selection.
+// Read formatting without replacing the live editable DOM or disturbing IME/selection.
 // Markers in one detached clone map text nodes onto the editor's logical text,
 // including explicit lines, blank paragraphs and imported bullet separators.
-export function editableColorRanges(host: HTMLElement): TextColorRange[] {
+export function editableTextFormatRanges(host: HTMLElement): TextFormatRange[] {
+  const formats = new Set(
+    (host.dataset.textFormats || "").split(" ").filter(Boolean),
+  );
+  if (!formats.size) return [];
   const clone = host.cloneNode(true) as HTMLElement;
   const originalWalker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
   const cloneWalker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
-  const entries: { text: string; color?: string }[] = [];
+  const entries: { text: string; style: RunStyle }[] = [];
   const prefix = "\uFDD0" + crypto.randomUUID() + ":";
   let node: Node | null;
   while ((node = originalWalker.nextNode())) {
@@ -34,7 +89,7 @@ export function editableColorRanges(host: HTMLElement): TextColorRange[] {
     const index = entries.length;
     entries.push({
       text: node.textContent,
-      color: cssColorHex(getComputedStyle(node.parentElement!).color),
+      style: readStyle(node, host, formats),
     });
     copy.textContent = prefix + index + "\uFDD1" + node.textContent;
   }
@@ -51,27 +106,31 @@ export function editableColorRanges(host: HTMLElement): TextColorRange[] {
     },
   );
   if (plain !== editableText(host))
-    throw new Error("텍스트 색상 범위를 확인하지 못했습니다.");
-  const ranges: TextColorRange[] = [];
+    throw new Error("텍스트 서식 범위를 확인하지 못했습니다.");
+  const ranges: TextFormatRange[] = [];
   starts.forEach(({ start, index }, i) => {
-    const { text, color } = entries[index];
+    const { text, style } = entries[index];
     const end = Math.min(
       start + text.length,
       starts[i + 1]?.start ?? plain.length,
       plain.length,
     );
-    if (!color || end <= start) return;
+    if (end <= start) return;
     const previous = ranges.at(-1);
-    if (previous && previous.end === start && previous.color === color)
+    if (
+      previous &&
+      previous.end === start &&
+      JSON.stringify(previous.style) === JSON.stringify(style)
+    )
       previous.end = end;
-    else ranges.push({ start, end, color });
+    else ranges.push({ start, end, style });
   });
   return ranges;
 }
 
-export function applyTextColorRanges(
+export function applyTextFormatRanges(
   element: SlideElement,
-  ranges: TextColorRange[],
+  ranges: TextFormatRange[],
 ): SlideElement {
   if (element.type !== "text" || !ranges.length) return element;
   const source: TextParagraph[] =
@@ -101,10 +160,21 @@ export function applyTextColorRanges(
         const range = ranges[index];
         const covered = range && range.start <= at;
         const next = Math.min(end, covered ? range.end : (range?.start ?? end));
+        const patch: RunStyle = {};
+        if (covered) {
+          for (const key of Object.keys(range.style) as TextFormat[]) {
+            const value = range.style[key];
+            const current =
+              run[key] ?? element[key] ?? (key === "color" ? "#233D35" : false);
+            // Preserve omitted (inherited) values and unrelated run metadata.
+            if (value !== undefined && value !== current)
+              Object.assign(patch, { [key]: value });
+          }
+        }
         append({
           ...run,
           text: run.text.slice(at - offset, next - offset),
-          ...(covered ? { color: range.color } : {}),
+          ...patch,
         });
         at = next;
       }

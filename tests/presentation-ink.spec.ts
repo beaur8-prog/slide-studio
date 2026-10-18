@@ -50,13 +50,11 @@ async function open(page: Page, link = false) {
       );
     return serializeDeck(deck);
   }, link);
-  await page
-    .locator('input[type=file][accept*=".pptx"]')
-    .setInputFiles({
-      name: "ink.slide",
-      mimeType: "application/json",
-      buffer: Buffer.from(fixture),
-    });
+  await page.locator('input[type=file][accept*=".pptx"]').setInputFiles({
+    name: "ink.slide",
+    mimeType: "application/json",
+    buffer: Buffer.from(fixture),
+  });
   await expect(page.locator(".thumbnail-button")).toHaveCount(3);
   await expect(page.locator(".save-indicator")).toHaveText("저장됨");
   if (await page.locator(".toast button").count())
@@ -97,6 +95,14 @@ test("Windows slideshow ribbon icons and labels fit without clipping at supporte
           return {
             label: button.textContent,
             inside: r.top >= ribbon.top && r.bottom <= ribbon.bottom,
+            horizontal: (() => {
+              const label = button.querySelector("span");
+              if (!label) return false;
+              const range = document.createRange();
+              range.selectNodeContents(label);
+              const text = range.getBoundingClientRect();
+              return text.left >= r.left + 5 && text.right <= r.right - 5;
+            })(),
             visible: [button.querySelector("svg"), button.querySelector("span")]
               .filter(Boolean)
               .every((child) => {
@@ -108,9 +114,22 @@ test("Windows slideshow ribbon icons and labels fit without clipping at supporte
       });
     expect(bounds.length).toBe(4);
     expect(
-      bounds.every((b) => b.inside && b.visible),
+      bounds.every((b) => b.inside && b.visible && b.horizontal),
       JSON.stringify(bounds),
     ).toBe(true);
+    const hide = page
+      .locator(".ribbon")
+      .getByRole("button", { name: "슬라이드 숨기기", exact: true });
+    await hide.click();
+    await expect(
+      page
+        .locator(".ribbon")
+        .getByRole("button", { name: "숨김 해제", exact: true }),
+    ).toBeVisible();
+    await page
+      .locator(".ribbon")
+      .getByRole("button", { name: "숨김 해제", exact: true })
+      .click();
     const notes = page
       .locator(".ribbon")
       .getByRole("button", { name: "발표자 노트", exact: true });

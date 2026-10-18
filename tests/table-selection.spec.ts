@@ -558,6 +558,12 @@ test("new tables default to table formatting and canvas cells use an explicit se
   await dialog.getByLabel("셀 배경", { exact: true }).fill("#e0e1e2");
   await dialog.getByLabel("표 글자 크기", { exact: true }).fill("22");
   await dialog.getByRole("button", { name: "표 적용", exact: true }).click();
+  await expect
+    .poll(async () => {
+      const value = await savedTable(page);
+      return [value.table.fill, value.table.fontSize];
+    })
+    .toEqual(["#E0E1E2", 22]);
   const global = await savedTable(page);
   expect(global.table.fill).toBe("#E0E1E2");
   expect(global.table.fontSize).toBe(22);
@@ -568,6 +574,9 @@ test("new tables default to table formatting and canvas cells use an explicit se
   await dialog.getByLabel("서식 적용 대상").selectOption("selection");
   await dialog.getByLabel("셀 배경", { exact: true }).fill("#010203");
   await dialog.getByRole("button", { name: "표 적용", exact: true }).click();
+  await expect
+    .poll(async () => (await savedTable(page)).styles[1][1].fill)
+    .toBe("#010203");
   const explicit = await savedTable(page);
   for (let r = 0; r < 4; r++)
     for (let c = 0; c < 4; c++)

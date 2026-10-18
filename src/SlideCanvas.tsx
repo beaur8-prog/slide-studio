@@ -591,6 +591,7 @@ function cellAtPoint(host: HTMLElement, x: number, y: number) {
 interface Props {
   deck: Deck;
   slide: Slide;
+  contextMenu: (id: string, x: number, y: number) => void;
   scale: number;
   selected: string[];
   tableSelection: TableCellSelection | null;
@@ -609,6 +610,7 @@ interface Props {
   grid: boolean;
 }
 export default function SlideCanvas({
+  contextMenu,
   deck,
   slide,
   scale,
@@ -926,7 +928,7 @@ export default function SlideCanvas({
               data-testid="slide-element"
               data-element-id={e.id}
               data-type={e.type}
-              tabIndex={e.type === "table" ? -1 : undefined}
+              tabIndex={0}
               className={`slide-element ${selected.includes(e.id) ? "selected" : ""} ${e.locked ? "locked" : ""} ${editing === e.id ? "editing" : ""}`}
               style={
                 {
@@ -934,6 +936,30 @@ export default function SlideCanvas({
                   "--inverse-scale": 1 / scale,
                 } as CSSProperties
               }
+              onContextMenu={(ev) => {
+                // Keep native text selection and clipboard while editing text.
+                if (editing === e.id) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                ev.currentTarget.focus({ preventScroll: true });
+                contextMenu(e.id, ev.clientX, ev.clientY);
+              }}
+              onKeyDown={(ev) => {
+                if (
+                  editing === e.id ||
+                  (ev.key !== "ContextMenu" &&
+                    !(ev.shiftKey && ev.key === "F10"))
+                )
+                  return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                const bounds = ev.currentTarget.getBoundingClientRect();
+                contextMenu(
+                  e.id,
+                  bounds.left + bounds.width / 2,
+                  bounds.top + bounds.height / 2,
+                );
+              }}
               onPointerDown={(ev) => down(ev, e)}
               onDoubleClick={(ev) => {
                 ev.stopPropagation();

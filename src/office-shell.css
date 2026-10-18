@@ -181,3 +181,14 @@
   .office-shell .local-badge { display: none; }
   .command-trigger kbd { display: none; }
 }
+
+/* Reserve label width independently of platform font metrics and flex sizing. */
+.office-shell .slideshow-tools .tools-row { gap: 12px; }
+.office-shell .slideshow-tools .tool {
+  flex: 0 0 auto;
+  min-width: 100px;
+  width: max-content;
+  padding: 6px 12px;
+  line-height: 1.4;
+}
+.office-shell .slideshow-tools .tool > span { flex-shrink: 0; }

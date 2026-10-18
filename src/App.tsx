@@ -80,6 +80,7 @@ import {
   Camera,
 } from "lucide-react";
 import CommandSearch from "./CommandSearch";
+import ObjectContextMenu, { type ObjectMenuAction } from "./ObjectContextMenu";
 import CanvasScrollbar from "./CanvasScrollbar";
 import type {
   Deck,
@@ -401,6 +402,10 @@ export default function App() {
   >("footer");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [menu, setMenu] = useState<"file" | "layout" | "shape" | null>(null);
+  const [objectMenu, setObjectMenu] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const closeObjectMenu = useCallback(() => setObjectMenu(null), []);
   const [layout, setLayout] = useState("title");
   const [zoom, setZoom] = useState<number | null>(null);
   const [fitScale, setFitScale] = useState(0.6);
@@ -422,6 +427,9 @@ export default function App() {
     }
   });
   const [presenting, setPresenting] = useState(false);
+  useEffect(() => {
+    setObjectMenu(null);
+  }, [activeId, deck.id, modal, presenting, sorter]);
   const presentationActive = useRef(false);
   const presentationView = useRef<HTMLDivElement>(null);
   const presentationInk = useRef<PresentationInkHandle>(null);
@@ -1600,6 +1608,7 @@ export default function App() {
         }
         return;
       }
+      if (objectMenu) return;
       const cmd = e.metaKey || e.ctrlKey;
       if (cmd && e.key === "F1") {
         e.preventDefault();
@@ -2033,6 +2042,101 @@ export default function App() {
       ))}
     </div>
   );
+
+  const objectMenuActions: ObjectMenuAction[] = [];
+  if (selectedElement) {
+    const locked = slide.elements.some(
+      (el) => selected.includes(el.id) && el.locked,
+    );
+    objectMenuActions.push(
+      {
+        label: "잘라내기",
+        icon: <Scissors size={16} />,
+        disabled: locked,
+        run: () => {
+          copySelection();
+          removeSelected();
+        },
+      },
+      { label: "복사", icon: <Copy size={16} />, run: copySelection },
+      {
+        label: "붙여넣기",
+        icon: <ClipboardPaste size={16} />,
+        disabled: !clipboard.current.elements && !clipboard.current.slide,
+        run: pasteSelection,
+      },
+      { label: "복제", icon: <Copy size={16} />, run: duplicateSelected },
+      {
+        label: "삭제",
+        icon: <Trash2 size={16} />,
+        disabled: locked,
+        run: removeSelected,
+      },
+    );
+    if (selected.length === 1 && selectedElement.type === "text")
+      objectMenuActions.push({
+        label: "텍스트 편집",
+        icon: <Type size={16} />,
+        separator: true,
+        disabled: locked,
+        run: () => {
+          begin();
+          setEditing(selectedElement.id);
+        },
+      });
+    if (selected.length === 1 && selectedElement.type === "table")
+      objectMenuActions.push({
+        label: "표 편집",
+        icon: <Table2 size={16} />,
+        separator: true,
+        disabled: locked,
+        run: () => openTable(selectedElement.id),
+      });
+    objectMenuActions.push(
+      {
+        label: "맨 앞으로 가져오기",
+        icon: <ArrowUpToLine size={16} />,
+        separator: true,
+        disabled: locked,
+        run: () => layerSelected("front"),
+      },
+      {
+        label: "앞으로 한 단계",
+        icon: <ArrowUp size={16} />,
+        disabled: locked,
+        run: () => layerSelected("up"),
+      },
+      {
+        label: "뒤로 한 단계",
+        icon: <ArrowDown size={16} />,
+        disabled: locked,
+        run: () => layerSelected("down"),
+      },
+      {
+        label: "맨 뒤로 보내기",
+        icon: <ArrowDownToLine size={16} />,
+        disabled: locked,
+        run: () => layerSelected("back"),
+      },
+      {
+        label: locked ? "잠금 해제" : "잠금",
+        icon: locked ? <UnlockKeyhole size={16} /> : <LockKeyhole size={16} />,
+        separator: true,
+        run: () =>
+          changeSlide((s) => ({
+            ...s,
+            elements: s.elements.map((el) =>
+              selected.includes(el.id) ? { ...el, locked: !locked } : el,
+            ),
+          })),
+      },
+      {
+        label: "개체 서식",
+        icon: <Settings2 size={16} />,
+        run: () => setInspectorVisible(true),
+      },
+    );
+  }
 
   if (!ready)
     return (
@@ -2890,7 +2994,7 @@ export default function App() {
           )}
           {tab === "slideshow" && (
             <>
-              <div className="ribbon-group">
+              <div className="ribbon-group slideshow-tools">
                 <div className="tools-row">
                   <Tool
                     icon={<Presentation size={27} />}
@@ -2909,7 +3013,7 @@ export default function App() {
                 </div>
                 <span className="group-label">슬라이드 쇼 시작</span>
               </div>
-              <div className="ribbon-group">
+              <div className="ribbon-group slideshow-tools">
                 <div className="tools-row">
                   <Tool
                     icon={<StickyNote size={25} />}
@@ -3098,6 +3202,17 @@ export default function App() {
                       <span>{deck.width}</span>
                     </div>
                     <SlideCanvas
+                      contextMenu={(id, x, y) => {
+                        if (modal || busy || presenting) return;
+                        if (editing) {
+                          finish();
+                          setEditing(null);
+                        }
+                        setSelected(selected.includes(id) ? selected : [id]);
+                        setTableSelection(null);
+                        setMenu(null);
+                        setObjectMenu({ x, y });
+                      }}
                       deck={deck}
                       slide={slide}
                       scale={Math.max(0.1, scale)}
@@ -3651,6 +3766,13 @@ export default function App() {
             <Maximize size={14} />
           </button>
         </footer>
+        {objectMenu && selectedElement && (
+          <ObjectContextMenu
+            {...objectMenu}
+            actions={objectMenuActions}
+            onClose={closeObjectMenu}
+          />
+        )}
       </div>
       <input
         ref={imageInput}

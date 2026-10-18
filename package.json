@@ -17,6 +17,7 @@
     "package": "npm run build && node scripts/package-mac.cjs",
     "package:mac": "npm run build && node scripts/package-mac.cjs",
     "package:win": "npm run build && node scripts/package-win.cjs && node scripts/package-win-setup.cjs",
+    "package:linux": "npm run build && node scripts/package-linux.cjs",
     "package:win:setup": "node scripts/package-win-setup.cjs"
   },
   "dependencies": {

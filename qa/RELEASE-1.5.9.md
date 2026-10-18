@@ -30,3 +30,13 @@ The public download-guide URL and stable binary URLs are retained. The guide doc
 Mac is not Apple-notarized; Windows has no release code signature. Linux is a standalone unsigned DEB. Native Windows CI uses Windows Server 2025, not a physical Windows 10/11 device. Browser reputation warnings and SmartScreen UI are not reproduced by the automated installer checks. Physical Windows/Linux IME typing, Wayland, screen-capture permissions and paper printing are outside this release check.
 
 Local evidence: `qa/results/release-1.5.9/` (ignored by Git).
+
+## Final publication verification
+
+Version `v1.5.9` is the stable latest GitHub release. All five stable download URLs were fetched in full; their bytes and SHA-256 values match the local packages and GitHub asset digests. The existing Lithos guide now shows 1.5.9, the browser download warning and **추가 정보 → 실행** installation instructions. Ten public images match their reviewed files.
+
+The shared document URL, token, source/vault identity, creation/expiry values, server PID/port and tunnel PID/origin are unchanged. The guide was refreshed through the running service's `ShareServer.update`, without restarting either service. A rendered Markdown emphasis correction was applied through the same update operation. The temporary localhost maintenance inspector was closed after both updates.
+
+[Unchanged download and usage guide](https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6) · [GitHub release](https://github.com/beaur8-prog/slide-studio/releases/tag/v1.5.9)
+
+Evidence includes `publication-verification.json`, native OS artifacts, the retained user's six-slide Mac document/version check and `download-warning-guide.png` under the ignored evidence directory.

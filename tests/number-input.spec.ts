@@ -203,3 +203,118 @@ test("Home font size also keeps small leading digits until the number is complet
   await size.press("Enter");
   await expect(text.locator(".element-text")).toHaveCSS("font-size", "24px");
 });
+
+for (const kind of ["text", "shape", "image"] as const) {
+  test(`seven-slide document: ${kind} keeps width 200, height 200 and rotation -15`, async ({
+    page,
+  }) => {
+    await page.goto("http://127.0.0.1:5190");
+    await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+    await page.evaluate(async () => {
+      const { blankDeck, newSlide, element } = await import("/src/model.ts");
+      const { saveAutosave } = await import("/src/storage.ts");
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 32;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#D4613F";
+      ctx.fillRect(0, 0, 32, 32);
+      const deck = blankDeck();
+      deck.slides = Array.from({ length: 7 }, (_, i) => ({
+        ...newSlide("blank"),
+        elements: [
+          element("text", {
+            id: `text-${i}`,
+            text: "Alpha Beta 한글 문장",
+            x: 100,
+            y: 100,
+            width: 300,
+            height: 120,
+            fontSize: 32,
+            autoHeight: false,
+          }),
+          element("shape", {
+            id: `shape-${i}`,
+            shape: "arrow",
+            x: 550,
+            y: 100,
+            width: 260,
+            height: 100,
+          }),
+          element("image", {
+            id: `image-${i}`,
+            src: canvas.toDataURL(),
+            x: 550,
+            y: 350,
+            width: 260,
+            height: 100,
+          }),
+        ],
+      }));
+      await saveAutosave(deck);
+    });
+    await page.reload();
+    await expect(page.locator(".thumbnail-button")).toHaveCount(7);
+    await page.locator(".thumbnail-button").nth(6).click();
+    const target = page.locator(`[data-element-id="${kind}-6"]`);
+    await target.click({ button: "right" });
+    await page
+      .getByRole("menuitem", { name: "개체 서식", exact: true })
+      .click();
+    for (const [label, property, before] of [
+      ["너비", "width", kind === "text" ? "300px" : "260px"],
+      ["높이", "height", kind === "text" ? "120px" : "100px"],
+    ] as const) {
+      const field = number(page, label);
+      await field.focus();
+      await field.press("ControlOrMeta+a");
+      await field.pressSequentially("2");
+      await expect(field).toHaveValue("2");
+      await expect(target).toHaveCSS(property, before);
+      await field.pressSequentially("00");
+      await expect(field).toHaveValue("200");
+      await field.press("Enter");
+      await expect(target).toHaveCSS(property, "200px");
+    }
+    const rotation = await typeNumber(page, "회전", "-15");
+    await expect(rotation).toHaveValue("-15");
+    expect(await target.evaluate((el) => el.style.transform)).toBe(
+      "rotate(0deg)",
+    );
+    await rotation.press("Enter");
+    expect(await target.evaluate((el) => el.style.transform)).toBe(
+      "rotate(-15deg)",
+    );
+    if (kind === "text") {
+      const size = await typeNumber(page, "글자 크기", "24");
+      await expect(size).toHaveValue("24");
+      await size.press("Enter");
+      await expect(target.locator(".element-text")).toHaveCSS(
+        "font-size",
+        "24px",
+      );
+    }
+    await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+    await page.reload();
+    const persisted = await page.evaluate(async (kind) => {
+      const { loadAutosave } = await import("/src/storage.ts");
+      const deck = (await loadAutosave())!;
+      return {
+        count: deck.slides.length,
+        edited: deck.slides[6].elements.find((e) => e.id === `${kind}-6`)!,
+        untouched: deck.slides[0].elements.find((e) => e.id === `${kind}-0`)!,
+      };
+    }, kind);
+    expect(persisted.count).toBe(7);
+    expect(persisted.edited).toMatchObject({
+      width: 200,
+      height: 200,
+      rotation: -15,
+      ...(kind === "text" ? { fontSize: 24 } : {}),
+    });
+    expect(persisted.untouched).toMatchObject({
+      width: kind === "text" ? 300 : 260,
+      height: kind === "text" ? 120 : 100,
+      rotation: 0,
+    });
+  });
+}

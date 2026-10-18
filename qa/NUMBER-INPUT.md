@@ -13,6 +13,13 @@ Inspector geometry, opacity and stroke fields, and Home font size now keep a loc
 - In an isolated native Mac app, selected an inserted arrow, typed each digit separately, confirmed that the initial `2` stayed `2`, and committed widths `200` and `160`. One native Cmd+Z restored width `200`. Screenshot: `qa/results/number-input/native-width-160.png`.
 - Native Windows/Linux execution was not repeated for this local follow-up.
 
+## Expanded report recheck
+
+- Rechecked the expanded report against runtime source commit `d7feaac`: **20 tests passed** (54.5 seconds), including all numeric-input and partial-formatting tests.
+- Added seven-slide fixtures with text, arrow and image objects. For each object type, entering `200` for width and height and `-15` for rotation preserves the draft and commits the exact value. Text font size `24` also passes. Reload preserves the values and leaves the first slide's objects unchanged.
+- The running local Mac app's ASAR matches the corrected build (`17e5687e…`), with all 48 production files matching the local build output. The existing public Mac and Windows ZIPs still contain the older ASAR (`05205776…`); these fixes have not been publicly released.
+- This recheck changes tests and this QA record only. The already-correct running app and the user's saved document were left open without replacement.
+
 ## Scope
 
 Git and local Mac app only; base version stays 1.5.7. No release, version tag, public download replacement or Lithos document change. Existing Mac ZIP, Windows ZIP/Setup and Linux DEB hashes are unchanged. The staged Mac bundle passes strict signature verification; the installed copy has the same ASAR and passes normal signature verification. Documents' file provider adds FinderInfo metadata, so strict verification is performed outside Documents.

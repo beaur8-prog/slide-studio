@@ -205,6 +205,7 @@ const { execFile } = require('node:child_process');
       const automatic = page.getByLabel('내용에 맞춰 상자 높이 자동 조절');
       await expect(automatic).toBeChecked();
       await page.getByLabel('높이', { exact: true }).fill('70');
+      await page.getByLabel('높이', { exact: true }).press('Enter');
       await expect(automatic).not.toBeChecked();
       await automatic.check();
       await expect.poll(complete).toBe(true);
@@ -221,6 +222,10 @@ const { execFile } = require('node:child_process');
       await page.screenshot({ path: path.join(output, 'chart-notice.png') });
       await chart.getByRole('button', { name: '취소', exact: true }).click();
       console.log('Native app: long Korean auto-height, persistence and chart notice verified');
+    }
+    if (version.localeCompare('1.5.8', undefined, { numeric: true }) >= 0) {
+      await require('./qa-editing-regressions.cjs')(page, output);
+      console.log('Native app: partial italic and numeric edits verified');
     }
     // A silent update must fail rather than kill a running app or overwrite it.
     const busyExit = await new Promise((resolve, reject) => {

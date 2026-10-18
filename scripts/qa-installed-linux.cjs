@@ -138,6 +138,9 @@ const output = path.resolve('qa/results/linux-native');
     await expect(chart).toContainText('데이터 연동 안 됨');
     await chart.getByRole('button', { name: '취소', exact: true }).click();
     await page.screenshot({ path: path.join(output, 'long-text.png') });
+    if (process.env.EXPECTED_APP_VERSION.localeCompare('1.5.8', undefined, { numeric: true }) >= 0) {
+      await require('./qa-editing-regressions.cjs')(page, output);
+    }
     await fs.writeFile(path.join(output, 'native-app.json'), JSON.stringify({
       version: process.env.EXPECTED_APP_VERSION, protection, installedApp: true, pptxImport: true,
       koreanText: true, systemKoreanFallback: true, objectContext: true, selectedTextColorAndSelection: true,

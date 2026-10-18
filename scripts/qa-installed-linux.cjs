@@ -104,7 +104,7 @@ const output = path.resolve('qa/results/linux-native');
 
     await page.getByRole('button', { name: '삽입', exact: true }).click();
     await page.getByRole('button', { name: '텍스트 상자', exact: true }).click();
-    const newText = page.getByTestId('slide-element').last();
+    const newText = page.locator('.slide-element[data-type="text"]').last();
     await newText.dblclick();
     const longText = '긴 한글 문장이 리눅스에서도 마지막 글자까지 줄바꿈되어 표시됩니다. '.repeat(5);
     await editor.fill(longText);
@@ -112,6 +112,9 @@ const output = path.resolve('qa/results/linux-native');
     await editor.press('Escape');
     await expect(page.locator('.save-indicator')).toHaveText('저장됨');
     await page.reload();
+    await expect(page.locator('.save-indicator')).toHaveText('저장됨');
+    // Startup opens the first slide; this text was inserted on slide two.
+    await page.locator('.thumbnail-button').nth(1).click();
     await expect(newText).toHaveText(longText);
     await page.getByRole('button', { name: '삽입', exact: true }).click();
     await page.getByRole('button', { name: '차트', exact: true }).click();

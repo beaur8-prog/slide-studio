@@ -17,6 +17,9 @@ dpkg-deb --contents "$deb" > "$out/deb-files.txt"
 sudo apt-get install -y "$deb"
 [[ "$(stat -c '%u:%g:%a' /opt/slide-studio/chrome-sandbox)" == 0:0:4755 ]]
 desktop-file-validate /usr/share/applications/slide-studio.desktop
+# A minimal desktop can have no Hangul glyphs for UI/default-font fallback.
+dpkg-query -W -f='${Status}\n' fonts-noto-cjk | grep -qx 'install ok installed'
+fc-match ':lang=ko' > "$out/korean-system-font.txt"
 ldd /opt/slide-studio/slide-studio > "$out/ldd.txt"
 ! grep -q 'not found' "$out/ldd.txt"
 [[ "$(readlink /usr/bin/slide-studio)" == /opt/slide-studio/slide-studio ]]

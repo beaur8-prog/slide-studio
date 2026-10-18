@@ -116,6 +116,22 @@ const output = path.resolve('qa/results/linux-native');
     // Startup opens the first slide; this text was inserted on slide two.
     await page.locator('.thumbnail-button').nth(1).click();
     await expect(newText).toHaveText(longText);
+    // Text-content assertions alone cannot catch missing Hangul glyphs (tofu).
+    // Inspect the actual font used for Korean UI and default-font slide text.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('DOM.enable');
+    await cdp.send('CSS.enable');
+    const { root } = await cdp.send('DOM.getDocument');
+    const elementID = await newText.getAttribute('data-element-id');
+    const koreanFonts = {};
+    for (const [name, selector] of [['ui', '.tabs button'], ['defaultText', `[data-element-id="${elementID}"] .element-text`]]) {
+      const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector });
+      const { fonts } = await cdp.send('CSS.getPlatformFontsForNode', { nodeId });
+      expect(fonts.some(font => /Noto (Sans|Serif) CJK/.test(font.familyName) && font.glyphCount > 0)).toBe(true);
+      koreanFonts[name] = fonts;
+    }
+    await cdp.detach();
+    await fs.writeFile(path.join(output, 'korean-fonts.json'), JSON.stringify(koreanFonts, null, 2) + '\n');
     await page.getByRole('button', { name: '삽입', exact: true }).click();
     await page.getByRole('button', { name: '차트', exact: true }).click();
     const chart = page.getByRole('dialog', { name: '차트 삽입', exact: true });
@@ -124,7 +140,7 @@ const output = path.resolve('qa/results/linux-native');
     await page.screenshot({ path: path.join(output, 'long-text.png') });
     await fs.writeFile(path.join(output, 'native-app.json'), JSON.stringify({
       version: process.env.EXPECTED_APP_VERSION, protection, installedApp: true, pptxImport: true,
-      koreanText: true, objectContext: true, selectedTextColorAndSelection: true,
+      koreanText: true, systemKoreanFallback: true, objectContext: true, selectedTextColorAndSelection: true,
       nativeFullscreen: true, slideshowWheel: true, laserPointer: true, penAndUndo: true,
       nativePDFExport: true, longTextAutoHeight: true, autosaveReload: true, chartNotice: true,
       desktopSession: process.env.XDG_SESSION_TYPE || 'x11-xvfb',

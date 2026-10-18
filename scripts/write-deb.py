@@ -24,7 +24,7 @@ Section: editors
 Priority: optional
 Maintainer: Slide Studio <beaur8-prog@users.noreply.github.com>
 Installed-Size: {installed_size}
-Depends: libc6 (>= 2.35), libgtk-3-0, libnss3, libnspr4, libx11-6, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxrandr2, libxcb1, libxkbcommon0, libasound2 | libasound2t64, libatk1.0-0, libatk-bridge2.0-0, libatspi2.0-0, libcups2, libdbus-1-3, libdrm2, libgbm1, libexpat1, libglib2.0-0, libpango-1.0-0, libcairo2, libgcc-s1, libstdc++6, xdg-utils
+Depends: libc6 (>= 2.35), libgtk-3-0, libnss3, libnspr4, libx11-6, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxrandr2, libxcb1, libxkbcommon0, libasound2 | libasound2t64, libatk1.0-0, libatk-bridge2.0-0, libatspi2.0-0, libcups2, libdbus-1-3, libdrm2, libgbm1, libexpat1, libglib2.0-0, libpango-1.0-0, libcairo2, libgcc-s1, libstdc++6, xdg-utils, fonts-noto-cjk
 Homepage: https://github.com/beaur8-prog/slide-studio
 Description: Local presentation editor
  Edit PPTX and Slide Studio projects, present slides, and export PPTX or PDF.

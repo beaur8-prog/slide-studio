@@ -1,5 +1,7 @@
 # Numeric input commits after typing (local follow-up)
 
+Publication update: these corrections are included in [1.5.8](RELEASE-1.5.8.md), now released for Mac, Windows and Linux. The local-only notes below describe the earlier development checks.
+
 The reported arrow-width cases were reproduced before the fix: typing `200` produced `1600`, and `160` produced `1660`. Inspector inputs clamped the first digit to the minimum width of 16 and immediately replaced the controlled value.
 
 Inspector geometry, opacity and stroke fields, and Home font size now keep a local input draft. Enter or focus departure validates/clamps and commits once. Escape cancels; empty or incomplete numbers restore the previous value. Keyboard arrows still increment/decrement. Leaving a field by clicking another object commits before canvas selection changes, keeping the value attached to the original object. Selection-specific keys discard stale control state when the new object has the same initial value.

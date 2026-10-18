@@ -1,5 +1,7 @@
 # Partial bold, italic and underline (local follow-up)
 
+Publication update: these corrections are included in [1.5.8](RELEASE-1.5.8.md), now released for Mac, Windows and Linux. The local-only notes below describe the earlier development checks.
+
 Home's formatting buttons previously blurred the editable text and patched the whole text box. The reported `Alpha Beta` → select `Beta` → Italic case failed the new regression test before the fix.
 
 The buttons now preserve the editable selection and use Chromium's native formatting transaction. Only the changed character styles are synchronized back to the document, retaining other run properties and paragraph metrics. Native undo/redo and later typing use the same formatting history. Button state follows the selected text. A caret formats subsequent typing; object selection still formats the whole box. Underline is rendered on runs so an inherited underline can be removed from selected characters.

@@ -72,9 +72,11 @@ test("wheel changes one slide per burst, clamps at ends and follows the active t
   await area.hover();
   await page.mouse.wheel(0, -120);
   await expect(current(page)).toHaveText("1");
-  // Keep this a single burst. Waiting for an assertion between inputs can
-  // introduce a quiet gap and turn them into intentional separate notches.
-  await area.evaluate(async (element) => {
+  // Dispatch the queued burst in one browser task. A nominal 30 ms timer can
+  // be delayed beyond the app's 80 ms quiet gap by layout, producing a second
+  // intentional gesture instead of testing repeated events in one burst.
+  // The separate momentum-tail test exercises continuous timed input.
+  await area.evaluate((element) => {
     for (let i = 0; i < 3; i++) {
       element.dispatchEvent(
         new WheelEvent("wheel", {
@@ -83,7 +85,6 @@ test("wheel changes one slide per burst, clamps at ends and follows the active t
           cancelable: true,
         }),
       );
-      await new Promise((resolve) => setTimeout(resolve, 30));
     }
   });
   await expect(current(page)).toHaveText("2");

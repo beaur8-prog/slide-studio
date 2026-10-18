@@ -106,6 +106,65 @@ const { execFile } = require('node:child_process');
       await page.keyboard.press('Control+z');
       await expect(page.getByTestId('slide-element')).toHaveCount(count);
     }
+    const textFormatting = version.localeCompare('1.5.5', undefined, { numeric: true }) >= 0;
+    if (textFormatting) {
+      await page.getByRole('button', { name: '홈', exact: true }).click();
+      const text = page.locator('.slide-element[data-type="text"]').first();
+      await text.dblclick();
+      const editor = page.getByRole('textbox', { name: '슬라이드 텍스트 편집', exact: true });
+      await expect(editor).toBeFocused();
+      const originalText = await editor.innerText();
+      await editor.press('Control+Home');
+      await editor.press('Shift+ArrowRight');
+      await editor.press('Shift+ArrowRight');
+      const originalColor = await page.evaluate(() => getComputedStyle(getSelection().getRangeAt(0).startContainer.parentElement).color);
+      const selected = await page.evaluate(() => getSelection()?.toString());
+      expect(selected.length).toBe(2);
+      const box = await editor.boundingBox();
+      await editor.click({ button: 'right', position: { x: box.width - 5, y: box.height - 5 } });
+      const textMenu = page.getByRole('menu', { name: '텍스트 편집', exact: true });
+      await expect(textMenu).toBeVisible();
+      expect(await page.evaluate(() => getSelection()?.toString())).toBe(selected);
+      await textMenu.getByRole('menuitem', { name: '복사', exact: true }).click();
+      await expect.poll(async () => app.evaluate(({ clipboard }) => clipboard.readText())).toBe(selected);
+      await editor.click({ button: 'right', position: { x: box.width - 5, y: box.height - 5 } });
+      await expect(textMenu).toBeVisible();
+      await textMenu.getByRole('menuitem', { name: '글자 색', exact: true }).click();
+      const colors = page.getByRole('dialog', { name: '글자 색', exact: true });
+      await expect(colors).toBeVisible();
+      await colors.getByRole('textbox', { name: '색상 코드', exact: true }).fill('#FF0000');
+      await page.screenshot({ path: path.join(output, 'selected-text-color.png') });
+      await colors.getByRole('button', { name: '적용', exact: true }).click();
+      await expect(editor).toBeFocused();
+      expect(await page.evaluate(() => getSelection()?.toString())).toBe(selected);
+      expect(await editor.innerText()).toBe(originalText);
+      expect(await page.evaluate(() => {
+        const range = getSelection().getRangeAt(0);
+        return getComputedStyle(range.startContainer.parentElement).color;
+      })).toBe('rgb(255, 0, 0)');
+      await editor.press('Control+z');
+      expect(await editor.innerText()).toBe(originalText);
+      await expect.poll(async () => page.evaluate(() => getComputedStyle(getSelection().getRangeAt(0).startContainer.parentElement).color)).toBe(originalColor);
+      await editor.press('Escape');
+      await page.getByRole('button', { name: '파일', exact: true }).click();
+      await page.getByRole('button', { name: '원본 글꼴 추가', exact: true }).click();
+      const fonts = page.getByRole('dialog', { name: '원본 글꼴 추가', exact: true });
+      await expect(fonts).toBeVisible();
+      await page.screenshot({ path: path.join(output, 'source-fonts.png') });
+      const chooser = page.waitForEvent('filechooser');
+      await fonts.getByRole('button', { name: '글꼴 파일 선택', exact: true }).click();
+      await (await chooser).setFiles(path.resolve('public/fonts/NanumBarunGothic.ttf'));
+      await expect(fonts.getByRole('status')).toContainText('적용됨');
+      await fonts.getByRole('button', { name: '글꼴 관리 닫기', exact: true }).click();
+      await page.reload();
+      await expect(page.locator('.save-indicator')).toHaveText('저장됨');
+      expect(await page.evaluate(() => Array.from(document.fonts).some(f => f.family.includes('Slide Studio Local NanumBarunGothic') && f.status === 'loaded'))).toBe(true);
+      await page.getByRole('button', { name: '파일', exact: true }).click();
+      await page.getByRole('button', { name: '원본 글꼴 추가', exact: true }).click();
+      await fonts.getByRole('button', { name: /NanumBarunGothic.*제거/ }).click();
+      await expect(fonts.getByRole('status')).toContainText('제거했습니다');
+      await fonts.getByRole('button', { name: '글꼴 관리 닫기', exact: true }).click();
+    }
     // A silent update must fail rather than kill a running app or overwrite it.
     const busyExit = await new Promise((resolve, reject) => {
       execFile(process.env.SETUP_PATH, ['/S'], { timeout: 45000 }, error => {
@@ -117,7 +176,7 @@ const { execFile } = require('node:child_process');
     await expect(page.locator('.save-indicator')).toHaveText('저장됨');
     await page.screenshot({ path: path.join(output, 'installed-app.png') });
     await fs.writeFile(path.join(output, 'native-app.json'), JSON.stringify({
-      version, objectContext, installedApplicationLaunched: true, editorRendered: true,
+      version, objectContext, ...(textFormatting ? { textContextSelection: true, nativeTextClipboard: true, partialTextColor: true, nativeTextColorUndo: true, sourceFontImportPersistenceRemoval: true } : {}), installedApplicationLaunched: true, editorRendered: true,
       slideshowWheel: true, escapeRestoresEditor: true,
       runningAppBlocksSilentUpdate: true, runningApplicationPreserved: true,
       ...(pointerTools ? { ribbonLayouts, unclippedNotes: true, laserPointer: true, penDrawing: true, eraser: true, nativeInkUndoRedo: true, contextTools: true } : {}),

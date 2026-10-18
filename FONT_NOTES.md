@@ -71,7 +71,7 @@ The renderer registers the returned bytes in memory as
 `Slide Studio Office Arial Nova Light`. This face is used after the original
 `Helvetica Light` and `Helvetica Neue` names, before the Windows `Helvetica`
 alias. Bold runs retain the previous system-font stack. The Calibri support
-described below is a separate, unpublished follow-up.
+described below is a separate change in version 1.5.5.
 
 The app does not download, install, copy into its package, or redistribute this
 Office font. No Windows font-registration or Office settings are changed.
@@ -103,7 +103,7 @@ stops, full script-specific punctuation rules and PowerPoint's layout engine can
 still differ. PPTX exports reference fonts by name; they do not embed font files.
 The font assets included in Slide Studio do not automatically travel with a PPTX.
 
-## Local source-font support (unpublished follow-up)
+## Local source-font support (1.5.5)
 
 The renderer now tries an installed source family, a user-added source face,
 then an existing Office-private Calibri face before the Carlito substitute.

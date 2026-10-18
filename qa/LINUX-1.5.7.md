@@ -6,9 +6,9 @@ Linux amd64 is added to the existing 1.5.7 release. This is a new platform packa
 
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Slide-Studio-linux-amd64.deb | 132308476 | `83da6728e2f36a1cc4db123ec480fbdcadb2155ecb75ba6a24a97e477c85c7d1` |
+| Slide-Studio-linux-amd64.deb | 132308490 | `53d046084ec83017cbd78a2f8404e3b40aaa950d92d9a1d1a22a5a1e6a379504` |
 
-Electron 42.11.15 Linux x64 is downloaded from its official release and checked against the runtime package's published checksum. ZIP CRCs, ELF64 x86-64 identity, required files and all Debian payload hashes/owners/modes pass. The package contains 76 regular files, a launcher symlink and the required directories. It installs the existing icon and desktop entry. Chromium's official sandbox helper is the only setuid payload, owned by root with mode 4755; the main app runs as the ordinary user.
+Electron 42.11.15 Linux x64 is downloaded from its official release and checked against the runtime package's published checksum. ZIP CRCs, ELF64 x86-64 identity, required files and all Debian payload hashes/owners/modes pass. The package contains 76 regular files, a launcher symlink and the required directories. It installs the existing icon and desktop entry. Its `fonts-noto-cjk` system dependency supplies Hangul for the UI and default-font text on minimal Linux desktops. Chromium's official sandbox helper is the only setuid payload, owned by root with mode 4755; the main app runs as the ordinary user.
 
 The app ASAR SHA-256 is `05205776a1786db365fcc90b31d6e034f99d66a4e5fe4e5a3f51e5db63273ff0`, identical to Mac/Windows 1.5.7. A fresh TypeScript/Vite build passed and all 48 production source/assets match the release ASAR; its 49th file is the minimal package metadata. The [existing 1.5.7 application regressions](RELEASE-1.5.7.md) remain applicable without claiming another full-suite run.
 
@@ -16,7 +16,7 @@ The app ASAR SHA-256 is `05205776a1786db365fcc90b31d6e034f99d66a4e5fe4e5a3f51e5d
 
 ## Native Linux verification
 
-[Ubuntu 22.04 and 24.04 verification](https://github.com/beaur8-prog/slide-studio/actions/runs/39104535357) uses disposable GitHub-hosted x64 desktops under Xvfb/Openbox. Both use the exact public DEB hash above, ordinary-user execution, and Playwright's explicit `chromiumSandbox: true` (its default otherwise injects `--no-sandbox`). No sandbox, kernel or AppArmor protections are disabled.
+[Ubuntu 22.04 and 24.04 verification](https://github.com/beaur8-prog/slide-studio/actions/runs/39104750900) uses disposable GitHub-hosted x64 desktops under Xvfb/Openbox. Both use the exact public DEB hash above, ordinary-user execution, and Playwright's explicit `chromiumSandbox: true` (its default otherwise injects `--no-sandbox`). No sandbox, kernel or AppArmor protections are disabled.
 
 - Install with apt; read back package/version/architecture, root ownership and mode 4755; validate desktop entry, launcher target, runtime shared libraries and every installed payload file.
 - Launch the installed app and verify version/platform, sandbox/context isolation, no renderer Node access and no `--no-sandbox` switch.
@@ -26,6 +26,8 @@ The app ASAR SHA-256 is `05205776a1786db365fcc90b31d6e034f99d66a4e5fe4e5a3f51e5d
 - Export a PDF through the real export handler, stubbing only the OS destination picker in the disposable test.
 - Insert long Korean text with automatic height, save/reload and reopen its original slide, and verify the chart data-link limitation notice.
 - Reinstall and compare all payload files again, then uninstall. Preserve the profile sentinel and an unrelated local file while removing installed app, launcher, icon and desktop entry.
+
+Visual review also caught missing system Hangul fonts on the initial minimal runner: the final package adds `fonts-noto-cjk`, and Chromium platform-font checks verify real CJK glyph use for both the Korean UI and default-font slide text.
 
 The initial checks exposed two test-harness issues: Playwright's sandbox default and reloading onto the first slide instead of the slide containing the test text. These were corrected without changing the app or package bytes.
 

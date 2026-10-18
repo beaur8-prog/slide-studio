@@ -102,6 +102,7 @@ import type {
   TableCellFormat,
 } from "./types";
 import { editText, patchText, scaleElement } from "./text-layout";
+import { hasTextBullets, toggleTextBullets } from "./text-bullets";
 import {
   blankDeck,
   duplicateSlide,
@@ -2831,16 +2832,23 @@ export default function App() {
                 <button
                   className="ribbon-text-action"
                   disabled={selectedElement?.type !== "text"}
+                  aria-pressed={
+                    selectedElement?.type === "text" &&
+                    hasTextBullets(selectedElement)
+                  }
                   onClick={() => {
-                    if (selectedElement)
-                      updateSelected({
-                        text: (selectedElement.text || "")
-                          .split("\n")
-                          .map((l) =>
-                            l.startsWith("• ") ? l.slice(2) : `• ${l}`,
-                          )
-                          .join("\n"),
-                      });
+                    finish();
+                    setEditing(null);
+                    changeSlide((s) => ({
+                      ...s,
+                      elements: s.elements.map((e) =>
+                        selected.includes(e.id) &&
+                        !e.locked &&
+                        e.type === "text"
+                          ? toggleTextBullets(e)
+                          : e,
+                      ),
+                    }));
                   }}
                 >
                   • 글머리 기호

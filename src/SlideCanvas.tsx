@@ -21,6 +21,7 @@ import {
   type TextFormatRange,
 } from "./text-formatting";
 import type { TextMenuSelection } from "./text-selection";
+import { continueTextBullet } from "./text-bullets";
 import { LineShape } from "./LineShape";
 import { TableVisual } from "./TableEditor";
 import { TableResizer } from "./TableResizer";
@@ -179,7 +180,15 @@ function TextLine({
               r.text
             )}
             {editing && bullet && j === 0 ? (
-              <span style={{ fontSize: 0 }}>
+              <span
+                style={{
+                  // An empty list has no body run for the native caret. Do not
+                  // let the first typed characters inherit a zero font size.
+                  fontSize: bullet.runs.some((r) => r.text)
+                    ? 0
+                    : (p.fontSize ?? e.fontSize ?? 32),
+                }}
+              >
                 {p.bulletPrefix!.slice(bullet.label.length)}
               </span>
             ) : null}
@@ -640,6 +649,16 @@ function EditableText({
         // including while this contenteditable owns the selection.
         if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) return;
         e.stopPropagation();
+        if (
+          e.key === "Enter" &&
+          !e.shiftKey &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.altKey &&
+          !e.nativeEvent.isComposing &&
+          continueTextBullet(e.currentTarget, element)
+        )
+          e.preventDefault();
         if (e.key === "Escape") {
           e.preventDefault();
           e.currentTarget.blur();

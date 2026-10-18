@@ -11,7 +11,8 @@ const output = path.resolve('qa/results/linux-native');
   await fs.mkdir(output, { recursive: true });
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
-  const app = await electron.launch({ executablePath: '/opt/slide-studio/slide-studio', env, timeout: 45000 });
+  // Playwright otherwise injects --no-sandbox into Electron by default.
+  const app = await electron.launch({ executablePath: '/opt/slide-studio/slide-studio', chromiumSandbox: true, env, timeout: 45000 });
   let failed = false;
   try {
     const page = await app.firstWindow();

@@ -18,7 +18,7 @@ sudo apt-get install -y "$deb"
 [[ "$(stat -c '%u:%g:%a' /opt/slide-studio/chrome-sandbox)" == 0:0:4755 ]]
 desktop-file-validate /usr/share/applications/slide-studio.desktop
 ldd /opt/slide-studio/slide-studio > "$out/ldd.txt"
-! rg -q 'not found' "$out/ldd.txt"
+! grep -q 'not found' "$out/ldd.txt"
 [[ "$(readlink /usr/bin/slide-studio)" == /opt/slide-studio/slide-studio ]]
 unpacked="$(mktemp -d "$RUNNER_TEMP/slide-linux-payload.XXXXXX")"
 dpkg-deb --extract "$deb" "$unpacked"

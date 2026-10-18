@@ -176,11 +176,13 @@ export function InsertContentDialog({
     [background, theme.background, result.elements],
   );
   const hint =
-    kind === "equation"
-      ? "수식은 텍스트로 편집할 수 있습니다. 분수는 분자와 분모를 각각 편집할 수 있습니다."
-      : kind === "icons"
-        ? "삽입한 아이콘의 크기와 색상을 자유롭게 바꿀 수 있습니다."
-        : "삽입 후 각 도형과 글자를 편집할 수 있습니다.";
+    kind === "chart"
+      ? "데이터 연동 안 됨: 차트는 도형과 글자로 삽입됩니다. 엑셀이나 원본 데이터의 숫자를 바꿔도 자동 갱신되지 않습니다. 값을 바꾸려면 차트를 다시 삽입하세요."
+      : kind === "equation"
+        ? "수식은 텍스트로 편집할 수 있습니다. 분수는 분자와 분모를 각각 편집할 수 있습니다."
+        : kind === "icons"
+          ? "삽입한 아이콘의 크기와 색상을 자유롭게 바꿀 수 있습니다."
+          : "삽입 후 각 도형과 글자를 편집할 수 있습니다.";
   return (
     <div
       className="modal-backdrop insert-content-backdrop"

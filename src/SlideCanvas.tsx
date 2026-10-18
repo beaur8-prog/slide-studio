@@ -197,51 +197,119 @@ export function TextContent({
   element: SlideElement;
   editing?: boolean;
 }) {
+  let content;
   if (!e.paragraphs)
     // Keep native formatting spans inside one inline formatting context.
     // Direct children of the column-flex editor would become separate rows.
-    return editing ? (
+    content = (
       <div data-text-plain style={{ flexShrink: 0, minBlockSize: "1lh" }}>
         {e.text}
       </div>
-    ) : (
-      <>{e.text}</>
     );
+  else
+    content = (
+      <>
+        {e.paragraphs.map((p, i) => (
+          <div
+            key={i}
+            data-text-paragraph
+            style={{
+              flexShrink: 0,
+              fontSize: p.fontSize ?? e.fontSize,
+              textAlign: p.align ?? e.align,
+              lineHeight:
+                p.lineSpacing !== undefined
+                  ? `${p.lineSpacing}px`
+                  : (p.lineHeight ?? 1.2),
+              marginTop: p.spaceBefore ?? 0,
+              marginBottom: p.spaceAfter ?? 0,
+              paddingLeft: p.marginLeft ?? 0,
+              paddingRight: p.marginRight ?? 0,
+              tabSize: p.tabSize === undefined ? undefined : `${p.tabSize}px`,
+              lineBreak: p.eastAsianLineBreak === false ? "auto" : "strict",
+              wordBreak: p.eastAsianLineBreak === false ? "keep-all" : "normal",
+            }}
+          >
+            {paragraphLines(p).map((line, lineIndex) => (
+              <TextLine
+                key={lineIndex}
+                line={line}
+                paragraph={p}
+                element={e}
+                first={lineIndex === 0}
+                editing={editing}
+              />
+            ))}
+          </div>
+        ))}
+      </>
+    );
+  return (e.textColumns ?? 1) > 1 ? (
+    <div
+      data-text-columns
+      style={{
+        height: "100%",
+        minHeight: 0,
+        flexShrink: 0,
+        columnCount: e.textColumns,
+        columnGap: e.textColumnGap ?? 0,
+        columnFill: "auto",
+      }}
+    >
+      {content}
+    </div>
+  ) : (
+    content
+  );
+}
+
+function useTextHeight(
+  element: SlideElement,
+  onHeight?: (id: string, height: number) => void,
+) {
+  const ref = useRef<HTMLDivElement>(null);
+  const callback = useRef(onHeight);
+  callback.current = onHeight;
+  useLayoutEffect(() => {
+    const host = ref.current;
+    if (!host || !automaticTextHeight(element) || !onHeight || element.locked)
+      return;
+    const measure = () => {
+      // offsetHeight is in slide pixels even inside a zoomed/rotated canvas.
+      const height = Math.min(100000, Math.max(8, host.offsetHeight));
+      if (Math.abs(height - element.height) >= 1)
+        callback.current?.(element.id, height);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [element, Boolean(onHeight)]);
+  return ref;
+}
+
+function automaticTextHeight(e: SlideElement) {
+  return (
+    e.autoHeight &&
+    (!e.writingMode || e.writingMode === "horizontal") &&
+    (e.textColumns ?? 1) === 1
+  );
+}
+
+function StaticText({
+  element,
+  onHeight,
+}: {
+  element: SlideElement;
+  onHeight?: (id: string, height: number) => void;
+}) {
+  const ref = useTextHeight(element, onHeight);
   return (
     <>
-      {e.paragraphs.map((p, i) => (
-        <div
-          key={i}
-          data-text-paragraph
-          style={{
-            flexShrink: 0,
-            fontSize: p.fontSize ?? e.fontSize,
-            textAlign: p.align ?? e.align,
-            lineHeight:
-              p.lineSpacing !== undefined
-                ? `${p.lineSpacing}px`
-                : (p.lineHeight ?? 1.2),
-            marginTop: p.spaceBefore ?? 0,
-            marginBottom: p.spaceAfter ?? 0,
-            paddingLeft: p.marginLeft ?? 0,
-            paddingRight: p.marginRight ?? 0,
-            tabSize: p.tabSize === undefined ? undefined : `${p.tabSize}px`,
-            lineBreak: p.eastAsianLineBreak === false ? "auto" : "strict",
-            wordBreak: p.eastAsianLineBreak === false ? "keep-all" : "normal",
-          }}
-        >
-          {paragraphLines(p).map((line, lineIndex) => (
-            <TextLine
-              key={lineIndex}
-              line={line}
-              paragraph={p}
-              element={e}
-              first={lineIndex === 0}
-              editing={editing}
-            />
-          ))}
-        </div>
-      ))}
+      <div ref={ref} className="element-text" style={textStyle(element)}>
+        <TextContent element={element} />
+      </div>
+      <TextBorders element={element} />
     </>
   );
 }
@@ -278,7 +346,13 @@ function TextBorders({ element: e }: { element: SlideElement }) {
   );
 }
 
-export function ElementVisual({ element: e }: { element: SlideElement }) {
+export function ElementVisual({
+  element: e,
+  onTextHeight,
+}: {
+  element: SlideElement;
+  onTextHeight?: (id: string, height: number) => void;
+}) {
   if (e.type === "table") return <TableVisual element={e} />;
   if (e.type === "image")
     return (
@@ -312,14 +386,7 @@ export function ElementVisual({ element: e }: { element: SlideElement }) {
       </div>
     );
   if (e.type === "text")
-    return (
-      <>
-        <div className="element-text" style={textStyle(e)}>
-          <TextContent element={e} />
-        </div>
-        <TextBorders element={e} />
-      </>
-    );
+    return <StaticText element={e} onHeight={onTextHeight} />;
   if (e.shape === "custom" && e.paths)
     return (
       <svg
@@ -416,7 +483,8 @@ export function textStyle(e: SlideElement): CSSProperties {
     whiteSpace: e.wrap === false ? "pre" : "pre-wrap",
     overflowWrap: e.wrap === false ? "normal" : "break-word",
     wordBreak: e.paragraphs ? "keep-all" : undefined,
-    overflow: e.textOverflow ?? "hidden",
+    overflow: automaticTextHeight(e) ? "visible" : (e.textOverflow ?? "hidden"),
+    height: automaticTextHeight(e) ? "auto" : undefined,
     background: e.fill,
     outline:
       e.strokeWidth && e.stroke !== "transparent"
@@ -509,12 +577,14 @@ function EditableText({
   element,
   onInput,
   onDone,
+  onHeight,
 }: {
   element: SlideElement;
   onInput: (text: string, colors?: TextColorRange[]) => void;
   onDone: () => void;
+  onHeight: (id: string, height: number) => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useTextHeight(element, onHeight);
   const initial = useRef(<TextContent element={element} editing />);
   useLayoutEffect(() => {
     if (!ref.current) return;
@@ -652,6 +722,7 @@ interface Props {
   preview: (elements: SlideElement[]) => void;
   finish: () => void;
   changeText: (id: string, text: string, colors?: TextColorRange[]) => void;
+  resizeText: (id: string, height: number) => void;
   showGuides: boolean;
   grid: boolean;
 }
@@ -673,6 +744,7 @@ export default function SlideCanvas({
   preview,
   finish,
   changeText,
+  resizeText,
   showGuides,
   grid,
 }: Props) {
@@ -939,7 +1011,16 @@ export default function SlideCanvas({
           height = (width * e.height) / e.width;
           if (h.includes("n")) y = e.y + e.height - height;
         }
-        return { ...e, x, y, width, height };
+        return {
+          ...e,
+          x,
+          y,
+          width,
+          height,
+          ...(e.type === "text" && (h.includes("n") || h.includes("s"))
+            ? { autoHeight: false }
+            : {}),
+        };
       }),
     );
   };
@@ -1057,6 +1138,7 @@ export default function SlideCanvas({
               {editing === e.id ? (
                 <EditableText
                   element={e}
+                  onHeight={resizeText}
                   onInput={(text, colors) => changeText(e.id, text, colors)}
                   onDone={() => {
                     finish();
@@ -1086,7 +1168,7 @@ export default function SlideCanvas({
                   }
                 />
               ) : (
-                <ElementVisual element={e} />
+                <ElementVisual element={e} onTextHeight={resizeText} />
               )}
             </div>
           ))}

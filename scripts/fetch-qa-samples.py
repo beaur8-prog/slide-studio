@@ -15,6 +15,7 @@ SAMPLES = [
     {"id": f"cmu-lecture-{i}", "url": f"{COURSE}lectures/lecture{i}.pdf", "source": COURSE, "kind": "pdf"}
     for i in range(1, 5)
 ]
+SAMPLES += json.loads((ROOT.parent / "workplace-samples.json").read_text())
 
 def fetch(sample):
     result = dict(sample)
@@ -42,6 +43,8 @@ def fetch(sample):
         expected = b"PK" if sample["kind"] == "pptx" else b"%PDF"
         if not data.startswith(expected):
             raise ValueError("Response is not the expected document format")
+        if sample.get("sha256") and hashlib.sha256(data).hexdigest() != sample["sha256"]:
+            raise ValueError("Public sample changed; review and update its pinned fixture before testing")
         result.update(path=str(target), bytes=len(data), sha256=hashlib.sha256(data).hexdigest(), status="downloaded")
     except Exception as error:
         result.update(status="failed", error=str(error))

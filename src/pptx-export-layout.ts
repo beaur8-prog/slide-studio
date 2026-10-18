@@ -157,6 +157,13 @@ export function restoreLayoutXml(
       if (bp) {
         // The model stores effective spacing after source edge suppression.
         bp.setAttribute("spcFirstLastPara", "1");
+        if ((el.textColumns ?? 1) > 1) {
+          bp.setAttribute("numCol", String(el.textColumns));
+          bp.setAttribute(
+            "spcCol",
+            String(Math.round((el.textColumnGap ?? 0) * 9525)),
+          );
+        }
         if (el.textInsets)
           ["tIns", "rIns", "bIns", "lIns"].forEach((name, i) =>
             bp.setAttribute(name, String(Math.round(el.textInsets![i] * 9525))),

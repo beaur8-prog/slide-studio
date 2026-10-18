@@ -331,6 +331,28 @@ export function parseDeckJson(text: string): Deck {
             );
           if (source.wrap !== undefined)
             el.wrap = booleanValue(source.wrap, `${elLabel} 자동 줄바꿈`);
+          if (source.autoHeight !== undefined)
+            el.autoHeight = booleanValue(
+              source.autoHeight,
+              `${elLabel} 자동 높이`,
+            );
+          if (source.textColumns !== undefined) {
+            el.textColumns = numberValue(
+              source.textColumns,
+              `${elLabel} 텍스트 단 수`,
+              1,
+              16,
+            );
+            if (!Number.isInteger(el.textColumns))
+              fail(`${elLabel}: 텍스트 단 수는 정수여야 합니다.`);
+          }
+          if (source.textColumnGap !== undefined)
+            el.textColumnGap = numberValue(
+              source.textColumnGap,
+              `${elLabel} 텍스트 단 간격`,
+              0,
+              100000,
+            );
           if (source.textOverflow !== undefined)
             el.textOverflow = enumValue(
               source.textOverflow,

@@ -311,6 +311,18 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
     ...first,
     text: paragraphText(paragraphs),
     paragraphs,
+    ...(num(bodyProps, "numCol", 1) > 1
+      ? {
+          textColumns: Math.max(
+            1,
+            Math.min(16, Math.floor(num(bodyProps, "numCol", 1))),
+          ),
+          textColumnGap: Math.max(
+            0,
+            Math.min(100000, num(bodyProps, "spcCol", 0) / 9525),
+          ),
+        }
+      : {}),
     align: paragraphs[0].align,
     verticalAlign:
       anchor === "ctr" ? "middle" : anchor === "b" ? "bottom" : "top",

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "dickinson-workplace",
+    "url": "https://www.dickinson.edu/download/downloads/id/1076/sample_powerpoint_slides.pptx",
+    "source": "https://www.dickinson.edu/downloads/download/520/sample_powerpoint_slides",
+    "kind": "pptx",
+    "bytes": 647237,
+    "sha256": "ac7f2627645042190df3244cc25929f4b006d144fc2cac520e79ab376197bbbf",
+    "structure": {
+      "slides": 9,
+      "masters": 1,
+      "layouts": 10,
+      "groups": 0,
+      "multiColumnBodies": 0,
+      "nativeCharts": 1
+    }
+  },
+  {
+    "id": "dickinson-brand-wide",
+    "url": "https://www.dickinson.edu/download/downloads/id/8151/powerpoint_template_black_and_red_design_wide_format_slide.pptx",
+    "source": "https://www.dickinson.edu/downloads/download/520/sample_powerpoint_slides",
+    "kind": "pptx",
+    "bytes": 408137,
+    "sha256": "fbc557d53339398ded423f914520d01970c0e4d57cd8e25f8bf5df878daa4de2",
+    "structure": {
+      "slides": 2,
+      "masters": 1,
+      "layouts": 9,
+      "groups": 8,
+      "multiColumnBodies": 0,
+      "nativeCharts": 0
+    }
+  },
+  {
+    "id": "microsoft-earnings",
+    "url": "https://cdn-dynmedia-1.microsoft.com/is/content/microsoftcorp/SlidesFY26Q4.pptx",
+    "source": "https://www.microsoft.com/en-us/Investor/earnings/fy-2026-q4/metrics",
+    "kind": "pptx",
+    "bytes": 3118904,
+    "sha256": "b31174e9e0547b1c4816e35ae39fdcace946c18e4138220f117b1847870cdef5",
+    "structure": {
+      "slides": 23,
+      "masters": 1,
+      "layouts": 11,
+      "groups": 0,
+      "multiColumnBodies": 0,
+      "nativeCharts": 0
+    }
+  }
+]

@@ -832,7 +832,9 @@ export default function App() {
     const next = element(type, {
       x: deck.width * 0.28,
       y: deck.height * 0.35,
-      ...(type === "text" ? { color: theme.text } : {}),
+      ...(type === "text"
+        ? { color: theme.text, wrap: true, autoHeight: true }
+        : {}),
       ...(shape
         ? {
             shape,
@@ -3442,6 +3444,33 @@ export default function App() {
                       }
                       begin={begin}
                       finish={finish}
+                      resizeText={(id, height) =>
+                        preview((d) => {
+                          const target = d.slides.find(
+                            (s) => s.id === slide.id,
+                          );
+                          const el = target?.elements.find((e) => e.id === id);
+                          if (
+                            !el?.autoHeight ||
+                            el.locked ||
+                            Math.abs(el.height - height) < 1
+                          )
+                            return d;
+                          return {
+                            ...d,
+                            slides: d.slides.map((s) =>
+                              s !== target
+                                ? s
+                                : {
+                                    ...s,
+                                    elements: s.elements.map((e) =>
+                                      e.id === id ? { ...e, height } : e,
+                                    ),
+                                  },
+                            ),
+                          };
+                        })
+                      }
                       preview={(elements) =>
                         preview((d) => ({
                           ...d,
@@ -3578,7 +3607,9 @@ export default function App() {
                         label="높이"
                         value={selectedElement.height}
                         min={8}
-                        onChange={(height) => updateSelected({ height })}
+                        onChange={(height) =>
+                          updateSelected({ height, autoHeight: false })
+                        }
                       />
                       <NumberField
                         label="회전"
@@ -3599,6 +3630,35 @@ export default function App() {
                   {selectedElement.type === "text" && (
                     <div className="inspector-section">
                       <h4>텍스트</h4>
+                      <label className="check-field">
+                        <input
+                          type="checkbox"
+                          checked={selectedElement.wrap !== false}
+                          disabled={selectedElement.locked}
+                          onChange={(e) =>
+                            updateSelected({ wrap: e.target.checked })
+                          }
+                        />
+                        상자 너비에 맞춰 자동 줄바꿈
+                      </label>
+                      <label className="check-field">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(selectedElement.autoHeight)}
+                          disabled={
+                            selectedElement.locked ||
+                            (selectedElement.textColumns ?? 1) > 1 ||
+                            Boolean(
+                              selectedElement.writingMode &&
+                                selectedElement.writingMode !== "horizontal",
+                            )
+                          }
+                          onChange={(e) =>
+                            updateSelected({ autoHeight: e.target.checked })
+                          }
+                        />
+                        내용에 맞춰 상자 높이 자동 조절
+                      </label>
                       <ColorField
                         label="색상"
                         value={selectedElement.color || "#233D35"}

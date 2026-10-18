@@ -119,6 +119,9 @@ export interface SlideElement {
   align?: "left" | "center" | "right";
   verticalAlign?: "top" | "middle" | "bottom";
   wrap?: boolean;
+  autoHeight?: boolean;
+  textColumns?: number;
+  textColumnGap?: number;
   paragraphs?: TextParagraph[];
   textOverflow?: "visible" | "hidden";
   writingMode?: "horizontal" | "vertical" | "vertical270" | "stacked";

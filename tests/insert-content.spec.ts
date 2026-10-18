@@ -202,6 +202,10 @@ test("chart preview validates data, applies color and inserts the previewed obje
   page,
 }, testInfo) => {
   await mountDialog(page, "chart");
+  await expect(page.getByRole("dialog")).toContainText("데이터 연동 안 됨");
+  await expect(page.getByRole("dialog")).toContainText(
+    "자동 갱신되지 않습니다",
+  );
   const preview = page.getByTestId("insert-content-preview");
   await expect(preview.locator(".slide-element").first()).toBeVisible();
   await page

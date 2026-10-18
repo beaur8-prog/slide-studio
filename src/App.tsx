@@ -79,6 +79,7 @@ import {
   Omega,
   Camera,
 } from "lucide-react";
+import FontManager from "./FontManager";
 import CommandSearch from "./CommandSearch";
 import TextColorPalette from "./TextColorPalette";
 import { applyTextColorRanges, cssColorHex } from "./text-color";
@@ -132,6 +133,7 @@ const shortcut = (key: string) => (isMac ? `⌘${key}` : `Ctrl+${key}`);
 type History = { past: Deck[]; present: Deck; future: Deck[] };
 type Tab = "home" | "insert" | "design" | "transitions" | "slideshow" | "view";
 type Modal =
+  | "fonts"
   | "new"
   | "library"
   | "shortcuts"
@@ -2581,6 +2583,18 @@ export default function App() {
                   파일 열기<span>{shortcut("O")}</span>
                 </button>
                 <hr />
+                <button
+                  onClick={() => {
+                    finish();
+                    setEditing(null);
+                    setModal("fonts");
+                    setMenu(null);
+                  }}
+                >
+                  <Type size={16} />
+                  원본 글꼴 추가
+                </button>
+                <hr />
                 <button onClick={() => void saveProject()}>
                   <Save size={16} />
                   프로젝트 저장<span>{shortcut("S")}</span>
@@ -3999,6 +4013,7 @@ export default function App() {
           }
         }}
       />
+      {modal === "fonts" && <FontManager onClose={() => setModal(null)} />}
       {modal === "table" && (
         <TableEditor
           initialRange={tableEditRange}

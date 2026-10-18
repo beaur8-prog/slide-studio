@@ -72,12 +72,14 @@ function TextLine({
     layout();
     void document.fonts.ready.then(layout);
     document.fonts.addEventListener("loadingdone", layout);
+    window.addEventListener("slide-studio:fonts-changed", layout);
     const observer = new ResizeObserver(layout);
     observer.observe(box);
     window.addEventListener("beforeprint", layout);
     return () => {
       disposed = true;
       document.fonts.removeEventListener("loadingdone", layout);
+      window.removeEventListener("slide-studio:fonts-changed", layout);
       observer.disconnect();
       window.removeEventListener("beforeprint", layout);
     };

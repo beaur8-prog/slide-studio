@@ -24,12 +24,48 @@ export async function registerOfficeLightFont(
 // without this face continue with the regular system/font fallback stack.
 export async function installDesktopFonts(): Promise<boolean> {
   try {
+    let loaded = false;
+    if (window.desktop?.loadOfficeCalibriFonts) {
+      const fonts = await window.desktop
+        .loadOfficeCalibriFonts()
+        .catch(() => []);
+      for (const font of fonts.slice(0, 6)) {
+        try {
+          if (
+            !["Calibri", "Calibri Light"].includes(font.family) ||
+            ![300, 400, 700].includes(font.weight) ||
+            !["normal", "italic"].includes(font.style) ||
+            font.bytes.byteLength > 2 * 1024 * 1024
+          )
+            continue;
+          const bytes = new Uint8Array(font.bytes);
+          const face = new FontFace(
+            `Slide Studio Office ${font.family}`,
+            bytes.buffer,
+            {
+              weight: String(font.weight),
+              style: font.style,
+              display: "block",
+            },
+          );
+          await face.load();
+          document.fonts.add(face);
+          loaded = true;
+        } catch {
+          /* Keep other styles and the existing fallback usable. */
+        }
+      }
+    }
     if (
       window.desktop?.platform !== "win32" ||
       !window.desktop.loadOfficeLightFont
     )
-      return false;
-    return registerOfficeLightFont(await window.desktop.loadOfficeLightFont());
+      return loaded;
+    return (
+      (await registerOfficeLightFont(
+        await window.desktop.loadOfficeLightFont(),
+      )) || loaded
+    );
   } catch {
     return false;
   }

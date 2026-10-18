@@ -1,3 +1,4 @@
+import { localFontAlias } from "./local-fonts";
 import type { SlideElement, TextParagraph, TextRun } from "./types";
 
 export function fontStack(name = "Arial", bold = false): string {
@@ -15,7 +16,10 @@ export function fontStack(name = "Arial", bold = false): string {
         : /^(?:나눔바른고딕|Nanum\s*Barun\s*Gothic)$/i.test(clean)
           ? ', "Slide Studio Nanum Barun Gothic"'
           : "";
-  return `"${clean}"${substitute}, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+  const office = /^Calibri(?: Light)?$/i.test(clean)
+    ? `, "Slide Studio Office ${clean}"`
+    : "";
+  return `"${clean}", "${localFontAlias(clean)}"${office}${substitute}, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
 }
 
 // Keep the source run and its two font faces in the model; split only for

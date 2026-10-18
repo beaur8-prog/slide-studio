@@ -70,8 +70,8 @@ font size are limited; paths escaping the cache through links are rejected.
 The renderer registers the returned bytes in memory as
 `Slide Studio Office Arial Nova Light`. This face is used after the original
 `Helvetica Light` and `Helvetica Neue` names, before the Windows `Helvetica`
-alias. Bold runs retain the previous system-font stack. Calibri and the macOS
-font behavior are unchanged.
+alias. Bold runs retain the previous system-font stack. The Calibri support
+described below is a separate, unpublished follow-up.
 
 The app does not download, install, copy into its package, or redistribute this
 Office font. No Windows font-registration or Office settings are changed.
@@ -102,3 +102,42 @@ local substitutes. Light-face shape/thickness, advanced typography, custom tab
 stops, full script-specific punctuation rules and PowerPoint's layout engine can
 still differ. PPTX exports reference fonts by name; they do not embed font files.
 The font assets included in Slide Studio do not automatically travel with a PPTX.
+
+## Local source-font support (unpublished follow-up)
+
+The renderer now tries an installed source family, a user-added source face,
+then an existing Office-private Calibri face before the Carlito substitute.
+Calibri and Calibri Light styles are registered separately with their actual
+weights and italics; original faces do not receive Carlito's size/vertical
+adjustments. Startup loads saved faces before the first slide is rendered.
+
+**File → 원본 글꼴 추가** accepts individual TTF/OTF files. The app reads their
+family (including localized Korean names), weight and italic metadata and validates them with Chromium's FontFace
+loader. Add the regular/bold/italic files needed by the document. Faces are
+stored in a separate local IndexedDB database and restored on restart; removing
+a face restores normal font fallback. Limits are 16 MiB per file, 24 faces and
+64 MiB total. Fonts are neither installed in the OS nor sent over the network,
+embedded in `.slide`/PPTX exports, or added to public installers. Each viewing
+PC needs its own source fonts. Collections (TTC/OTC) are not supported.
+
+Optional automatic Calibri discovery checks fixed Office FontCache locations on
+Windows and macOS, plus the font resources in installed macOS PowerPoint, Word
+and Excel apps. Each file must have an exact whitelisted Calibri PostScript
+name/weight. Reads are bounded and links escaping the expected directories are
+rejected. Missing/unreadable fonts never stop the editor from opening. This
+uses only files already on the device; it does not download Microsoft fonts.
+The existing Arial Nova Light path remains available on Windows.
+
+Carlito's calibrated Calibri/Calibri Light aliases now cover all seven supplied
+Fontsource Unicode subsets, including extended Latin, Greek, Cyrillic and
+Vietnamese, with consistent size and vertical metrics. Previously those aliases
+included only Latin, so other supported characters could fall through to a
+system font with different widths. Regenerate the CSS after a Fontsource update
+with `node scripts/create-font-fallbacks.cjs`.
+
+These changes remove avoidable font substitution when the source face is
+available; they cannot reconstruct a missing commercial font or guarantee an
+identical PowerPoint layout engine. The current Mac has no original Calibri.
+Tests use a clearly named, test-only Nanum fixture to prove font selection,
+persistence and removal, not as a reference for Calibri's real metrics. Existing
+CMU PDF width/line and paragraph regressions still test the bundled fallback.

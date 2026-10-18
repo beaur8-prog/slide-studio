@@ -125,6 +125,10 @@ for (const platform of ['win32', 'darwin']) {
     for (const action of ['read', 'execute', null, {}]) expect(() => textClipboard(event, action)).toThrow('Unknown text clipboard action');
     expect(() => textClipboard({ ...event, sender: {} }, 'copy')).toThrow('editor window');
     expect(() => textClipboard({ ...event, senderFrame: { url: contents.mainFrame.url } }, 'paste')).toThrow('editor window');
+    const loadCalibri = handlers.get('slide-studio:load-office-calibri-fonts')!;
+    expect(() => loadCalibri({ ...event, sender: {} })).toThrow('editor window');
+    expect(() => loadCalibri({ ...event, senderFrame: { url: contents.mainFrame.url } })).toThrow('editor window');
+    expect(() => loadCalibri(event, '/private/calibri.ttf')).toThrow('no paths or arguments');
     const loadFont = handlers.get('slide-studio:load-office-light-font')!;
     expect(() => loadFont({ ...event, sender: {} })).toThrow('editor window');
     expect(() => loadFont({ ...event, senderFrame: { url: contents.mainFrame.url } })).toThrow('editor window');
@@ -171,7 +175,8 @@ test('preload exposes an immutable platform and a narrow theme command', async (
   await bridge.editTextClipboard('copy');
   await bridge.setChromeTheme('light');
   await bridge.loadOfficeLightFont('ignored/path.ttf');
-  expect(calls).toEqual([['slide-studio:edit-text-clipboard', 'copy'], ['slide-studio:set-chrome-theme', 'light'], ['slide-studio:load-office-light-font']]);
+  await bridge.loadOfficeCalibriFonts('ignored/path.ttf');
+  expect(calls).toEqual([['slide-studio:edit-text-clipboard', 'copy'], ['slide-studio:set-chrome-theme', 'light'], ['slide-studio:load-office-light-font'], ['slide-studio:load-office-calibri-fonts']]);
   expect(bridge.invoke).toBeUndefined();
   expect(bridge.send).toBeUndefined();
 });

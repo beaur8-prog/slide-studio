@@ -5,6 +5,14 @@ declare global {
     desktop?: {
       readonly platform?: string;
       editTextClipboard?(action: "copy" | "cut" | "paste"): Promise<void>;
+      loadOfficeCalibriFonts?(): Promise<
+        Array<{
+          family: "Calibri" | "Calibri Light";
+          weight: number;
+          style: "normal" | "italic";
+          bytes: Uint8Array;
+        }>
+      >;
       loadOfficeLightFont?(): Promise<Uint8Array | null>;
       setChromeTheme?(theme: "dark" | "light"): Promise<void>;
       setPresentationMode?(enabled: boolean): Promise<void>;

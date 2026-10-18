@@ -5,7 +5,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { fileURLToPath } = require('node:url');
-const { readOfficeArialNovaLight } = require('./office-fonts.cjs');
+const { readOfficeArialNovaLight, readOfficeCalibriFonts } = require('./office-fonts.cjs');
 
 const PRODUCT_NAME = 'Slide Studio';
 const APP_ICON = path.join(__dirname, 'assets', 'SlideStudio.png');
@@ -22,6 +22,7 @@ const CHROME_THEMES = {
 let mainWindow = null;
 let nativeOperationPending = false;
 let officeLightFont;
+let officeCalibriFonts;
 let presentationWindowState = null;
 const captureSources = new Map();
 let captureExpiry;
@@ -268,6 +269,13 @@ function installIPC() {
     requireTrustedSender(event);
     if (typeof enabled !== 'boolean') throw new TypeError('Presentation mode must be a boolean.');
     setPresentationMode(enabled);
+  });
+
+  ipcMain.handle('slide-studio:load-office-calibri-fonts', (event, ...args) => {
+    requireTrustedSender(event);
+    if (args.length) throw new TypeError('This font request takes no paths or arguments.');
+    officeCalibriFonts ??= readOfficeCalibriFonts({ platform: process.platform });
+    return officeCalibriFonts;
   });
 
   ipcMain.handle('slide-studio:load-office-light-font', (event, ...args) => {

@@ -4,7 +4,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const MAX_FONT_BYTES = 2 * 1024 * 1024;
 
-function isArialNovaLight(bytes) {
+function isNamedOfficeFont(bytes, expectedName, expectedWeight) {
   try {
     if (
       bytes.length < 12 ||
@@ -29,7 +29,7 @@ function isArialNovaLight(bytes) {
       names.length < 6 ||
       !metrics ||
       metrics.length < 6 ||
-      bytes.readUInt16BE(metrics.offset + 4) !== 300
+      bytes.readUInt16BE(metrics.offset + 4) !== expectedWeight
     )
       return false;
     const records = bytes.readUInt16BE(names.offset + 2),
@@ -55,11 +55,14 @@ function isArialNovaLight(bytes) {
         platform === 1
           ? data.toString("latin1")
           : Buffer.from(data).swap16().toString("utf16le");
-      if (name === "ArialNova-Light") return true;
+      if (name === expectedName) return true;
     }
   } catch {}
   return false;
 }
+
+const isArialNovaLight = (bytes) =>
+  isNamedOfficeFont(bytes, "ArialNova-Light", 300);
 
 const inside = (root, target) => {
   const relative = path.relative(root, target);
@@ -124,4 +127,150 @@ async function readOfficeArialNovaLight({
   return null;
 }
 
-module.exports = { readOfficeArialNovaLight, isArialNovaLight, MAX_FONT_BYTES };
+const CALIBRI_FACES = [
+  { family: "Calibri", postscript: "Calibri", weight: 400, style: "normal" },
+  {
+    family: "Calibri",
+    postscript: "Calibri-Bold",
+    weight: 700,
+    style: "normal",
+  },
+  {
+    family: "Calibri",
+    postscript: "Calibri-Italic",
+    weight: 400,
+    style: "italic",
+  },
+  {
+    family: "Calibri",
+    postscript: "Calibri-BoldItalic",
+    weight: 700,
+    style: "italic",
+  },
+  {
+    family: "Calibri Light",
+    postscript: "Calibri-Light",
+    weight: 300,
+    style: "normal",
+  },
+  {
+    family: "Calibri Light",
+    postscript: "Calibri-LightItalic",
+    weight: 300,
+    style: "italic",
+  },
+];
+
+// Read only existing Calibri faces in fixed Office locations. No renderer paths,
+// downloads, recursive disk scans, OS installation or packaged proprietary files.
+async function readOfficeCalibriFonts({
+  platform = process.platform,
+  localAppData = process.env.LOCALAPPDATA,
+  home = require("node:os").homedir(),
+  applications = "/Applications",
+} = {}) {
+  const found = new Map();
+  const roots =
+    platform === "win32" && localAppData
+      ? [path.join(localAppData, "Microsoft", "FontCache")]
+      : platform === "darwin"
+        ? [
+            path.join(
+              home,
+              "Library",
+              "Group Containers",
+              "UBF8T346G9.Office",
+              "FontCache",
+            ),
+          ]
+        : [];
+  const directories = [];
+  for (const root of roots) {
+    try {
+      const cache = await fs.realpath(root);
+      const versions = (await fs.readdir(cache, { withFileTypes: true }))
+        .filter((e) => e.isDirectory() && /^\d{1,3}$/.test(e.name))
+        .sort((a, b) => Number(b.name) - Number(a.name))
+        .slice(0, 8);
+      for (const version of versions)
+        for (const family of ["Calibri", "Calibri Light"])
+          directories.push({
+            cache: true,
+            root: cache,
+            directory: path.join(cache, version.name, "CloudFonts", family),
+          });
+    } catch {}
+  }
+  if (platform === "darwin") {
+    for (const app of [
+      "Microsoft PowerPoint.app",
+      "Microsoft Word.app",
+      "Microsoft Excel.app",
+    ])
+      for (const name of ["DFonts", "Fonts"])
+        directories.push({
+          root: path.join(applications, app),
+          directory: path.join(
+            applications,
+            app,
+            "Contents",
+            "Resources",
+            name,
+          ),
+        });
+  }
+  for (const candidate of directories) {
+    try {
+      const root = await fs.realpath(candidate.root),
+        directory = await fs.realpath(candidate.directory);
+      if (!inside(root, directory)) continue;
+      const files = (await fs.readdir(directory, { withFileTypes: true }))
+        .filter(
+          (e) =>
+            e.isFile() &&
+            (candidate.cache
+              ? /^[a-z0-9_. -]+\.ttf$/i
+              : /^calibri[a-z0-9_. -]*\.ttf$/i
+            ).test(e.name),
+        )
+        .slice(0, 16);
+      for (const file of files) {
+        let handle;
+        try {
+          const filename = await fs.realpath(path.join(directory, file.name));
+          if (!inside(directory, filename)) continue;
+          handle = await fs.open(filename, "r");
+          const stat = await handle.stat();
+          if (!stat.isFile() || stat.size < 12 || stat.size > MAX_FONT_BYTES)
+            continue;
+          const buffer = Buffer.alloc(MAX_FONT_BYTES + 1);
+          const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+          const bytes = buffer.subarray(0, bytesRead);
+          const face = CALIBRI_FACES.find(
+            (f) =>
+              !found.has(f.postscript) &&
+              isNamedOfficeFont(bytes, f.postscript, f.weight),
+          );
+          if (face)
+            found.set(face.postscript, {
+              family: face.family,
+              weight: face.weight,
+              style: face.style,
+              bytes: new Uint8Array(bytes),
+            });
+        } catch {
+        } finally {
+          await handle?.close().catch(() => {});
+        }
+      }
+    } catch {}
+    if (found.size === CALIBRI_FACES.length) break;
+  }
+  return [...found.values()];
+}
+module.exports = {
+  readOfficeArialNovaLight,
+  readOfficeCalibriFonts,
+  isArialNovaLight,
+  MAX_FONT_BYTES,
+};

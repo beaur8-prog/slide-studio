@@ -1,0 +1,38 @@
+.font-manager {
+  width: min(580px, calc(100vw - 40px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+}
+.font-manager p {
+  line-height: 1.6;
+}
+.font-manager ul {
+  list-style: none;
+  padding: 0;
+  max-height: 240px;
+  overflow: auto;
+}
+.font-manager li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+}
+.font-manager li span {
+  overflow-wrap: anywhere;
+}
+.font-manager-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 140px;
+  overflow: auto;
+}
+.font-manager small {
+  display: block;
+  line-height: 1.6;
+  opacity: 0.75;
+}
+.font-manager > p {
+  color: #586651;
+}

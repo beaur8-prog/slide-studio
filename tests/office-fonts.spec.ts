@@ -122,9 +122,11 @@ test("missing desktop font remains optional and font mapping preserves native fa
     rejected: false,
     malformed: false,
   });
-  expect(result.light.startsWith('"Helvetica Light", "Helvetica Neue"')).toBe(
-    true,
-  );
+  expect(
+    result.light.startsWith(
+      '"Helvetica Light", "Slide Studio Local Helvetica Light"',
+    ),
+  ).toBe(true);
   expect(
     result.light.indexOf('"Slide Studio Office Arial Nova Light"'),
   ).toBeLessThan(result.light.indexOf(", Helvetica"));
@@ -185,4 +187,76 @@ test("existing Office light font renders with its true light face and reference 
         font.postScriptName === "ArialNova-Light",
     ),
   ).toBe(true);
+});
+
+test("Calibri cache loads exact regular/bold/Light styles on Windows and Mac and rejects escape paths", async () => {
+  const { readOfficeCalibriFonts } = require("../electron/office-fonts.cjs");
+  const temporary = await fs.mkdtemp(
+    path.join(os.tmpdir(), "slide-studio-font-test-"),
+  );
+  try {
+    for (const platform of ["win32", "darwin"]) {
+      const base =
+        platform === "win32"
+          ? path.join(temporary, "Microsoft", "FontCache")
+          : path.join(
+              temporary,
+              "Library",
+              "Group Containers",
+              "UBF8T346G9.Office",
+              "FontCache",
+            );
+      const regular = path.join(base, "4", "CloudFonts", "Calibri"),
+        light = path.join(base, "4", "CloudFonts", "Calibri Light");
+      await fs.mkdir(regular, { recursive: true });
+      await fs.mkdir(light, { recursive: true });
+      await fs.writeFile(
+        path.join(regular, "calibri.ttf"),
+        fixtureFont("Calibri", 400),
+      );
+      await fs.writeFile(
+        path.join(regular, "calibrib.ttf"),
+        fixtureFont("Calibri-Bold", 700),
+      );
+      await fs.writeFile(
+        path.join(light, "calibril.ttf"),
+        fixtureFont("Calibri-Light", 300),
+      );
+      await fs.writeFile(
+        path.join(light, "calibrili.ttf"),
+        fixtureFont("Calibri-LightItalic", 300),
+      );
+      await fs.writeFile(
+        path.join(regular, "calibri-fake.ttf"),
+        fixtureFont("ArialNova-Light", 300),
+      );
+      const options = {
+        platform,
+        localAppData: temporary,
+        home: temporary,
+        applications: path.join(temporary, "Applications"),
+      };
+      const fonts = await readOfficeCalibriFonts(options);
+      expect(fonts.map((f: any) => [f.family, f.weight, f.style])).toEqual(
+        expect.arrayContaining([
+          ["Calibri", 400, "normal"],
+          ["Calibri", 700, "normal"],
+          ["Calibri Light", 300, "normal"],
+          ["Calibri Light", 300, "italic"],
+        ]),
+      );
+      expect(fonts).toHaveLength(4);
+      const outside = path.join(temporary, `outside-${platform}`);
+      await fs.rename(regular, outside);
+      await fs.symlink(outside, regular, "junction");
+      expect(
+        (await readOfficeCalibriFonts(options)).every(
+          (f: any) => f.family === "Calibri Light",
+        ),
+      ).toBe(true);
+    }
+    expect(await readOfficeCalibriFonts({ platform: "linux" })).toEqual([]);
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
 });

@@ -1,5 +1,7 @@
 # Bullet-list continuation and consistent toggling
 
+Publication update: included in [1.5.9](RELEASE-1.5.9.md). The local-only scope below records the earlier development turn.
+
 The reported `One\nTwo` → bullets → Enter → `Three` sequence reproduced both failures before the fix: the new item had no marker, and toggling a mixed list inverted each line independently.
 
 The Home button now decides one state for the entire text box. A mixed list becomes fully bulleted; a fully bulleted list becomes plain paragraphs. Existing literal bullets from earlier versions are recognized. Paragraph runs are transformed directly, retaining body fonts, colors, emphasis, spacing and imported soft breaks. Bullet metadata supplies hanging indentation and real PPTX bullet output.

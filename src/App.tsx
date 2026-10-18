@@ -82,6 +82,7 @@ import {
 import FontManager from "./FontManager";
 import CommandSearch from "./CommandSearch";
 import TextColorPalette from "./TextColorPalette";
+import NumberInput from "./NumberInput";
 import {
   applyTextFormatRanges,
   cssColorHex,
@@ -230,17 +231,13 @@ function NumberField({
   return (
     <label className="number-field">
       <span>{label}</span>
-      <input
-        type="number"
+      <NumberInput
         aria-label={label}
         value={round(value)}
         min={min}
         max={max}
         step={step}
-        onChange={(e) => {
-          const n = Number(e.target.value);
-          if (Number.isFinite(n)) onChange(Math.max(min, Math.min(max, n)));
-        }}
+        onChange={onChange}
       />
     </label>
   );
@@ -2092,18 +2089,14 @@ export default function App() {
             <option key={f}>{f}</option>
           ))}
         </select>
-        <input
+        <NumberInput
+          key={selected.join(",")}
           aria-label="글자 크기"
-          type="number"
-          min="8"
-          max="240"
+          min={8}
+          max={240}
           value={selectedElement?.fontSize || 32}
           disabled={selectedElement?.type !== "text"}
-          onChange={(e) =>
-            updateSelected({
-              fontSize: Math.max(8, Math.min(240, Number(e.target.value) || 8)),
-            })
-          }
+          onChange={(fontSize) => updateSelected({ fontSize })}
         />
       </div>
       <div className="format-row">
@@ -3646,7 +3639,7 @@ export default function App() {
                               : "도형"}
                       </span>
                     </h4>
-                    <div className="number-grid">
+                    <div className="number-grid" key={selected.join(",")}>
                       <NumberField
                         label="X"
                         value={selectedElement.x}
@@ -3788,6 +3781,7 @@ export default function App() {
                       />
                       <NumberField
                         label="선 두께"
+                        key={selected.join(",")}
                         value={selectedElement.strokeWidth || 0}
                         min={0}
                         max={30}

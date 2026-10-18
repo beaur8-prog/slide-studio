@@ -114,6 +114,7 @@ test("new text defaults to automatic height and follows typing, no-space Korean,
   await added.click();
   await page.getByRole("button", { name: "홈", exact: true }).click();
   await page.getByLabel("글자 크기", { exact: true }).fill("42");
+  await page.getByLabel("글자 크기", { exact: true }).press("Enter");
   await expect
     .poll(() => added.evaluate((el) => el.offsetHeight))
     .toBeGreaterThan(original);
@@ -171,16 +172,18 @@ test("automatic height follows width changes; manual height disables it and undo
   await el.click();
   await page.getByRole("button", { name: "서식", exact: true }).click();
   await page.getByLabel("너비", { exact: true }).fill("600");
+  await page.getByLabel("너비", { exact: true }).press("Enter");
   await expect
     .poll(async () => (await metrics(page)).height)
     .toBeLessThan(original);
   await page.getByLabel("높이", { exact: true }).fill("80");
+  await page.getByLabel("높이", { exact: true }).press("Enter");
   await expect(
     page.getByLabel("내용에 맞춰 상자 높이 자동 조절"),
   ).not.toBeChecked();
   expect((await metrics(page)).height).toBe(80);
-  await page.getByRole("textbox", { name: "발표자 노트", exact: true }).click();
-  await page.keyboard.press("ControlOrMeta+z");
+  // Undo the committed object resize, not the browser's text-input history.
+  await page.getByRole("button", { name: "실행 취소", exact: true }).click();
   await expect.poll(async () => (await saved(page)).autoHeight).toBe(true);
   await expect.poll(async () => (await metrics(page)).vertical).toBe(true);
 });

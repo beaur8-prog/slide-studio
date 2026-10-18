@@ -311,6 +311,67 @@ export function tableSizes(
   return values.map((value) => (total * value) / sum);
 }
 
+/** Move an internal divider by slide pixels, relative to the drag-start table. */
+export function resizeTableBoundary(
+  table: TableData,
+  axis: "column" | "row",
+  boundaryIndex: number,
+  delta: number,
+  total: number,
+): TableData {
+  if (
+    (axis !== "column" && axis !== "row") ||
+    !Number.isFinite(delta) ||
+    !Number.isFinite(total) ||
+    total <= 0 ||
+    delta === 0
+  )
+    return table;
+  const count =
+    axis === "column" ? (table.cells[0]?.length ?? 0) : table.cells.length;
+  if (
+    count > (axis === "column" ? MAX_TABLE_COLUMNS : MAX_TABLE_ROWS) ||
+    !Number.isInteger(boundaryIndex) ||
+    boundaryIndex < 0 ||
+    boundaryIndex >= count - 1
+  )
+    return table;
+  const key = axis === "column" ? "columnWidths" : "rowHeights";
+  const original = table[key] ?? Array.from({ length: count }, () => 1);
+  if (
+    !Array.isArray(original) ||
+    original.length !== count ||
+    original.some((n) => !Number.isFinite(n) || n < 0.001 || n > 100000)
+  )
+    return table;
+  const sizes = tableSizes(original, count, total);
+  if (sizes.some((n) => !Number.isFinite(n) || n <= 0)) return table;
+  const before = sizes[boundaryIndex],
+    after = sizes[boundaryIndex + 1];
+  const minimum = Math.min(24, before, after);
+  const requested = Math.max(
+    minimum,
+    Math.min(before + after - minimum, before + delta),
+  );
+  const tolerance = Number.EPSILON * 16 * Math.max(1, total);
+  if (Math.abs(requested - before) <= tolerance) return table;
+
+  sizes[boundaryIndex] = requested;
+  sizes[boundaryIndex + 1] = before + after - requested;
+  // Normalize the final sizes, so even a 24px cell in a very wide table can
+  // stay above the weight minimum without changing any physical cell sizes.
+  const low = 0.001 / Math.min(...sizes);
+  const high = 100000 / Math.max(...sizes);
+  if (low > high) return table; // The requested ratio cannot be represented.
+  const factor = Math.max(low, Math.min(high, count / total));
+  if (!Number.isFinite(factor) || factor <= 0) return table;
+  // Clamp only floating-point spill at the exact validation limits.
+  const weights = sizes.map((size) =>
+    Math.max(0.001, Math.min(100000, size * factor)),
+  );
+  return { ...table, [key]: weights };
+}
+
 export function tableCellStyle(
   table: TableData,
   row: number,

@@ -3097,6 +3097,40 @@ export default function App() {
                       }}
                       edit={setEditing}
                       editTable={(id, range) => openTable(id, range)}
+                      tableResizeEnabled={!modal && !busy && !presenting}
+                      resizeTable={(id, before, table) =>
+                        commit((d) => {
+                          if (modalRef.current) return d;
+                          const target = d.slides.find(
+                            (s) => s.id === slide.id,
+                          );
+                          const original = target?.elements.find(
+                            (el) => el.id === id,
+                          );
+                          // A cancelled gesture or a concurrent document edit must
+                          // never replace a newer table with an older snapshot.
+                          if (
+                            !original ||
+                            original.locked ||
+                            original.table !== before ||
+                            table === before
+                          )
+                            return d;
+                          return {
+                            ...d,
+                            slides: d.slides.map((s) =>
+                              s !== target
+                                ? s
+                                : {
+                                    ...s,
+                                    elements: s.elements.map((el) =>
+                                      el === original ? { ...el, table } : el,
+                                    ),
+                                  },
+                            ),
+                          };
+                        })
+                      }
                       begin={begin}
                       finish={finish}
                       preview={(elements) =>

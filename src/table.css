@@ -96,6 +96,62 @@
   cursor: cell;
   user-select: none;
 }
+.editable-slide .slide-element[data-type="table"] {
+  /* Resizing a rotated row moves its text vertically. Scroll anchoring would
+     move the viewport too, feeding that movement back into the drag delta. */
+  overflow-anchor: none;
+}
+.table-column-resize-handle,
+.table-row-resize-handle {
+  position: absolute;
+  touch-action: none;
+  user-select: none;
+  z-index: 2;
+}
+.table-column-resize-handle {
+  top: calc(4px * var(--inverse-scale, 1));
+  bottom: calc(4px * var(--inverse-scale, 1));
+  width: calc(8px * var(--inverse-scale, 1));
+  transform: translateX(-50%);
+  cursor: col-resize;
+}
+.table-row-resize-handle {
+  left: calc(4px * var(--inverse-scale, 1));
+  right: calc(4px * var(--inverse-scale, 1));
+  height: calc(8px * var(--inverse-scale, 1));
+  transform: translateY(-50%);
+  cursor: row-resize;
+}
+.table-column-resize-handle::after,
+.table-row-resize-handle::after {
+  content: "";
+  position: absolute;
+  background: #2487ee;
+  opacity: 0;
+  pointer-events: none;
+}
+.table-column-resize-handle::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: calc(2px * var(--inverse-scale, 1));
+  transform: translateX(-50%);
+}
+.table-row-resize-handle::after {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: calc(2px * var(--inverse-scale, 1));
+  transform: translateY(-50%);
+}
+.table-column-resize-handle:is(:hover, :focus-visible, .resizing)::after,
+.table-row-resize-handle:is(:hover, :focus-visible, .resizing)::after {
+  opacity: 1;
+}
+.table-column-resize-handle:focus-visible,
+.table-row-resize-handle:focus-visible {
+  outline: none;
+}
 .inserted-table .table-cell-selected::after {
   content: "";
   position: absolute;

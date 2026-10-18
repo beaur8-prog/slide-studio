@@ -48,7 +48,7 @@ async function seedTable(page: Page, rows = 4, columns = 4) {
 }
 
 async function openEditor(page: Page) {
-  await tableOnSlide(page).dblclick();
+  await canvasCell(page, 1, 1).dblclick();
   const dialog = page.getByRole("dialog", { name: "표 편집", exact: true });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -587,6 +587,12 @@ test("canvas cell copy writes selected TSV without changes and cut clears only t
   await cell(dialog, 1, 1).fill("한글\t값");
   await cell(dialog, 1, 2).fill('첫줄\n"둘째"');
   await dialog.getByRole("button", { name: "표 적용", exact: true }).click();
+  await expect
+    .poll(async () => {
+      const saved = await savedTable(page);
+      return [saved.table.cells[1][1], saved.table.cells[1][2]];
+    })
+    .toEqual(["한글\t값", '첫줄\n"둘째"']);
   const original = (await savedTable(page)).table;
   await dragCanvasCells(page, [1, 1], [2, 2]);
   await expectCanvasSelection(page, rectangle(1, 1, 2, 2));

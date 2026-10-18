@@ -4,6 +4,7 @@ import type {
   Deck,
   Slide,
   SlideElement,
+  TableData,
   TextParagraph,
   TextRun,
 } from "./types";
@@ -16,6 +17,7 @@ import {
 } from "./text-layout";
 import { LineShape } from "./LineShape";
 import { TableVisual } from "./TableEditor";
+import { TableResizer } from "./TableResizer";
 import type { TableCellRange } from "./table";
 import { selectionRange, type TableCellSelection } from "./table-selection";
 
@@ -597,6 +599,8 @@ interface Props {
   select: (ids: string[]) => void;
   edit: (id: string | null) => void;
   editTable?: (id: string, range?: TableCellRange) => void;
+  resizeTable: (id: string, before: TableData, after: TableData) => void;
+  tableResizeEnabled: boolean;
   begin: () => void;
   preview: (elements: SlideElement[]) => void;
   finish: () => void;
@@ -615,6 +619,8 @@ export default function SlideCanvas({
   select,
   edit,
   editTable,
+  resizeTable,
+  tableResizeEnabled,
   begin,
   preview,
   finish,
@@ -958,8 +964,21 @@ export default function SlideCanvas({
                   }}
                 />
               ) : e.type === "table" ? (
-                <TableVisual
+                <TableResizer
                   element={e}
+                  scale={scale}
+                  selected={selected.includes(e.id)}
+                  enabled={tableResizeEnabled && !editing}
+                  onStart={() => {
+                    stopCellDrag();
+                    if (tableSelectionRef.current?.elementId !== e.id) {
+                      tableSelectionRef.current = null;
+                      selectTableCells(null);
+                    }
+                    select([e.id]);
+                    edit(null);
+                  }}
+                  onCommit={(before, after) => resizeTable(e.id, before, after)}
                   selection={
                     tableSelection?.elementId === e.id
                       ? selectionRange(tableSelection)

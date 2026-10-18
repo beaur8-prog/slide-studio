@@ -13,13 +13,15 @@ Mac과 Windows에서 독립적으로 실행하는 프레젠테이션 편집 앱�
 | 운영체제 | 다운로드 | 실행 방법 |
 | --- | --- | --- |
 | macOS 12 이상 · Apple Silicon(M1 이후) | [Mac ARM64 ZIP](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-mac-arm64.zip) | ZIP을 풀고 Slide Studio.app을 응용 프로그램 폴더로 옮겨 실행 |
-| Windows 10/11 · Intel/AMD 64비트 | [Windows x64 ZIP](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-win-x64.zip) | ZIP 전체를 풀고 Slide Studio.exe 실행 |
+| Windows 10/11 · Intel/AMD 64비트 | [Windows Setup.exe](https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-Setup-x64.exe) | 설치 마법사를 완료한 뒤 시작 메뉴의 Slide Studio 실행 |
 
 공개 ZIP의 버전은 릴리스 페이지에서 확인하세요. 저장소의 소스 버전과 공개 릴리스 버전은 다를 수 있습니다.
 
 다운로드 주소는 버전이 바뀌어도 동일합니다. 같은 주소를 사용하는 리토스 문서의 다운로드 버튼도 최신 공개 릴리스를 받으며, 파일 교체를 위해 공유 서버를 재시작할 필요가 없습니다.
 
-Windows에서는 EXE와 `resources`, `locales`, DLL을 함께 보관하세요. Mac 빌드는 Apple 공증을 받지 않았고 Windows 빌드는 배포용 코드 서명이 없습니다. 이번 두 ZIP의 검사와 Mac 실제 실행 범위는 [1.5.2 검증 기록](qa/RELEASE-1.5.2.md)에 있습니다. 이번 Windows ZIP은 Mac에서 패키징하고 파일을 검증했으며 Windows에서 직접 실행하지 않았습니다. 이전 PC 작업본의 Windows 실행과 PowerPoint 비교는 [1.5.0 검증 기록](qa/INSERT-1.5.0.md)을 참고하세요. 실제 키보드 IME 직접 타이핑과 종이 출력은 미검증입니다. Intel Mac, Windows ARM 및 32비트용 패키지는 제공하지 않습니다.
+Windows 설치판은 현재 사용자 계정의 `%LOCALAPPDATA%\Programs\Slide Studio`에 설치하고 시작 메뉴와 선택한 바탕화면 바로가기를 만듭니다. 업데이트 전에는 작업을 `.slide`로 저장하고 앱을 종료한 뒤 새 Setup을 실행하세요. Windows 설정의 설치된 앱에서 제거할 수 있으며 자동 저장 자료는 보존합니다. 기존 ZIP 배포본과 같은 `%APPDATA%\Slide Studio` 사용자 자료를 사용합니다.
+
+Mac 빌드는 Apple 공증을 받지 않았고 Windows 빌드는 배포용 코드 서명이 없습니다. 앱 기능과 Mac 실제 실행 범위는 [1.5.2 검증 기록](qa/RELEASE-1.5.2.md), 설치·실행·재설치·제거와 사용자 자료 보존은 [Windows 설치판 검증 기록](qa/SETUP-1.5.2.md)을 확인하세요. 실제 키보드 IME 직접 타이핑과 종이 출력은 미검증입니다. Intel Mac, Windows ARM 및 32비트용 패키지는 제공하지 않습니다.
 
 다운로드한 파일의 해시는 릴리스에 첨부된 `SHA256SUMS.txt`와 비교할 수 있습니다.
 
@@ -100,10 +102,10 @@ python3 scripts/fetch-qa-samples.py  # 공개 PPTX 회귀 검사에 필요한 �
 npm run build
 npm test
 npm run package:mac  # macOS에서 실행
-npm run package:win  # Windows x64 ZIP 생성, macOS에서도 가능
+npm run package:win  # Windows x64 Setup.exe와 ZIP 생성, macOS에서도 가능
 ```
 
-테스트는 설치된 Google Chrome을 사용합니다. PPTX 왕복 변환, 슬라이드 순서, 테마·레이아웃 상속, 한글 조합·저장·실행 취소, 300장 편집 성능, 잘못된 프로젝트 입력과 압축 파일 경계 조건을 확인합니다. 공개 자료 회귀 검사는 `python3 scripts/fetch-qa-samples.py`로 받은 샘플이 필요하며, 배포용 자산 검사는 먼저 빌드해야 합니다. `npm run package` / `npm run package:mac`은 Mac 앱 번들과 ZIP을 만듭니다. `npm run package:win`은 공식 Electron Windows x64 런타임의 SHA-256을 검증한 뒤 PC용 ZIP을 만듭니다. Windows 패키징 도구는 macOS에서도 실행됩니다. 앱은 로컬 임시 서명을 사용하며 Apple 공증 배포본은 아닙니다.
+테스트는 설치된 Google Chrome을 사용합니다. PPTX 왕복 변환, 슬라이드 순서, 테마·레이아웃 상속, 한글 조합·저장·실행 취소, 300장 편집 성능, 잘못된 프로젝트 입력과 압축 파일 경계 조건을 확인합니다. 공개 자료 회귀 검사는 `python3 scripts/fetch-qa-samples.py`로 받은 샘플이 필요하며, 배포용 자산 검사는 먼저 빌드해야 합니다. `npm run package` / `npm run package:mac`은 Mac 앱 번들과 ZIP을 만듭니다. `npm run package:win`은 공식 Electron Windows x64 런타임의 SHA-256을 검증한 뒤 PC용 ZIP과 NSIS 설치 프로그램을 만듭니다. NSIS와 7-Zip이 필요하며 Mac에서는 `brew install makensis sevenzip`으로 준비합니다. 기존 ZIP으로 설치 파일만 다시 만들려면 `npm run package:win:setup`을 사용합니다. 앱은 로컬 임시 서명을 사용하며 Apple 공증 배포본은 아닙니다.
 
 macOS의 동기화 폴더가 앱 번들에 Finder 메타데이터를 추가할 수 있으므로 배포에는 서명 검증을 마친 임시 빌드에서 생성한 ZIP을 사용합니다. 패키징과 네이티브 연동은 [DESKTOP.md](DESKTOP.md)에 설명했습니다.
 

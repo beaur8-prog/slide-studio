@@ -81,33 +81,34 @@ test("right click preserves a multi-selection and cut/paste do not affect unrela
   await expect(page.locator(".slide-element.selected")).toHaveCount(2);
 });
 
-test("text edit and format actions work; menu preserves native editing context", async ({
+test("right click while editing text opens the object menu and preserves entered text and undo", async ({
   page,
 }) => {
   await open(page);
-  await item(page, "text-b").click({ button: "right" });
-  await action(page, "텍스트 편집").click();
+  await item(page, "text-b").dblclick();
   const input = page.getByRole("textbox", { name: "슬라이드 텍스트 편집" });
-  await expect(input).toBeFocused();
   await input.fill("오른쪽 버튼으로 수정한 한글");
-  const nativeContext = await input.evaluate((host) => {
-    const event = new MouseEvent("contextmenu", {
-      bubbles: true,
-      cancelable: true,
-      button: 2,
-    });
-    host.dispatchEvent(event);
-    return !event.defaultPrevented;
-  });
-  expect(nativeContext).toBe(true);
-  await expect(menu(page)).toBeHidden();
-  await input.press("Escape");
-  await item(page, "text-b").click({ button: "right" });
-  await action(page, "개체 서식").click();
-  await expect(page.locator(".inspector")).toBeVisible();
+  await input.click({ button: "right" });
+  await expect(menu(page)).toBeVisible();
+  await expect(input).toBeHidden();
   await expect(item(page, "text-b")).toContainText(
     "오른쪽 버튼으로 수정한 한글",
   );
+  await action(page, "개체 서식").click();
+  await expect(page.locator(".inspector")).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(item(page, "text-b")).toContainText("한글 텍스트");
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(item(page, "text-b")).toContainText(
+    "오른쪽 버튼으로 수정한 한글",
+  );
+  await item(page, "text-b").click({ button: "right" });
+  await action(page, "텍스트 편집").click();
+  await expect(input).toBeFocused();
+  await input.press("Shift+F10");
+  await expect(menu(page)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(item(page, "text-b")).toHaveClass(/selected/);
 });
 
 test("layer changes and lock protection support undo without deleting locked content", async ({

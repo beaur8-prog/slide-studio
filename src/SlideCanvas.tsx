@@ -526,6 +526,9 @@ function EditableText({
       onBlur={onDone}
       onInput={(e) => onInput(editableText(e.currentTarget))}
       onKeyDown={(e) => {
+        // Let the object wrapper handle the context-menu keyboard shortcut,
+        // including while this contenteditable owns the selection.
+        if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) return;
         e.stopPropagation();
         if (e.key === "Escape") {
           e.preventDefault();
@@ -937,8 +940,8 @@ export default function SlideCanvas({
                 } as CSSProperties
               }
               onContextMenu={(ev) => {
-                // Keep native text selection and clipboard while editing text.
-                if (editing === e.id) return;
+                // Electron has no default text context menu. Finish the text
+                // transaction and open the same menu from either editing state.
                 ev.preventDefault();
                 ev.stopPropagation();
                 ev.currentTarget.focus({ preventScroll: true });
@@ -946,9 +949,8 @@ export default function SlideCanvas({
               }}
               onKeyDown={(ev) => {
                 if (
-                  editing === e.id ||
-                  (ev.key !== "ContextMenu" &&
-                    !(ev.shiftKey && ev.key === "F10"))
+                  ev.key !== "ContextMenu" &&
+                  !(ev.shiftKey && ev.key === "F10")
                 )
                   return;
                 ev.preventDefault();

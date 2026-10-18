@@ -197,7 +197,16 @@ export function TextContent({
   element: SlideElement;
   editing?: boolean;
 }) {
-  if (!e.paragraphs) return <>{e.text}</>;
+  if (!e.paragraphs)
+    // Keep native formatting spans inside one inline formatting context.
+    // Direct children of the column-flex editor would become separate rows.
+    return editing ? (
+      <div data-text-plain style={{ flexShrink: 0, minBlockSize: "1lh" }}>
+        {e.text}
+      </div>
+    ) : (
+      <>{e.text}</>
+    );
   return (
     <>
       {e.paragraphs.map((p, i) => (

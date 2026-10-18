@@ -1,4 +1,9 @@
-# Slide Studio 1.5.5 verification
+# Slide Studio 1.5.5 candidate verification
+
+**Withdrawn before becoming the latest public download.** Native Windows
+evidence exposed a plain-text partial-color layout defect missed by the
+paragraph-based fixtures. The candidate is a private draft; the final fix and
+release are recorded in [1.5.6](RELEASE-1.5.6.md).
 
 This release includes text context selection preservation, partial text color
 with Apply/Cancel, source-font import/persistence/removal, Office-private Calibri

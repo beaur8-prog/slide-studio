@@ -435,3 +435,60 @@ test("imported soft breaks and blank lines retain their text and paragraph metri
     "첫 줄\n\n셋째 줄",
   );
 });
+
+test("plain text stays on one line while applying a partial color and undoing it", async ({
+  page,
+}) => {
+  await page.goto("http://127.0.0.1:5190");
+  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await page.evaluate(async () => {
+    const { blankDeck, element } = await import("/src/model.ts");
+    const { saveAutosave } = await import("/src/storage.ts");
+    const deck = blankDeck();
+    deck.slides[0].elements = [
+      element("text", {
+        x: 100,
+        y: 100,
+        width: 800,
+        height: 40,
+        text: "OUR APPROACH",
+        fontSize: 20,
+        color: "#112233",
+      }),
+    ];
+    await saveAutosave(deck);
+  });
+  await page.reload();
+  await page.getByTestId("slide-element").dblclick();
+  await expect(input(page)).toBeFocused();
+  await select(page, 0, 2);
+  await trigger(page).click();
+  await palette(page)
+    .getByRole("textbox", { name: "색상 코드", exact: true })
+    .fill("#FF0000");
+  await palette(page)
+    .getByRole("button", { name: "적용", exact: true })
+    .click();
+  await expect(input(page)).toHaveText("OUR APPROACH");
+  expect(await input(page).innerText()).toBe("OUR APPROACH");
+  const lines = await input(page).evaluate((host) => {
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT),
+      tops: number[] = [];
+    while (walker.nextNode()) {
+      const range = document.createRange();
+      range.selectNodeContents(walker.currentNode);
+      for (const rect of range.getClientRects())
+        if (rect.width) tops.push(Math.round(rect.top));
+    }
+    return [...new Set(tops)];
+  });
+  expect(lines).toHaveLength(1);
+  await input(page).press("ControlOrMeta+z");
+  expect(await input(page).innerText()).toBe("OUR APPROACH");
+  await input(page).press("ControlOrMeta+Shift+z");
+  expect(await input(page).innerText()).toBe("OUR APPROACH");
+  await page.getByRole("textbox", { name: "발표자 노트", exact: true }).click();
+  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await page.reload();
+  await expect(page.getByTestId("slide-element")).toHaveText("OUR APPROACH");
+});

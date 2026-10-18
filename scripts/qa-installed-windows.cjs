@@ -14,6 +14,7 @@ const { execFile } = require('node:child_process');
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   const app = await electron.launch({ executablePath: executable, env, timeout: 45000 });
+  let failed = false;
   try {
     const page = await app.firstWindow();
     page.setDefaultTimeout(20000);
@@ -189,9 +190,14 @@ const { execFile } = require('node:child_process');
       ...(pointerTools ? { ribbonLayouts, unclippedNotes: true, laserPointer: true, penDrawing: true, eraser: true, nativeInkUndoRedo: true, contextTools: true } : {}),
     }, null, 2) + '\n');
   } catch (error) {
+    failed = true;
+    console.error("Native verification failed:", error);
     try { await app.windows()[0]?.screenshot({ path: path.join(output, 'native-failed.png') }); } catch {}
     throw error;
   } finally {
-    await app.close();
+    // This script is guarded to run only on a disposable CI desktop. A failed
+    // assertion can leave unsaved state and trigger the app's unload dialog.
+    if (failed) app.process().kill();
+    await app.close().catch(() => {});
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

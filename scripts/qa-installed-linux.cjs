@@ -124,14 +124,18 @@ const output = path.resolve('qa/results/linux-native');
     const { root } = await cdp.send('DOM.getDocument');
     const elementID = await newText.getAttribute('data-element-id');
     const koreanFonts = {};
-    for (const [name, selector] of [['ui', '.tabs button'], ['defaultText', `[data-element-id="${elementID}"] .element-text`]]) {
+    // Query the actual text-bearing span: CDP's font query does not recurse
+    // through every wrapper, so the outer .element-text reports no fonts.
+    for (const [name, selector] of [['ui', '.tabs button'], ['defaultText', `[data-element-id="${elementID}"] .element-text [data-text-plain] > span`]]) {
       const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector });
       const { fonts } = await cdp.send('CSS.getPlatformFontsForNode', { nodeId });
-      expect(fonts.some(font => /Noto (Sans|Serif) CJK/.test(font.familyName) && font.glyphCount > 0)).toBe(true);
       koreanFonts[name] = fonts;
     }
     await cdp.detach();
     await fs.writeFile(path.join(output, 'korean-fonts.json'), JSON.stringify(koreanFonts, null, 2) + '\n');
+    for (const fonts of Object.values(koreanFonts)) {
+      expect(fonts.some(font => /Noto (Sans|Serif) CJK/.test(font.familyName) && font.glyphCount > 0)).toBe(true);
+    }
     await page.getByRole('button', { name: '삽입', exact: true }).click();
     await page.getByRole('button', { name: '차트', exact: true }).click();
     const chart = page.getByRole('dialog', { name: '차트 삽입', exact: true });

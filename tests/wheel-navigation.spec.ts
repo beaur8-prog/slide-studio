@@ -37,6 +37,11 @@ test("tiny jitter does not change slides and a long momentum tail stays on one s
   await page.goto("http://127.0.0.1:5190");
   await expect(page.locator(".save-indicator")).toHaveText("저장됨");
   const area = page.locator(".canvas-area");
+  // Model arrival times rather than OS scheduling delays: renderer layout can
+  // stretch a 40 ms wall-clock timer beyond the intentional 80 ms quiet gap.
+  const start = new Date();
+  await page.clock.install({ time: start });
+  await page.clock.pauseAt(new Date(start.getTime() + 1000));
   for (let i = 0; i < 3; i++)
     await area.dispatchEvent("wheel", {
       deltaY: 2,
@@ -44,21 +49,24 @@ test("tiny jitter does not change slides and a long momentum tail stays on one s
       cancelable: true,
     });
   await expect(current(page)).toHaveText("1");
-  await page.waitForTimeout(120);
+  await page.clock.runFor(120);
   // Keep momentum arriving beyond the old 350 ms timer. It must not become
   // another page turn merely because enough wall-clock time has elapsed.
-  await area.evaluate(async (element) => {
-    for (const deltaY of [18, 15, 12, 10, 8, 6, 5, 4, 3, 2, 2, 1, 1, 1, 1]) {
-      element.dispatchEvent(
-        new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true }),
-      );
-      await new Promise((resolve) => setTimeout(resolve, 40));
-    }
-  });
+  for (const deltaY of [18, 15, 12, 10, 8, 6, 5, 4, 3, 2, 2, 1, 1, 1, 1]) {
+    await area.dispatchEvent("wheel", {
+      deltaY,
+      bubbles: true,
+      cancelable: true,
+    });
+    await page.clock.runFor(40);
+  }
   await expect(current(page)).toHaveText("2");
-  await page.waitForTimeout(120);
-  await area.hover();
-  await page.mouse.wheel(0, 20);
+  await page.clock.runFor(120);
+  await area.dispatchEvent("wheel", {
+    deltaY: 20,
+    bubbles: true,
+    cancelable: true,
+  });
   await expect(current(page)).toHaveText("3");
 });
 

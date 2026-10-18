@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('desktop', Object.freeze({
   platform: process.platform,
+  editTextClipboard: action => ipcRenderer.invoke('slide-studio:edit-text-clipboard', action),
   loadOfficeLightFont: () => ipcRenderer.invoke('slide-studio:load-office-light-font'),
   setChromeTheme: theme => ipcRenderer.invoke('slide-studio:set-chrome-theme', theme),
   setPresentationMode: enabled => ipcRenderer.invoke('slide-studio:set-presentation-mode', enabled),

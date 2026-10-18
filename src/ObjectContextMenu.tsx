@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import "./object-context-menu.css";
+import { restoreTextSelection, type TextMenuSelection } from "./text-selection";
 
 export type ObjectMenuAction = {
   label: string;
@@ -14,16 +15,29 @@ export default function ObjectContextMenu({
   y,
   actions,
   onClose,
+  label = "개체 편집",
+  textSelection,
 }: {
   x: number;
   y: number;
   actions: ObjectMenuAction[];
-  onClose: () => void;
+  onClose: (restoreFocus?: boolean) => void;
+  label?: string;
+  textSelection?: TextMenuSelection;
 }) {
   const menu = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const host = menu.current!;
     const previous = document.activeElement as HTMLElement | null;
+    if (
+      textSelection &&
+      "highlights" in CSS &&
+      typeof Highlight !== "undefined"
+    )
+      CSS.highlights.set(
+        "context-text-selection",
+        new Highlight(textSelection.range),
+      );
     const bounds = host.getBoundingClientRect();
     host.style.left = `${Math.max(8, Math.min(x, innerWidth - bounds.width - 8))}px`;
     host.style.top = `${Math.max(8, Math.min(y, innerHeight - bounds.height - 8))}px`;
@@ -31,15 +45,16 @@ export default function ObjectContextMenu({
       .querySelector<HTMLButtonElement>("button:not(:disabled)")
       ?.focus({ preventScroll: true });
     const outside = (event: PointerEvent) => {
-      if (!host.contains(event.target as Node)) onClose();
+      if (!host.contains(event.target as Node)) onClose(false);
     };
-    const close = () => onClose();
+    const close = () => onClose(false);
     const key = (event: KeyboardEvent) => {
       event.stopPropagation();
       if (["Escape", "Tab"].includes(event.key)) {
         event.preventDefault();
-        onClose();
-        previous?.focus({ preventScroll: true });
+        onClose(true);
+        if (textSelection) restoreTextSelection(textSelection);
+        else previous?.focus({ preventScroll: true });
       } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
         event.preventDefault();
         const items = Array.from(
@@ -66,20 +81,25 @@ export default function ObjectContextMenu({
     // Capture prevents editor shortcuts from changing objects behind the menu.
     host.addEventListener("keydown", key);
     return () => {
+      if (textSelection && "highlights" in CSS)
+        CSS.highlights.delete("context-text-selection");
       window.removeEventListener("pointerdown", outside, true);
       window.removeEventListener("resize", close);
       window.removeEventListener("blur", close);
       host.removeEventListener("keydown", key);
     };
-  }, [x, y, onClose]);
+  }, [x, y, onClose, textSelection]);
   return (
     <div
       ref={menu}
       className="object-context-menu"
       role="menu"
-      aria-label="개체 편집"
+      aria-label={label}
       style={{ left: x, top: y }}
       onContextMenu={(event) => event.preventDefault()}
+      onMouseDown={(event) => {
+        if (textSelection) event.preventDefault();
+      }}
     >
       {actions.map((action) => (
         <div key={action.label}>

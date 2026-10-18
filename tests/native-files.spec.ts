@@ -58,7 +58,11 @@ for (const platform of ['win32', 'darwin']) {
     let options: any;
     let installedMenu: any[] = [];
     let destroyed = false;
+    const clipboardActions: string[] = [];
     const contents = {
+      copy() { clipboardActions.push("copy"); },
+      cut() { clipboardActions.push("cut"); },
+      pasteAndMatchStyle() { clipboardActions.push("paste"); },
       mainFrame: { url: pathToFileURL(path.resolve('dist/index.html')).href },
       on() {}, setWindowOpenHandler() {},
       send(...args: unknown[]) { sentActions.push(args); },
@@ -115,6 +119,12 @@ for (const platform of ['win32', 'darwin']) {
 
     const updateTheme = handlers.get('slide-studio:set-chrome-theme')!;
     const event = { sender: contents, senderFrame: contents.mainFrame };
+    const textClipboard = handlers.get('slide-studio:edit-text-clipboard')!;
+    for (const action of ['copy','cut','paste']) textClipboard(event, action);
+    expect(clipboardActions).toEqual(['copy','cut','paste']);
+    for (const action of ['read', 'execute', null, {}]) expect(() => textClipboard(event, action)).toThrow('Unknown text clipboard action');
+    expect(() => textClipboard({ ...event, sender: {} }, 'copy')).toThrow('editor window');
+    expect(() => textClipboard({ ...event, senderFrame: { url: contents.mainFrame.url } }, 'paste')).toThrow('editor window');
     const loadFont = handlers.get('slide-studio:load-office-light-font')!;
     expect(() => loadFont({ ...event, sender: {} })).toThrow('editor window');
     expect(() => loadFont({ ...event, senderFrame: { url: contents.mainFrame.url } })).toThrow('editor window');
@@ -158,9 +168,10 @@ test('preload exposes an immutable platform and a narrow theme command', async (
   vm.runInNewContext(fs.readFileSync(path.resolve('electron/preload.cjs'), 'utf8'), sandbox);
   expect(bridge.platform).toBe('win32');
   expect(Object.isFrozen(bridge)).toBe(true);
+  await bridge.editTextClipboard('copy');
   await bridge.setChromeTheme('light');
   await bridge.loadOfficeLightFont('ignored/path.ttf');
-  expect(calls).toEqual([['slide-studio:set-chrome-theme', 'light'], ['slide-studio:load-office-light-font']]);
+  expect(calls).toEqual([['slide-studio:edit-text-clipboard', 'copy'], ['slide-studio:set-chrome-theme', 'light'], ['slide-studio:load-office-light-font']]);
   expect(bridge.invoke).toBeUndefined();
   expect(bridge.send).toBeUndefined();
 });

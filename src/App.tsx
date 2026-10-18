@@ -80,6 +80,8 @@ import {
   Camera,
 } from "lucide-react";
 import CommandSearch from "./CommandSearch";
+import TextContextMenu from "./TextContextMenu";
+import type { TextMenuSelection } from "./text-selection";
 import ObjectContextMenu, { type ObjectMenuAction } from "./ObjectContextMenu";
 import CanvasScrollbar from "./CanvasScrollbar";
 import type {
@@ -405,6 +407,11 @@ export default function App() {
   const [objectMenu, setObjectMenu] = useState<{ x: number; y: number } | null>(
     null,
   );
+  const [textMenu, setTextMenu] = useState<{
+    x: number;
+    y: number;
+    selection: TextMenuSelection;
+  } | null>(null);
   const closeObjectMenu = useCallback(() => setObjectMenu(null), []);
   const [layout, setLayout] = useState("title");
   const [zoom, setZoom] = useState<number | null>(null);
@@ -429,6 +436,7 @@ export default function App() {
   const [presenting, setPresenting] = useState(false);
   useEffect(() => {
     setObjectMenu(null);
+    setTextMenu(null);
   }, [activeId, deck.id, modal, presenting, sorter]);
   const presentationActive = useRef(false);
   const presentationView = useRef<HTMLDivElement>(null);
@@ -523,6 +531,16 @@ export default function App() {
             },
       );
   }, []);
+  const closeTextMenu = useCallback(
+    (endEditing = false) => {
+      if (endEditing) {
+        finish();
+        setEditing(null);
+      }
+      setTextMenu(null);
+    },
+    [finish],
+  );
   const undo = useCallback(() => {
     setEditing(null);
     transaction.current = null;
@@ -1608,7 +1626,7 @@ export default function App() {
         }
         return;
       }
-      if (objectMenu) return;
+      if (objectMenu || textMenu) return;
       const cmd = e.metaKey || e.ctrlKey;
       if (cmd && e.key === "F1") {
         e.preventDefault();
@@ -3202,8 +3220,15 @@ export default function App() {
                       <span>{deck.width}</span>
                     </div>
                     <SlideCanvas
-                      contextMenu={(id, x, y) => {
+                      contextMenu={(id, x, y, selection) => {
                         if (modal || busy || presenting) return;
+                        if (selection) {
+                          setObjectMenu(null);
+                          setMenu(null);
+                          setTextMenu({ x, y, selection });
+                          return;
+                        }
+                        setTextMenu(null);
                         if (editing) {
                           finish();
                           setEditing(null);
@@ -3766,6 +3791,19 @@ export default function App() {
             <Maximize size={14} />
           </button>
         </footer>
+        {textMenu && (
+          <TextContextMenu
+            key={`${textMenu.x}:${textMenu.y}`}
+            {...textMenu}
+            onClose={closeTextMenu}
+            onError={notify}
+            onObjectMenu={() => {
+              finish();
+              setEditing(null);
+              setObjectMenu({ x: textMenu.x, y: textMenu.y });
+            }}
+          />
+        )}
         {objectMenu && selectedElement && (
           <ObjectContextMenu
             {...objectMenu}

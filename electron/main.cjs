@@ -191,6 +191,15 @@ function installMenu() {
 }
 
 function installIPC() {
+  ipcMain.handle('slide-studio:edit-text-clipboard', (event, ...args) => {
+    requireTrustedSender(event);
+    const action = args[0];
+    if (args.length !== 1 || !['copy', 'cut', 'paste'].includes(action)) throw new TypeError('Unknown text clipboard action');
+    if (presentationWindowState || nativeOperationPending) throw new Error('Text editing is not available now');
+    if (action === 'copy') event.sender.copy();
+    else if (action === 'cut') event.sender.cut();
+    else event.sender.pasteAndMatchStyle();
+  });
   ipcMain.handle('slide-studio:list-capture-sources', (event, ...args) => withCaptureOperation(event, async () => {
     if (args.length) throw new TypeError('이 요청에는 인수가 필요하지 않습니다.');
     clearCaptureSources();

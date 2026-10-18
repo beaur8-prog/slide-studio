@@ -1,5 +1,7 @@
 # Text editing context-menu correction (local follow-up)
 
+The transaction-ending behavior described here was superseded by [selection preservation](TEXT-SELECTION-MENU-FIX.md), which keeps text editing and the selected characters active.
+
 The user reproduced no response when right-clicking selected text in the text editor. The previous implementation bypassed app context-menu handling while contenteditable was active, assuming a default native text menu. Electron did not show one. The prior object-selection checks missed this state.
 
 The canvas now handles context-menu events in either text state. It ends the active text transaction, preserves the entered text, and opens the text-box object menu. The contenteditable also allows Shift+F10 and ContextMenu key events to reach that handler. Escape is no longer a prerequisite.

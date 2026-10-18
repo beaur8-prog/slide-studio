@@ -89,11 +89,15 @@ test("right click while editing text opens the object menu and preserves entered
   const input = page.getByRole("textbox", { name: "슬라이드 텍스트 편집" });
   await input.fill("오른쪽 버튼으로 수정한 한글");
   await input.click({ button: "right" });
-  await expect(menu(page)).toBeVisible();
-  await expect(input).toBeHidden();
+  const textMenu = page.getByRole("menu", { name: "텍스트 편집", exact: true });
+  await expect(textMenu).toBeVisible();
+  await expect(input).toBeVisible();
   await expect(item(page, "text-b")).toContainText(
     "오른쪽 버튼으로 수정한 한글",
   );
+  await textMenu
+    .getByRole("menuitem", { name: "텍스트 상자 메뉴", exact: true })
+    .click();
   await action(page, "개체 서식").click();
   await expect(page.locator(".inspector")).toBeVisible();
   await page.keyboard.press("ControlOrMeta+z");
@@ -106,7 +110,7 @@ test("right click while editing text opens the object menu and preserves entered
   await action(page, "텍스트 편집").click();
   await expect(input).toBeFocused();
   await input.press("Shift+F10");
-  await expect(menu(page)).toBeVisible();
+  await expect(textMenu).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(item(page, "text-b")).toHaveClass(/selected/);
 });

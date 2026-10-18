@@ -15,6 +15,7 @@ import {
   paragraphLines,
   scriptRuns,
 } from "./text-layout";
+import type { TextMenuSelection } from "./text-selection";
 import { LineShape } from "./LineShape";
 import { TableVisual } from "./TableEditor";
 import { TableResizer } from "./TableResizer";
@@ -522,8 +523,21 @@ function EditableText({
       suppressContentEditableWarning
       spellCheck={false}
       style={textStyle(element)}
-      onPointerDown={(e) => e.stopPropagation()}
-      onBlur={onDone}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        if (e.button === 2) e.preventDefault();
+      }}
+      onMouseDown={(e) => {
+        if (e.button === 2) e.preventDefault();
+      }}
+      onBlur={(e) => {
+        if (
+          e.relatedTarget instanceof Element &&
+          e.relatedTarget.closest(".object-context-menu")
+        )
+          return;
+        onDone();
+      }}
       onInput={(e) => onInput(editableText(e.currentTarget))}
       onKeyDown={(e) => {
         // Let the object wrapper handle the context-menu keyboard shortcut,
@@ -594,7 +608,12 @@ function cellAtPoint(host: HTMLElement, x: number, y: number) {
 interface Props {
   deck: Deck;
   slide: Slide;
-  contextMenu: (id: string, x: number, y: number) => void;
+  contextMenu: (
+    id: string,
+    x: number,
+    y: number,
+    selection?: TextMenuSelection,
+  ) => void;
   scale: number;
   selected: string[];
   tableSelection: TableCellSelection | null;
@@ -633,6 +652,37 @@ export default function SlideCanvas({
   showGuides,
   grid,
 }: Props) {
+  const openContextMenu = (
+    element: SlideElement,
+    host: HTMLElement,
+    x: number,
+    y: number,
+  ) => {
+    const input =
+      editing === element.id
+        ? host.querySelector<HTMLElement>(".editing-text")
+        : null;
+    const selection = getSelection();
+    if (
+      input &&
+      selection?.rangeCount &&
+      input.contains(selection.anchorNode) &&
+      input.contains(selection.focusNode)
+    ) {
+      const range = selection.getRangeAt(0).cloneRange();
+      contextMenu(element.id, x, y, {
+        host: input,
+        range,
+        backward:
+          !range.collapsed &&
+          selection.anchorNode === range.endContainer &&
+          selection.anchorOffset === range.endOffset,
+      });
+    } else {
+      host.focus({ preventScroll: true });
+      contextMenu(element.id, x, y);
+    }
+  };
   const drag = useRef<Drag | null>(null);
   const cellDrag = useRef<CellDrag | null>(null);
   const tableSelectionRef = useRef(tableSelection);
@@ -940,12 +990,9 @@ export default function SlideCanvas({
                 } as CSSProperties
               }
               onContextMenu={(ev) => {
-                // Electron has no default text context menu. Finish the text
-                // transaction and open the same menu from either editing state.
                 ev.preventDefault();
                 ev.stopPropagation();
-                ev.currentTarget.focus({ preventScroll: true });
-                contextMenu(e.id, ev.clientX, ev.clientY);
+                openContextMenu(e, ev.currentTarget, ev.clientX, ev.clientY);
               }}
               onKeyDown={(ev) => {
                 if (
@@ -956,8 +1003,9 @@ export default function SlideCanvas({
                 ev.preventDefault();
                 ev.stopPropagation();
                 const bounds = ev.currentTarget.getBoundingClientRect();
-                contextMenu(
-                  e.id,
+                openContextMenu(
+                  e,
+                  ev.currentTarget,
                   bounds.left + bounds.width / 2,
                   bounds.top + bounds.height / 2,
                 );

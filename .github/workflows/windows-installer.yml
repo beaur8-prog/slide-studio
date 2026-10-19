@@ -13,7 +13,9 @@ on:
         description: Expected SHA-256 of the matching Windows ZIP
         required: true
 permissions:
-  contents: read
+  # GitHub requires write-level repository access to read unpublished draft assets.
+  # This verification workflow downloads only; it never edits the release.
+  contents: write
 jobs:
   install-update-uninstall:
     runs-on: windows-latest

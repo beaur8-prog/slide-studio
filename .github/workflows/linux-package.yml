@@ -10,7 +10,9 @@ on:
         description: Expected SHA-256 of Slide-Studio-linux-amd64.deb
         required: true
 permissions:
-  contents: read
+  # GitHub requires write-level repository access to read unpublished draft assets.
+  # This verification workflow downloads only; it never edits the release.
+  contents: write
 jobs:
   install-run-uninstall:
     strategy:

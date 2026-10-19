@@ -49,3 +49,27 @@ node scripts/qa-animated-media.cjs '/absolute/path/Slide Studio.app/Contents/Mac
 - 로컬 앱 교체 전 사용자 프로필과 이전 앱을 별도로 백업했다. 새 앱에서 기존 6장 문서, 수정한 본문과 발표자 노트, 저장 상태 및 새 동영상 삽입 버튼을 확인했다.
 - 설치 앱: `/Applications/Slide Studio.app`. 로컬 버전 표시는 1.6.1이며 미배포 소스 변경을 포함한다. ASAR SHA-256: `20634e919acfb2358aee536a6373fa34ce69fcb215351a71fd32d8e83048b122`.
 - GitHub Release, 공개 다운로드 파일 및 리토스 문서는 수정하지 않았다.
+
+## 삼각형 꼭짓점·개별 조절값 추가 검증
+
+삼각형 꼭짓점 위치가 기본값으로 돌아간다는 후속 보고를 확인했다. 같은 생성 PPTX를 공개 `v1.6.1`의 가져오기 코드와 현재 코드로 각각 읽었다. 공개 버전에서는 조절값이 있는 `triangle`도 기본 삼각형으로 처리해 꼭짓점이 모두 가로 50%에 놓인다. 현재 코드는 `61eb867`에서 추가된 분기로 원본 조절값의 경로를 계산한다. 이 비교의 이전 가져오기 모듈은 `v1.6.1:src/io.ts`를 사용했고, 상대 import만 현재 공통 모듈 경로로 연결했다. 당시 앱 전체를 실행한 비교는 아니다.
+
+| 원본 꼭짓점의 가로 위치 | 공개 v1.6.1 가져오기 코드 | 현재 가져오기 코드 |
+| --- | --- | --- |
+| 0% | 50% | 0% |
+| 10% | 50% | 10% |
+| 20% | 50% | 20% |
+| 50% | 50% | 50% |
+| 80% | 50% | 80% |
+| 90% | 50% | 90% |
+| 100% | 50% | 100% |
+
+`tests/shape-adjustments.spec.ts`를 추가했다. 187종 중 조절값이 정의된 123종의 300개 값을 각각 바꿔 정사각형·가로형·세로형의 1,800개 조건을 검사한다. 실제 PPTX 가져오기 → 프로젝트 저장/복원 → PPTX 내보내기/재가져오기에서 누락·기본값 복귀 없이 경로가 유지됐다. 말풍선 꼬리·연결선 굽힘은 도형 밖에도 위치하므로 래스터 비교 외에 전체 경로 좌표도 비교한다. 나눗셈 도형의 점 간격은 기본 반지름에서 범위가 0으로 고정되므로, 해당 검사에서는 반지름을 먼저 줄여 점 간격 변화가 실제로 나타나는 조건을 사용했다. 300개 모두 최소 한 조건에서 경로 변화가 발생하고, 세 단계에서 유지됨을 확인했다.
+
+별도 삼각형 검사에서는 0/10/20/50/80/90/100%의 꼭짓점과 점 편집으로 만든 사용자 경로를 좌표 계산으로 확인하고, 실제 파일 열기 후 편집 화면과 발표 화면의 SVG 경로 및 스크린샷도 검사했다. 기존 도형 검사 5건과 새 검사 2건이 통과했다. 이번 추가 검사에서는 제품 동작 코드를 더 변경하지 않았다.
+
+재현 파일과 결과는 `qa/results/shape-adjustments/triangle-apex.pptx`, `audit.json`, `released-comparison.json`, `triangle-editor.png`, `triangle-presentation.png`에 있다. 기준은 [Microsoft AdjustValueList](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.adjustvaluelist?view=openxml-3.0.1)다. 생성 파일을 이용한 일반 PPTX 검사이며, 사용자가 보고한 원본 파일과 별도로 추가된 Windows DRM 가져오기는 검증하지 않았다. 공개 배포판은 여전히 v1.6.1이므로 PC 빌드를 만들 때는 `61eb867` 이후의 소스를 포함해야 한다.
+
+```sh
+npx playwright test tests/drawing-guides.spec.ts tests/shape-compatibility.spec.ts tests/shape-adjustments.spec.ts
+```

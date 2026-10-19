@@ -642,6 +642,14 @@ export default function App() {
     cellStyles?: TableCellFormat[][];
   }>({});
   const clipboardToken = useRef("");
+  const clipboardRequest = useRef(0);
+  const clipboardContext = useRef(0);
+  // A permission prompt/read may outlive the selection that requested paste.
+  // An epoch also catches changing away and back to the original location.
+  useLayoutEffect(() => {
+    clipboardContext.current++;
+  }, [history.present, activeId, selected, slideSelection, tableSelection,
+    editing, modal, presenting, sorter, ready, busy]);
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -2294,12 +2302,54 @@ export default function App() {
     };
   });
   const pasteFromClipboard = async () => {
-    if (window.desktop?.pasteTableClipboard) { await window.desktop.pasteTableClipboard(); return; }
+    if (!ready || busy || modalRef.current || presentationActive.current || editing)
+      return;
+    const shortcut = /Mac/i.test(navigator.platform) ? "⌘V" : "Ctrl+V";
+    if (window.desktop?.pasteTableClipboard) {
+      try { await window.desktop.pasteTableClipboard(); }
+      catch { notify(`슬라이드에서 ${shortcut}로 붙여넣으세요.`); }
+      return;
+    }
+    const request = ++clipboardRequest.current;
+    const context = clipboardContext.current;
+    let cancelled = false;
+    const cancel = () => { cancelled = true; };
+    const current = () => !cancelled && request === clipboardRequest.current &&
+      context === clipboardContext.current && !modalRef.current &&
+      !presentationActive.current;
+    const changed = () => notify("삽입 위치나 편집 상태가 바뀌었습니다. 다시 붙여넣으세요.");
+    document.addEventListener("focusin", cancel);
+    document.addEventListener("pointerdown", cancel, true);
+    document.addEventListener("keydown", cancel, true);
+    window.addEventListener("blur", cancel);
     try {
-      const items=await navigator.clipboard.read(),data=new DataTransfer();
-      for (const item of items) for (const type of ['text/html','text/plain']) if(item.types.includes(type)) data.setData(type,await(await item.getType(type)).text());
-      window.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
-    } catch { if(clipboardToken.current){pasteSelection();notify('앱에서 복사한 항목을 붙였습니다. 외부 내용은 Ctrl+V로 붙여넣으세요.');}else notify('슬라이드에서 Ctrl+V로 붙여넣으세요.'); }
+      const data = new DataTransfer();
+      if (navigator.clipboard.read) {
+        const items = await navigator.clipboard.read();
+        // HTML and TSV must come from the same clipboard snapshot/item.
+        const item = items.find(item => item.types.includes("text/html")) ??
+          items.find(item => item.types.includes("text/plain"));
+        for (const type of ["text/html", "text/plain"])
+          if (item?.types.includes(type))
+            data.setData(type, await (await item.getType(type)).text());
+      } else data.setData("text/plain", await navigator.clipboard.readText());
+      if (!current()) { changed(); return; }
+      if (!data.types.length) { notify("클립보드에 붙여넣을 글이나 표가 없습니다."); return; }
+      window.dispatchEvent(new ClipboardEvent("paste", {
+        bubbles: true, cancelable: true, clipboardData: data,
+      }));
+    } catch {
+      if (!current()) { changed(); return; }
+      if (clipboardToken.current) {
+        pasteSelection();
+        notify(`앱에서 복사한 항목을 붙였습니다. 외부 내용은 ${shortcut}로 붙여넣으세요.`);
+      } else notify(`슬라이드에서 ${shortcut}로 붙여넣으세요.`);
+    } finally {
+      document.removeEventListener("focusin", cancel);
+      document.removeEventListener("pointerdown", cancel, true);
+      document.removeEventListener("keydown", cancel, true);
+      window.removeEventListener("blur", cancel);
+    }
   };
   useEffect(() => {
     const paste = (e: ClipboardEvent) => {
@@ -2309,14 +2359,6 @@ export default function App() {
       }
       if (e.defaultPrevented || editingTarget(e.target) || editing || modal)
         return;
-      const file = Array.from(e.clipboardData?.items || [])
-        .find((i) => i.type.startsWith("image/"))
-        ?.getAsFile();
-      if (file) {
-        e.preventDefault();
-        void addImage(file);
-        return;
-      }
       if (
         clipboardToken.current &&
         (e.clipboardData?.getData("application/x-slide-studio") ===
@@ -2340,6 +2382,16 @@ export default function App() {
             notify('표를 붙여넣었습니다.');return;
           }
         }catch(error){e.preventDefault();notify(error instanceof Error?error.message:'표를 붙여넣지 못했습니다.');return;}
+      }
+      // Office/Studio may include a bitmap preview alongside editable HTML.
+      // Prefer the native table, while ordinary image paste remains unchanged.
+      const file = Array.from(e.clipboardData?.items || [])
+        .find((i) => i.type.startsWith("image/"))
+        ?.getAsFile();
+      if (file) {
+        e.preventDefault();
+        void addImage(file);
+        return;
       }
       const text = e.clipboardData?.getData("text/plain");
       if (text) {

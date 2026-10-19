@@ -1780,8 +1780,6 @@ button:not(:disabled):active {
 }
 
 .presentation-view.whiteout { background:white; }
-.present-notes-toggle {position:absolute;bottom:12px;right:16px;background:#222b;color:white;padding:8px 12px;border-radius:5px;font-size:12px;opacity:.25;z-index:96;}
-.present-notes-toggle:hover,.present-notes-toggle:focus-visible {opacity:1;}
 
 .presentation-run-link {font:inherit;color:inherit;background:transparent;border:0;padding:0;text-align:inherit;text-decoration:inherit;cursor:pointer;display:inline;}
 

@@ -836,6 +836,8 @@ export default function App() {
     setMenu(null);
     setZoom(null);
     setSorter(false);
+    setWarnings([]);
+    setToast("");
   };
 
   useEffect(() => {
@@ -1652,15 +1654,10 @@ export default function App() {
       if (/\.pptx$/i.test(name)) {
         const result = await importPptx(data);
         replaceDeck(result.deck);
-        if (result.warnings.length) {
-          setWarnings(result.warnings);
-          setModal("import");
-        } else
-          notify(`${result.deck.slides.length}개의 슬라이드를 불러왔습니다.`);
+        setWarnings(result.warnings);
       } else {
         const imported = parseDeckJson(new TextDecoder().decode(data));
         replaceDeck(imported);
-        notify("프로젝트를 열었습니다.");
       }
     } catch (error) {
       notify(
@@ -4959,6 +4956,12 @@ export default function App() {
             <Keyboard size={13} />
             단축키
           </button>
+          {warnings.length > 0 && (
+            <button onClick={() => setModal("import")}>
+              <AlertCircle size={13} />
+              가져오기 안내 ({warnings.length})
+            </button>
+          )}
           <span className="footer-spacer" />
           <button
             className={notesVisible ? "on" : ""}
@@ -5323,7 +5326,7 @@ export default function App() {
             ) : (
               <>
                 <div className="dialog-eyebrow">PRESENTATION IMPORT</div>
-                <h2>슬라이드를 불러왔습니다</h2>
+                <h2>가져오기 안내</h2>
                 <p>이 파일에서 아래 항목은 지원 범위에 제한이 있습니다.</p>
                 <ul className="warning-list">
                   {warnings.map((warning, i) => (
@@ -5334,7 +5337,7 @@ export default function App() {
                   className="button primary"
                   onClick={() => setModal(null)}
                 >
-                  편집 시작하기
+                  닫기
                 </button>
               </>
             )}
@@ -5387,18 +5390,6 @@ export default function App() {
               if (index >= 0) showPresentationSlide(index);
             }}
           />
-          {!presentEnded && (
-            <button
-              className="present-notes-toggle"
-              aria-pressed={presentNotes}
-              onClick={(e) => {
-                e.stopPropagation();
-                setPresentNotes((v) => !v);
-              }}
-            >
-              발표자 노트 (O)
-            </button>
-          )}
           {presentNotes && !presentEnded && (
             <div className="present-notes" onClick={(e) => e.stopPropagation()}>
               <strong>발표자 노트</strong>

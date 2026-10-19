@@ -370,9 +370,9 @@ for (const item of [
     await page
       .locator('input[type=file][accept*=".pptx"]')
       .setInputFiles(sample);
-    await page
-      .getByRole("button", { name: "편집 시작하기", exact: true })
-      .click();
+    await expect(page.locator(".busy-backdrop")).toHaveCount(0, {
+      timeout: 90000,
+    });
     await page
       .locator(".thumbnail-button")
       .nth(item.slide - 1)

@@ -129,21 +129,10 @@ try {
         await page
           .locator('input[type=file][accept*=".pptx"]')
           .setInputFiles(path.join(root, "qa", "samples", filename));
-        await page.waitForFunction(
-          () =>
-            document
-              .querySelector(".toast")
-              ?.textContent.includes("파일 열기 실패") ||
-            document.querySelector(".warning-list") ||
-            document
-              .querySelector(".toast")
-              ?.textContent.includes("불러왔습니다"),
-        );
+        await page.waitForFunction(() => !document.querySelector(".busy-backdrop"));
+        const message = (await page.locator(".toast").allTextContents()).join("\n");
+        if (message.includes("파일 열기 실패")) throw new Error(message);
         item.open_to_ui_ms = performance.now() - start;
-        if (await page.locator(".warning-list").count())
-          await page
-            .getByRole("button", { name: "편집 시작하기", exact: true })
-            .click();
         await page.waitForFunction(() =>
           document
             .querySelector(".save-indicator")

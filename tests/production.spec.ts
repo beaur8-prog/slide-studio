@@ -63,27 +63,21 @@ test("production assets decode TIFF, load bundled fonts, restore Korean layout a
     await page
       .locator('input[type=file][accept*=".pptx"]')
       .setInputFiles(path.resolve(file));
-    await page.waitForFunction(
-      () =>
-        document.querySelector(".warning-list") ||
-        document
-          .querySelector(".toast")
-          ?.textContent?.includes("불러왔습니다") ||
-        document
-          .querySelector(".toast")
-          ?.textContent?.includes("파일 열기 실패"),
-    );
+    await expect(page.locator(".busy-backdrop")).toHaveCount(0, {
+      timeout: 90000,
+    });
     await expect(
       page.locator(".toast").filter({ hasText: "파일 열기 실패" }),
     ).toHaveCount(0);
-    if (await page.locator(".warning-list").count())
-      await page
-        .getByRole("button", { name: "편집 시작하기", exact: true })
-        .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.locator(".toast")).toHaveCount(0);
     await expect(page.locator(".save-indicator")).toHaveText("저장됨");
   };
   await open("qa/samples/cmu-lecture-1.pptx");
   await expect(page.locator(".thumbnail-row")).toHaveCount(70);
+  await page.getByRole("button", { name: /^가져오기 안내/ }).click();
+  await expect(page.locator(".warning-list")).toBeVisible();
+  await page.getByRole("button", { name: "닫기", exact: true }).click();
   await expect(page.locator(".editable-slide img")).toHaveCount(1);
   expect(
     await page

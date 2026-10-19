@@ -100,9 +100,9 @@ test("DSU slide 10 preserves label bounds and matches the native reference when 
   test.skip(!fs.existsSync(file), "Download the public QA sample first");
   await page.goto("http://127.0.0.1:5190");
   await page.locator('input[type="file"][accept*=".pptx"]').setInputFiles(file);
-  await page
-    .getByRole("button", { name: "편집 시작하기", exact: true })
-    .click();
+  await expect(page.locator(".busy-backdrop")).toHaveCount(0, {
+    timeout: 90000,
+  });
   await expect(page.locator(".thumbnail-button")).toHaveCount(22, {
     timeout: 90000,
   });

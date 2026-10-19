@@ -22,6 +22,7 @@ $startFolder = Join-Path ([Environment]::GetFolderPath('Programs')) 'Slide Studi
 $profileDirectory = Join-Path $env:APPDATA 'Slide Studio'
 $report = Join-Path $PWD 'qa/results/windows-setup-native'
 New-Item -ItemType Directory -Path $report -Force | Out-Null
+& (Join-Path $PSScriptRoot 'qa-windows-display.ps1') -Report (Join-Path $report 'display-setup.json')
 if ((Test-Path $install) -or (Test-Path $registry) -or (Test-Path $profileDirectory)) { throw 'Runner is not clean; refusing to touch a pre-existing installation or profile' }
 
 function Assert-True([bool]$Condition, [string]$Message) {

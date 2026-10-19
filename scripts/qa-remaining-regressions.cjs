@@ -90,11 +90,20 @@ module.exports = async function verifyRemaining(page, output, { app } = {}) {
   const ink = page.getByTestId('presentation-ink');
   await expect(ink).toBeVisible();
   if (app) {
-    await expect.poll(() => app.evaluate(({ BrowserWindow, screen }) => {
+    const fullscreenGeometry = () => app.evaluate(({ BrowserWindow, screen }) => {
       const win = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('#presenter='));
-      const bounds = win.getContentBounds(), display = screen.getDisplayMatching(win.getBounds()).bounds;
-      return win.isFullScreen() && bounds.width === display.width && bounds.height === display.height;
-    })).toBe(true);
+      const display = screen.getDisplayMatching(win.getBounds());
+      return { fullscreen: win.isFullScreen(), window: win.getBounds(), content: win.getContentBounds(),
+        minimum: win.getMinimumSize(), display: display.bounds, scaleFactor: display.scaleFactor, platform: process.platform };
+    });
+    try {
+      await expect.poll(async () => {
+        const state = await fullscreenGeometry();
+        return state.fullscreen && state.content.width === state.display.width && state.content.height === state.display.height;
+      }).toBe(true);
+    } finally {
+      await fs.writeFile(path.join(output, 'fullscreen-geometry.json'), JSON.stringify(await fullscreenGeometry(), null, 2) + '\n');
+    }
     await app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('#presenter='));
       win.focus(); win.webContents.focus();

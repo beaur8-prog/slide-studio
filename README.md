@@ -168,3 +168,7 @@ React + TypeScript 편집기, Electron 데스크톱 셸, IndexedDB 자동 저장
 - [Microsoft: Mac용 Office 패키지 배포 정보](https://learn.microsoft.com/en-us/officeupdates/update-history-office-for-mac)
 
 기존 구현은 위 공개 문서를 참고했고, 이번 Windows UI 변경은 [실행 화면 관찰](POWERPOINT-ANALYSIS.md)을 추가로 반영했습니다. PowerPoint 내부 코드를 복원한 결과는 아닙니다. 원본 설치 패키지, 다운로드한 테스트 문서, 로컬 공유 설정과 생성 결과는 저장소와 배포 앱에 포함하지 않습니다. 포함한 글꼴·디코더의 라이선스는 [public/licenses](public/licenses)에 있습니다.
+
+## Studio 앱 간 표 복사 (1.6.1 소스·로컬, 미배포)
+
+Sheet Studio 0.7.10의 표를 홈 붙여넣기 또는 Ctrl+V/⌘V로 받아 셀을 편집할 수 있습니다. 표를 복사하면 다른 Studio 앱으로도 보낼 수 있습니다. [사용법·교환 형식·각 앱 구현 및 제한](https://github.com/beaur8-prog/sheet-studio/blob/main/docs/STUDIO-CLIPBOARD.md)을 확인하세요.

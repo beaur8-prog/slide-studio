@@ -63,6 +63,7 @@ for (const platform of ['win32', 'darwin']) {
       copy() { clipboardActions.push("copy"); },
       cut() { clipboardActions.push("cut"); },
       pasteAndMatchStyle() { clipboardActions.push("paste"); },
+      paste() { clipboardActions.push("table-paste"); },
       mainFrame: { url: pathToFileURL(path.resolve('dist/index.html')).href },
       on() {}, setWindowOpenHandler() {},
       send(...args: unknown[]) { sentActions.push(args); },
@@ -122,6 +123,11 @@ for (const platform of ['win32', 'darwin']) {
     const textClipboard = handlers.get('slide-studio:edit-text-clipboard')!;
     for (const action of ['copy','cut','paste']) textClipboard(event, action);
     expect(clipboardActions).toEqual(['copy','cut','paste']);
+    const pasteTable = handlers.get('slide-studio:paste-table-clipboard')!;
+    pasteTable(event);expect(clipboardActions.at(-1)).toBe('table-paste');
+    expect(() => pasteTable(event, 'extra')).toThrow();
+    expect(() => pasteTable({ ...event, sender: {} })).toThrow('editor window');
+    expect(() => pasteTable({ ...event, senderFrame: { url: contents.mainFrame.url } })).toThrow('editor window');
     for (const action of ['read', 'execute', null, {}]) expect(() => textClipboard(event, action)).toThrow('Unknown text clipboard action');
     expect(() => textClipboard({ ...event, sender: {} }, 'copy')).toThrow('editor window');
     expect(() => textClipboard({ ...event, senderFrame: { url: contents.mainFrame.url } }, 'paste')).toThrow('editor window');

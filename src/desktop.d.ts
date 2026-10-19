@@ -4,6 +4,7 @@ declare global {
   interface Window {
     desktop?: {
       readonly platform?: string;
+      pasteTableClipboard?(): Promise<void>;
       editTextClipboard?(action: "copy" | "cut" | "paste"): Promise<void>;
       loadOfficeCalibriFonts?(): Promise<
         Array<{

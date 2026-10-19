@@ -46,7 +46,8 @@ async function withCaptureOperation(event, task) {
 }
 
 app.setName(PRODUCT_NAME);
-app.setPath('userData', path.join(app.getPath('appData'), PRODUCT_NAME));
+const customUserData=app.commandLine?.getSwitchValue?.('user-data-dir')||'';
+app.setPath('userData',customUserData&&path.isAbsolute(customUserData)?path.resolve(customUserData):path.join(app.getPath('appData'), PRODUCT_NAME));
 if (process.platform === 'win32') app.setAppUserModelId('local.slidestudio.app');
 
 function isTrustedURL(value) {
@@ -205,6 +206,11 @@ function installMenu() {
 }
 
 function installIPC() {
+  ipcMain.handle('slide-studio:paste-table-clipboard', (event, ...args) => {
+    requireTrustedSender(event);
+    if(args.length || presentationWindowState || nativeOperationPending) throw new Error('지금은 표를 붙여넣을 수 없습니다.');
+    event.sender.paste();
+  });
   ipcMain.handle('slide-studio:edit-text-clipboard', (event, ...args) => {
     requireTrustedSender(event);
     const action = args[0];

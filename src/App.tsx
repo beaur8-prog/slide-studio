@@ -146,6 +146,7 @@ import {
   applyTableCellFormat,
 } from "./table";
 import { changeTableAxis, visibleTableCells, MAX_TABLE_ROWS } from "./table";
+import {copyStudioTable,readStudioTable,pasteStudioTable} from './table-exchange';
 import { parseTableClipboard, pasteTableClipboard } from "./table-clipboard";
 import type { TableCellRange } from "./table";
 import { selectionRange, type TableCellSelection } from "./table-selection";
@@ -1255,10 +1256,12 @@ export default function App() {
   const writeInternalClipboard = (
     text: string,
     nativeClipboard?: DataTransfer | null,
+    html?: string,
   ) => {
     clipboardToken.current = uid();
     const fill = (data: DataTransfer) => {
       data.setData("text/plain", text);
+      data.setData("text/html",`<span data-slide-studio-copy="${clipboardToken.current}"></span>`+(html||""));
       data.setData("application/x-slide-studio", clipboardToken.current);
     };
     if (nativeClipboard) {
@@ -1301,7 +1304,7 @@ export default function App() {
     clipboard.current = { cells, cellStyles };
     const text = tableClipboardText(cells);
     try {
-      writeInternalClipboard(text, nativeClipboard);
+      writeInternalClipboard(text, nativeClipboard, copyStudioTable(table,tableRange,{width:selectedElement.width,height:selectedElement.height}).html);
     } catch {
       /* The explicit internal paste remains available. */
     }
@@ -1327,12 +1330,14 @@ export default function App() {
       clipboard.current.slide?.elements ??
       [];
     try {
+      const rich=elements.length===1&&elements[0].table?copyStudioTable(elements[0].table,undefined,{width:elements[0].width,height:elements[0].height}):undefined;
       writeInternalClipboard(
-        elements
+        rich?.text ?? elements
           .map((e) => e.text ?? "")
           .filter(Boolean)
           .join("\n"),
         nativeClipboard,
+        rich?.html,
       );
     } catch {
       /* Keep the internal copy if native clipboard access fails. */
@@ -2288,6 +2293,14 @@ export default function App() {
       window.removeEventListener("cut", copyCells);
     };
   });
+  const pasteFromClipboard = async () => {
+    if (window.desktop?.pasteTableClipboard) { await window.desktop.pasteTableClipboard(); return; }
+    try {
+      const items=await navigator.clipboard.read(),data=new DataTransfer();
+      for (const item of items) for (const type of ['text/html','text/plain']) if(item.types.includes(type)) data.setData(type,await(await item.getType(type)).text());
+      window.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
+    } catch { if(clipboardToken.current){pasteSelection();notify('앱에서 복사한 항목을 붙였습니다. 외부 내용은 Ctrl+V로 붙여넣으세요.');}else notify('슬라이드에서 Ctrl+V로 붙여넣으세요.'); }
+  };
   useEffect(() => {
     const paste = (e: ClipboardEvent) => {
       if (presentationActive.current) {
@@ -2306,12 +2319,27 @@ export default function App() {
       }
       if (
         clipboardToken.current &&
-        e.clipboardData?.getData("application/x-slide-studio") ===
-          clipboardToken.current
+        (e.clipboardData?.getData("application/x-slide-studio") ===
+          clipboardToken.current || e.clipboardData?.getData("text/html").includes(`data-slide-studio-copy="${clipboardToken.current}"`))
       ) {
         e.preventDefault();
         pasteSelection();
         return;
+      }
+      const html=e.clipboardData?.getData('text/html');
+      if(html){
+        try{
+          const source=readStudioTable(html);
+          if(source){
+            e.preventDefault();
+            if(activeTableSelection&&selectedElement?.table){
+              if(selectedElement.locked){notify('잠긴 표에는 붙여넣을 수 없습니다.');return;}
+              const next=pasteStudioTable(selectedElement.table,activeTableSelection.focus.row,activeTableSelection.focus.column,source);
+              changeSlide(s=>({...s,elements:s.elements.map(el=>el.id===selectedElement.id?{...el,table:next}:el)}));
+            }else insertElements([createTableElement(source,deck.width,deck.height)]);
+            notify('표를 붙여넣었습니다.');return;
+          }
+        }catch(error){e.preventDefault();notify(error instanceof Error?error.message:'표를 붙여넣지 못했습니다.');return;}
       }
       const text = e.clipboardData?.getData("text/plain");
       if (text) {
@@ -2842,11 +2870,7 @@ export default function App() {
       {
         label: "붙여넣기",
         icon: <ClipboardPaste size={16} />,
-        disabled:
-          !clipboard.current.elements &&
-          !clipboard.current.slide &&
-          !clipboard.current.slides,
-        run: pasteSelection,
+        run: () => void pasteFromClipboard(),
       },
       { label: "복제", icon: <Copy size={16} />, run: duplicateSelected },
       {
@@ -3327,13 +3351,7 @@ export default function App() {
                 <div className="tools-row">
                   <Tool
                     icon={<ClipboardPaste size={25} />}
-                    disabled={
-                      !clipboard.current.cells &&
-                      !clipboard.current.elements &&
-                      !clipboard.current.slide &&
-                      !clipboard.current.slides
-                    }
-                    onClick={pasteSelection}
+                    onClick={() => void pasteFromClipboard()}
                   >
                     붙여넣기
                   </Tool>

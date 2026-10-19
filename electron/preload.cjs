@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('desktop', Object.freeze({
   platform: process.platform,
+  pasteTableClipboard: () => ipcRenderer.invoke('slide-studio:paste-table-clipboard'),
   editTextClipboard: action => ipcRenderer.invoke('slide-studio:edit-text-clipboard', action),
   loadOfficeCalibriFonts: () => ipcRenderer.invoke('slide-studio:load-office-calibri-fonts'),
   loadOfficeLightFont: () => ipcRenderer.invoke('slide-studio:load-office-light-font'),

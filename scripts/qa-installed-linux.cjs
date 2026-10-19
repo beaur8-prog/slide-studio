@@ -149,6 +149,8 @@ const output = path.resolve('qa/results/linux-native');
       await require('./qa-remaining-regressions.cjs')(page, output, { app });
     if (process.env.EXPECTED_APP_VERSION.localeCompare('1.6.1', undefined, { numeric: true }) >= 0)
       await require('./qa-studio-clipboard.cjs')(page, output, { app });
+    if (process.env.EXPECTED_APP_VERSION.localeCompare('1.6.2', undefined, { numeric: true }) >= 0)
+      await require('./qa-animated-media.cjs')(page, output, { app });
     await fs.writeFile(path.join(output, 'native-app.json'), JSON.stringify({
       version: process.env.EXPECTED_APP_VERSION, protection, installedApp: true, pptxImport: true,
       koreanText: true, systemKoreanFallback: true, objectContext: true, selectedTextColorAndSelection: true,

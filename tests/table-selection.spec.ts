@@ -667,6 +667,10 @@ test("ribbon copy, cut and paste operate on selected cells without replacing the
   await canvasCell(page, 0, 0).click();
   await ribbon.getByRole("button", { name: "붙여넣기", exact: true }).click();
   await expect(tableOnSlide(page)).toHaveCount(1);
+  // Home paste reads the external clipboard asynchronously. Wait for the
+  // new cell content, rather than accepting the preceding saved indicator.
+  await expect.poll(async () => (await savedTable(page)).table.cells)
+    .toEqual(pasteExpected(original.table.cells));
   let pasted = await savedTable(page);
   expect(pasted.table.cells).toEqual(pasteExpected(original.table.cells));
   // Pasting into a heading retains the copied cells' effective body styles.
@@ -683,6 +687,8 @@ test("ribbon copy, cut and paste operate on selected cells without replacing the
   expect((await savedTable(page)).table.cells).toEqual(cleared);
   await canvasCell(page, 0, 0).click();
   await ribbon.getByRole("button", { name: "붙여넣기", exact: true }).click();
+  await expect.poll(async () => (await savedTable(page)).table.cells)
+    .toEqual(pasteExpected(cleared));
   pasted = await savedTable(page);
   await expect(tableOnSlide(page)).toHaveCount(1);
   expect(pasted.table.cells).toEqual(pasteExpected(cleared));

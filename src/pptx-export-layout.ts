@@ -111,7 +111,7 @@ export function restoreLayoutXml(
       );
     }
     if (
-      (el.shape === "line" || el.shape === "arrow") &&
+      (el.shape === "line" || el.shape === "arrow" || el.shape === "custom") &&
       (el.lineStart || el.lineEnd)
     ) {
       const line = child(child(node, "spPr"), "ln");
@@ -470,7 +470,7 @@ export function restoreLayoutXml(
           {
             w: Math.round(source.width),
             h: Math.round(source.height),
-            fill: source.fill ? "norm" : "none",
+            fill: source.fill ? (source.fillMode ?? "norm") : "none",
             stroke: source.stroke ? "1" : "0",
           },
           list,
@@ -479,7 +479,9 @@ export function restoreLayoutXml(
           source.d.match(/[MLCQAZ]|[-+]?(?:\d*\.)?\d+(?:e[-+]?\d+)?/gi) ?? [];
         let i = 0,
           x = 0,
-          y = 0;
+          y = 0,
+          startX = 0,
+          startY = 0;
         const number = () => {
           const n = Number(tokens[i++]);
           if (!Number.isFinite(n)) throw Error("Invalid drawing path");
@@ -491,12 +493,15 @@ export function restoreLayoutXml(
           const command = tokens[i++];
           if (command === "Z") {
             make("close", {}, path);
+            x = startX;
+            y = startY;
             continue;
           }
           if (command === "M" || command === "L") {
             x = number();
             y = number();
             point(make(command === "M" ? "moveTo" : "lnTo", {}, path), x, y);
+            if (command === "M") [startX, startY] = [x, y];
           } else if (command === "C" || command === "Q") {
             const n = make(
               command === "C" ? "cubicBezTo" : "quadBezTo",
@@ -561,8 +566,9 @@ export function restoreLayoutXml(
               );
             const cx = (x + nx) / 2 + (factor * rx * dy) / ry,
               cy = (y + ny) / 2 - (factor * ry * dx) / rx;
-            const start = Math.atan2((y - cy) / ry, (x - cx) / rx),
-              end = Math.atan2((ny - cy) / ry, (nx - cx) / rx);
+            // DrawingML records the geometric angle of the radius ray.
+            const start = Math.atan2(y - cy, x - cx),
+              end = Math.atan2(ny - cy, nx - cx);
             let swing = end - start;
             if (sweep && swing < 0) swing += 2 * Math.PI;
             if (!sweep && swing > 0) swing -= 2 * Math.PI;

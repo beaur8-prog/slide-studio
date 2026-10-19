@@ -69,7 +69,7 @@ export function resizeElements(
     );
   const keep =
     handle.length === 2 &&
-    (shift || (moving.length === 1 && moving[0].type === "image"));
+    (shift || (moving.length === 1 && ["image", "video"].includes(moving[0].type)));
   if (keep) {
     const ratio = Math.abs(sx - 1) > Math.abs(sy - 1) ? sx : sy;
     sx = sy = Math.max(minX, minY, ratio);

@@ -1,4 +1,6 @@
 import { GradientDefs, gradientCss } from "./gradient";
+import { CustomShape } from "./CustomShape";
+import { VideoVisual } from "./VideoVisual";
 import { SlideLinks } from "./slide-links";
 import { alphaColor } from "./colors";
 import EditableText from "./EditableText";
@@ -63,7 +65,12 @@ import { expandGroups } from "./object-groups";
 import { snapMovement } from "./object-arrange";
 import { TableVisual } from "./TableEditor";
 import { TableResizer } from "./TableResizer";
-import { tableMerge, visibleTableCells, MAX_TABLE_ROWS, type TableCellRange } from "./table";
+import {
+  tableMerge,
+  visibleTableCells,
+  MAX_TABLE_ROWS,
+  type TableCellRange,
+} from "./table";
 import { selectionRange, type TableCellSelection } from "./table-selection";
 
 import { TextContent } from "./TextContent";
@@ -123,10 +130,14 @@ function TextBorders({ element: e }: { element: SlideElement }) {
 export function ElementVisual({
   element,
   onTextHeight,
+  playMedia = false,
 }: {
   element: SlideElement;
   onTextHeight?: (id: string, height: number) => void;
+  playMedia?: boolean;
 }) {
+  if (element.type === "video")
+    return <VideoVisual element={element} playing={playMedia} />;
   if (element.type !== "shape")
     return <ArtworkVisual element={element} onTextHeight={onTextHeight} />;
   return (
@@ -183,46 +194,7 @@ function ArtworkVisual({
     );
   if (e.type === "text")
     return <StaticText element={e} onHeight={onTextHeight} />;
-  if (e.shape === "custom" && e.paths)
-    return (
-      <svg
-        className="element-svg"
-        width="100%"
-        height="100%"
-        viewBox={`0 0 ${e.width} ${e.height}`}
-        preserveAspectRatio="none"
-        style={{ transform: `scale(${e.flipH ? -1 : 1},${e.flipV ? -1 : 1})` }}
-      >
-        <GradientDefs gradient={e.gradient} id={gradientId} />
-        {e.paths.map((p, i) => (
-          <path
-            key={i}
-            d={p.d}
-            transform={`scale(${e.width / p.width},${e.height / p.height})`}
-            fill={
-              p.fill ? (e.gradient ? `url(#${gradientId})` : e.fill) : "none"
-            }
-            fillOpacity={e.fillOpacity}
-            stroke={p.stroke ? e.stroke : "none"}
-            strokeOpacity={e.strokeOpacity}
-            strokeDasharray={e.strokeDash
-              ?.map(
-                (n) =>
-                  n / Math.sqrt(((e.width / p.width) * e.height) / p.height),
-              )
-              .join(" ")}
-            strokeLinecap={e.strokeCap}
-            strokeWidth={
-              (e.strokeWidth ?? 0) /
-              Math.max(
-                0.00001,
-                Math.sqrt(((e.width / p.width) * e.height) / p.height),
-              )
-            }
-          />
-        ))}
-      </svg>
-    );
+  if (e.shape === "custom" && e.paths) return <CustomShape element={e} />;
   if ((e.shape === "line" || e.shape === "arrow") && (e.lineStart || e.lineEnd))
     return <LineShape element={e} />;
   if (e.shape === "line" || e.shape === "arrow")
@@ -250,67 +222,45 @@ function ArtworkVisual({
         )}
       </svg>
     );
-  if (e.gradient || e.strokeDash)
-    return (
-      <svg
-        className="element-svg"
-        width="100%"
-        height="100%"
-        viewBox={`0 0 ${e.width} ${e.height}`}
-        preserveAspectRatio="none"
-        style={{ transform: `scale(${e.flipH ? -1 : 1},${e.flipV ? -1 : 1})` }}
-      >
-        <GradientDefs gradient={e.gradient} id={gradientId} />
-        <g
-          fill={e.gradient ? `url(#${gradientId})` : e.fill}
-          fillOpacity={e.fillOpacity}
-          stroke={e.stroke}
-          strokeOpacity={e.strokeOpacity}
-          strokeWidth={e.strokeWidth}
-          strokeDasharray={e.strokeDash?.join(" ")}
-          strokeLinecap={e.strokeCap}
-        >
-          {e.shape === "ellipse" ? (
-            <ellipse
-              cx={e.width / 2}
-              cy={e.height / 2}
-              rx={e.width / 2}
-              ry={e.height / 2}
-            />
-          ) : e.shape === "triangle" ? (
-            <polygon
-              points={`${e.width / 2},0 ${e.width},${e.height} 0,${e.height}`}
-            />
-          ) : (
-            <rect
-              width={e.width}
-              height={e.height}
-              rx={e.shape === "roundRect" ? (e.cornerRadius ?? 22) : 0}
-            />
-          )}
-        </g>
-      </svg>
-    );
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        background: alphaColor(e.fill, e.fillOpacity),
-        transform: `scale(${e.flipH ? -1 : 1},${e.flipV ? -1 : 1})`,
-        border: `${e.strokeWidth || 0}px solid ${alphaColor(e.stroke, e.strokeOpacity) || "transparent"}`,
-        borderRadius:
-          e.shape === "ellipse"
-            ? "50%"
-            : e.shape === "roundRect"
-              ? (e.cornerRadius ?? 22)
-              : 0,
-        clipPath:
-          e.shape === "triangle"
-            ? "polygon(50% 0, 100% 100%, 0 100%)"
-            : undefined,
-      }}
-    />
+    <svg
+      className="element-svg"
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${e.width} ${e.height}`}
+      preserveAspectRatio="none"
+      style={{ transform: `scale(${e.flipH ? -1 : 1},${e.flipV ? -1 : 1})` }}
+    >
+      <GradientDefs gradient={e.gradient} id={gradientId} />
+      <g
+        fill={e.gradient ? `url(#${gradientId})` : (e.fill ?? "none")}
+        fillOpacity={e.fillOpacity}
+        stroke={e.stroke ?? "none"}
+        strokeOpacity={e.strokeOpacity}
+        strokeWidth={e.strokeWidth ?? 0}
+        strokeDasharray={e.strokeDash?.join(" ")}
+        strokeLinecap={e.strokeCap}
+      >
+        {e.shape === "ellipse" ? (
+          <ellipse
+            cx={e.width / 2}
+            cy={e.height / 2}
+            rx={e.width / 2}
+            ry={e.height / 2}
+          />
+        ) : e.shape === "triangle" ? (
+          <polygon
+            points={`${e.width / 2},0 ${e.width},${e.height} 0,${e.height}`}
+          />
+        ) : (
+          <rect
+            width={e.width}
+            height={e.height}
+            rx={e.shape === "roundRect" ? (e.cornerRadius ?? 22) : 0}
+          />
+        )}
+      </g>
+    </svg>
   );
 }
 export function elementStyle(e: SlideElement): CSSProperties {
@@ -332,6 +282,7 @@ export const SlideVisual = memo(function SlideVisual({
   height,
   scale = 1,
   interactive = false,
+  playMedia = false,
   onSlideLink,
 }: {
   slide: Slide;
@@ -339,6 +290,7 @@ export const SlideVisual = memo(function SlideVisual({
   height: number;
   scale?: number;
   interactive?: boolean;
+  playMedia?: boolean;
   onSlideLink?: (slideId: string) => void;
 }) {
   return (
@@ -349,7 +301,7 @@ export const SlideVisual = memo(function SlideVisual({
           width,
           height,
           background: slide.background,
-          backgroundImage:gradientCss(slide.backgroundGradient),
+          backgroundImage: gradientCss(slide.backgroundGradient),
           transform: `scale(${scale})`,
         }}
       >
@@ -359,7 +311,7 @@ export const SlideVisual = memo(function SlideVisual({
             className="slide-element static"
             style={elementStyle(e)}
           >
-            <ElementVisual element={e} />
+            <ElementVisual element={e} playMedia={playMedia} />
             {interactive && e.hyperlink?.url && (
               <a
                 className="presentation-link"
@@ -450,7 +402,7 @@ interface Props {
   edit: (id: string | null) => void;
   editTable?: (id: string, range?: TableCellRange) => void;
   resizeTable: (id: string, before: TableData, after: TableData) => void;
-  appendTableRow: (id:string)=>void;
+  appendTableRow: (id: string) => void;
   tableResizeEnabled: boolean;
   begin: () => void;
   preview: (elements: SlideElement[]) => void;
@@ -1125,7 +1077,25 @@ export default function SlideCanvas({
                             else {
                               edit(null);
                               setInlineCell(null);
-                              if(!backward&&e.table!.cells.length<MAX_TABLE_ROWS){const row=e.table!.cells.length;appendTableRow(e.id);selectTableCells({elementId:e.id,anchor:{row,column:0},focus:{row,column:0}});requestAnimationFrame(()=>document.querySelector<HTMLElement>('.editable-slide .slide-element.selected')?.focus());}
+                              if (
+                                !backward &&
+                                e.table!.cells.length < MAX_TABLE_ROWS
+                              ) {
+                                const row = e.table!.cells.length;
+                                appendTableRow(e.id);
+                                selectTableCells({
+                                  elementId: e.id,
+                                  anchor: { row, column: 0 },
+                                  focus: { row, column: 0 },
+                                });
+                                requestAnimationFrame(() =>
+                                  document
+                                    .querySelector<HTMLElement>(
+                                      ".editable-slide .slide-element.selected",
+                                    )
+                                    ?.focus(),
+                                );
+                              }
                             }
                           },
                         }
@@ -1248,9 +1218,11 @@ export default function SlideCanvas({
                       ? "텍스트"
                       : e.type === "image"
                         ? "이미지"
-                        : e.type === "table"
-                          ? "표 · 셀을 드래그하여 선택"
-                          : "도형"}
+                        : e.type === "video"
+                          ? "동영상"
+                          : e.type === "table"
+                            ? "표 · 셀을 드래그하여 선택"
+                            : "도형"}
                 </span>
               )}
             </div>

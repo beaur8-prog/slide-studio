@@ -332,6 +332,7 @@ const PresentationInk = forwardRef<
           <SlideVisual
             slide={slide}
             interactive={!blackout && tool === "arrow"}
+            playMedia={!blackout}
             onSlideLink={onSlideLink}
             width={width}
             height={height}

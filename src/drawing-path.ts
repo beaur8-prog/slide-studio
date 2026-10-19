@@ -27,7 +27,9 @@ export function drawingPaths(
       )
         throw Error("dimensions");
       let x = 0,
-        y = 0;
+        y = 0,
+        startX = 0,
+        startY = 0;
       const d: string[] = [];
       const point = (p: Element) => {
         const a = resolve(p.getAttribute("x")),
@@ -45,8 +47,11 @@ export function drawingPaths(
         const pts = Array.from(command.children)
           .filter((n) => n.localName === "pt")
           .map(point);
-        if (command.localName === "close") d.push("Z");
-        else if (
+        if (command.localName === "close") {
+          d.push("Z");
+          x = startX;
+          y = startY;
+        } else if (
           ["moveTo", "lnTo", "cubicBezTo", "quadBezTo"].includes(
             command.localName,
           )
@@ -66,6 +71,7 @@ export function drawingPaths(
           if (pts.length !== expected[command.localName]) throw Error("points");
           d.push(names[command.localName] + " " + pts.flat().join(" "));
           [x, y] = pts.at(-1)!;
+          if (command.localName === "moveTo") [startX, startY] = [x, y];
         } else if (command.localName === "arcTo") {
           const rx = resolve(command.getAttribute("wR")),
             ry = resolve(command.getAttribute("hR"));
@@ -82,14 +88,27 @@ export function drawingPaths(
           )
             throw Error("arc");
           if (!rx || !ry) continue;
-          const cx = x - rx * Math.cos(start),
-            cy = y - ry * Math.sin(start);
+          // DrawingML angles are rays from the ellipse's center, not the
+          // parametric angles used by SVG. They coincide only on circles or
+          // at quadrant boundaries. Using cos/sin directly distorts pies,
+          // curved arrows and ribbons when their aspect ratio changes.
+          const offset = (angle: number) => {
+            const parameter = Math.atan2(
+              rx * Math.sin(angle),
+              ry * Math.cos(angle),
+            );
+            return [rx * Math.cos(parameter), ry * Math.sin(parameter)];
+          };
+          const [dx, dy] = offset(start);
+          const cx = x - dx,
+            cy = y - dy;
           // Split full ellipses: SVG arcs with identical endpoints are empty.
           const pieces = Math.max(1, Math.ceil(Math.abs(swing) / Math.PI));
           if (pieces > 100) throw Error("arc");
           for (let i = 1; i <= pieces; i++) {
-            x = cx + rx * Math.cos(start + (swing * i) / pieces);
-            y = cy + ry * Math.sin(start + (swing * i) / pieces);
+            const [dx, dy] = offset(start + (swing * i) / pieces);
+            x = cx + dx;
+            y = cy + dy;
             d.push(`A ${rx} ${ry} 0 0 ${swing >= 0 ? 1 : 0} ${x} ${y}`);
           }
         } else throw Error("command");
@@ -99,7 +118,12 @@ export function drawingPaths(
         width,
         height,
         fill: path.getAttribute("fill") !== "none",
-        stroke: path.getAttribute("stroke") !== "0",
+        stroke: !["0", "false"].includes(path.getAttribute("stroke") ?? ""),
+        ...(["darken", "darkenLess", "lighten", "lightenLess"].includes(
+          path.getAttribute("fill") ?? "",
+        )
+          ? { fillMode: path.getAttribute("fill") as ShapePath["fillMode"] }
+          : {}),
       };
     });
   } catch {

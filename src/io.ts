@@ -1,5 +1,13 @@
 import { readGradient, writeGradient, validateGradient } from "./gradient";
 import { presetGeometry } from "./drawing-presets";
+import {
+  safeVideo,
+  videoMime,
+  bytesDataUrl,
+  MAX_VIDEO_BYTES,
+  EMPTY_POSTER,
+} from "./video";
+import { readVideoPlayback, writeVideoPlayback } from "./pptx-video";
 import { drawingTextFrame } from "./drawing-guides";
 import { normalizeObjectAlpha, rgbToHsl, hslToRgb } from "./colors";
 import {
@@ -204,7 +212,7 @@ export function parseDeckJson(text: string): Deck {
             id: stringValue(source.id, `${elLabel} ID`, 160, false),
             type: enumValue(
               source.type,
-              ["text", "shape", "image", "table"],
+              ["text", "shape", "image", "table", "video"],
               `${elLabel} 종류`,
             ),
             x: numberValue(source.x, `${elLabel} X`, -100000, 100000),
@@ -482,6 +490,21 @@ export function parseDeckJson(text: string): Deck {
                 height: numberValue(p.height, elLabel, 0.0001, 1e12),
                 fill: booleanValue(p.fill, elLabel),
                 stroke: booleanValue(p.stroke, elLabel),
+                ...(p.fillMode !== undefined
+                  ? {
+                      fillMode: enumValue(
+                        p.fillMode,
+                        [
+                          "norm",
+                          "darken",
+                          "darkenLess",
+                          "lighten",
+                          "lightenLess",
+                        ] as const,
+                        elLabel,
+                      ),
+                    }
+                  : {}),
               };
             });
           }
@@ -518,6 +541,21 @@ export function parseDeckJson(text: string): Deck {
             imageBytes += el.src.length * 0.75;
             if (imageBytes > MAX_EXPANDED / 2)
               fail("내장 이미지의 합계가 100 MB를 초과합니다.");
+          }
+          if (el.type === "video") {
+            el.src = safeVideo(source.src);
+            el.poster =
+              source.poster === undefined
+                ? EMPTY_POSTER
+                : safeImage(source.poster, elLabel);
+            for (const key of ["autoPlay", "loop", "muted"] as const)
+              el[key] =
+                source[key] === undefined
+                  ? true
+                  : booleanValue(source[key], elLabel);
+            imageBytes += (el.src.length + el.poster.length) * 0.75;
+            if (imageBytes > MAX_EXPANDED / 2)
+              fail("내장 이미지·동영상의 합계가 100 MB를 초과합니다.");
           }
           if (
             (!el.width || !el.height) &&
@@ -894,6 +932,15 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
             },
           },
         );
+      } else if (el.type === "video") {
+        slide.addMedia({
+          ...box,
+          type: "video",
+          data: el.src!,
+          cover: el.poster ?? EMPTY_POSTER,
+          extn: el.src!.startsWith("data:video/webm") ? "webm" : "mp4",
+          objectName: el.id,
+        });
       } else if (el.type === "image") {
         slide.addImage({
           ...box,
@@ -1032,22 +1079,31 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
     );
     writeObjectState(doc, slide.elements);
     writeGroups(doc, slide.elements);
+    writeVideoPlayback(doc, slide.elements);
+    if (slide.transition === "fade") {
+      const transition = doc.createElementNS(
+        "http://schemas.openxmlformats.org/presentationml/2006/main",
+        "p:transition",
+      );
+      transition.setAttribute("spd", "med");
+      transition.appendChild(
+        doc.createElementNS(transition.namespaceURI, "p:fade"),
+      );
+      doc.documentElement.insertBefore(
+        transition,
+        child(doc.documentElement, "timing") ??
+          child(doc.documentElement, "extLst") ??
+          null,
+      );
+    }
     xml = new XMLSerializer().serializeToString(doc);
-    zip.file(
-      path,
-      slide.transition === "fade"
-        ? xml.replace(
-            "</p:sld>",
-            '<p:transition spd="med"><p:fade/></p:transition></p:sld>',
-          )
-        : xml,
-    );
+    zip.file(path, xml);
   }
   return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
 }
 
 /** Reject oversized/ambiguous ZIPs before JSZip allocates decompressed data. */
-function checkZip(bytes: Uint8Array): void {
+function checkZip(bytes: Uint8Array): Map<string, number> {
   if (bytes.length > MAX_ARCHIVE) fail("PPTX 파일은 256 MiB 이하여야 합니다.");
   if (bytes.length < 22) fail("올바른 PPTX ZIP 파일이 아닙니다.");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -1076,6 +1132,7 @@ function checkZip(bytes: Uint8Array): void {
   if (count > MAX_ZIP_FILES || start + centralSize > end)
     fail("PPTX 파일 수 또는 디렉터리 크기가 제한을 초과합니다.");
   const names = new Set<string>();
+  const sizes = new Map<string, number>();
   const decoder = new TextDecoder();
   let at = start;
   let expanded = 0;
@@ -1106,6 +1163,7 @@ function checkZip(bytes: Uint8Array): void {
     )
       fail("PPTX에 잘못되거나 중복된 파일 경로가 있습니다.");
     names.add(name);
+    sizes.set(name, size);
     expanded += size;
     if (size > MAX_PART || expanded > MAX_EXPANDED)
       fail("PPTX 압축 해제 크기가 제한을 초과합니다.");
@@ -1115,6 +1173,7 @@ function checkZip(bytes: Uint8Array): void {
   }
   if (at !== start + centralSize)
     fail("PPTX ZIP 디렉터리 길이가 일치하지 않습니다.");
+  return sizes;
 }
 
 function child(
@@ -1408,7 +1467,8 @@ function transformGroupedElement(
     x: cx + dx * Math.cos(angle) - dy * Math.sin(angle) - element.width / 2,
     y: cy + dx * Math.sin(angle) + dy * Math.cos(angle) - element.height / 2,
     rotation: orientation,
-    ...(element.type === "image" || (element.type === "shape" && !line)
+    ...(["image", "video"].includes(element.type) ||
+    (element.type === "shape" && !line)
       ? {
           flipH: Boolean(element.flipH) !== flipH,
           flipV: Boolean(element.flipV) !== flipV,
@@ -1485,7 +1545,7 @@ export async function importPptx(
   data: ArrayBuffer | Uint8Array,
 ): Promise<ImportResult> {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  checkZip(bytes);
+  const partSizes = checkZip(bytes);
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(bytes, { createFolders: false });
@@ -1499,6 +1559,8 @@ export async function importPptx(
   let readTotal = 0;
   const xmlCache = new Map<string, Document>();
   const imageCache = new Map<string, string>();
+  const videoCache = new Map<string, string | null>();
+  let embeddedAssetBytes = 0;
   const readBytes = async (
     path: string,
     limit = MAX_PART,
@@ -1747,8 +1809,23 @@ export async function importPptx(
       if (transition.hasAttribute("advTm"))
         warn("자동 슬라이드 전환 시간은 가져오지 않습니다.");
     }
-    if (first(doc, "timing"))
-      warn("개체 애니메이션과 오디오·비디오 타이밍은 가져오지 않습니다.");
+    if (
+      first(doc, "timing") &&
+      [
+        "anim",
+        "animClr",
+        "animEffect",
+        "animMotion",
+        "animRot",
+        "animScale",
+        "set",
+        "cmd",
+        "audio",
+      ].some((name) => first(first(doc, "timing"), name))
+    )
+      warn(
+        "개체 애니메이션·오디오와 복잡한 미디어 타이밍은 가져오지 않습니다. 동영상의 자동 시작·반복·음소거는 보존합니다.",
+      );
     if (rels.some((r) => r.external && !r.type.endsWith("/hyperlink")))
       warn("외부 링크 이미지·미디어는 불러오거나 실행하지 않습니다.");
 
@@ -1775,6 +1852,9 @@ export async function importPptx(
       if (++count > MAX_ELEMENTS || slide.elements.length >= 1000)
         fail("PPTX 개체 수가 지원 한도를 초과합니다.");
       normalizeObjectAlpha(el);
+      if (el.type === "image" || el.type === "video")
+        embeddedAssetBytes +=
+          ((el.src?.length ?? 0) + (el.poster?.length ?? 0)) * 0.75;
       slide.elements.push(el);
     };
     const readFill = (
@@ -2003,19 +2083,9 @@ export async function importPptx(
         width: attrNumber(child(xfrm, "ext"), "cx"),
         height: attrNumber(child(xfrm, "ext"), "cy"),
       });
-      if (!paths && preset === "rightArrow")
-        paths = [
-          {
-            d: "M 0 25 L 60 25 L 60 0 L 100 50 L 60 100 L 60 75 L 0 75 Z",
-            width: 100,
-            height: 100,
-            fill: true,
-            stroke: true,
-          },
-        ];
       if (!paths && preset === "donut") {
         const guide = children(
-          child(child(properties, "prstGeom"), "avLst"),
+          child(child(geometryProperties, "prstGeom"), "avLst"),
           "gd",
         ).find((n) => n.getAttribute("name") === "adj");
         const value = guide
@@ -2051,7 +2121,12 @@ export async function importPptx(
         );
       if (
         !paths &&
-        !SHAPES.has(preset as ShapeKind) &&
+        (!SHAPES.has(preset as ShapeKind) ||
+          (preset === "triangle" &&
+            children(
+              child(child(geometryProperties, "prstGeom"), "avLst"),
+              "gd",
+            ).length > 0)) &&
         preset !== "straightConnector1"
       )
         paths = drawingPaths(sourceGeometry, extent);
@@ -2065,7 +2140,7 @@ export async function importPptx(
       const isTextBox =
         child(child(node, "nvSpPr"), "cNvSpPr")?.getAttribute("txBox") === "1";
       const pureText =
-        isTextBox ||
+        (isTextBox && preset === "rect" && !paths) ||
         (!paths &&
           Boolean(body) &&
           preset === "rect" &&
@@ -2085,7 +2160,7 @@ export async function importPptx(
       let cornerRadius: number | undefined;
       if (shape === "roundRect") {
         const guide = children(
-          child(child(properties, "prstGeom"), "avLst"),
+          child(child(geometryProperties, "prstGeom"), "avLst"),
           "gd",
         ).find((n) => n.getAttribute("name") === "adj");
         const constant = guide
@@ -2116,12 +2191,16 @@ export async function importPptx(
           ...(shape !== "line" && shape !== "arrow"
             ? {
                 paths,
-                flipH: xfrm?.getAttribute("flipH") === "1",
-                flipV: xfrm?.getAttribute("flipV") === "1",
+                flipH: ["1", "true"].includes(
+                  xfrm?.getAttribute("flipH") ?? "",
+                ),
+                flipV: ["1", "true"].includes(
+                  xfrm?.getAttribute("flipV") ?? "",
+                ),
               }
             : {}),
           ...geometry,
-          ...(shape === "line" || shape === "arrow"
+          ...(shape === "line" || shape === "arrow" || (paths && line.arrow)
             ? { lineStart: line.start, lineEnd: line.end }
             : {}),
           ...(shape === "line" || shape === "arrow"
@@ -2132,10 +2211,14 @@ export async function importPptx(
                 const length = Math.hypot(geometry.width, geometry.height);
                 const dx =
                   geometry.width *
-                  (xfrm?.getAttribute("flipH") === "1" ? -1 : 1);
+                  (["1", "true"].includes(xfrm?.getAttribute("flipH") ?? "")
+                    ? -1
+                    : 1);
                 const dy =
                   geometry.height *
-                  (xfrm?.getAttribute("flipV") === "1" ? -1 : 1);
+                  (["1", "true"].includes(xfrm?.getAttribute("flipV") ?? "")
+                    ? -1
+                    : 1);
                 return {
                   x: geometry.x + geometry.width / 2 - length / 2,
                   y: geometry.y + geometry.height / 2 - 0.5,
@@ -2227,6 +2310,76 @@ export async function importPptx(
         warn("위치 정보를 찾을 수 없는 이미지를 제외했습니다.");
         return;
       }
+      const media = first(node, "media"),
+        legacyVideo = first(node, "videoFile");
+      if (media || legacyVideo) {
+        const id = relId(media, "embed") || relId(legacyVideo, "link");
+        const relationship = pictureRelationships.find((r) => r.id === id);
+        const declaredSize = relationship?.path
+          ? partSizes.get(relationship.path)
+          : undefined;
+        if (
+          relationship?.path &&
+          !relationship.external &&
+          declaredSize !== undefined &&
+          declaredSize <= MAX_VIDEO_BYTES &&
+          embeddedAssetBytes + declaredSize + 512 < MAX_EXPANDED / 2
+        ) {
+          let src = videoCache.get(relationship.path);
+          if (src === undefined) {
+            const raw = await readBytes(relationship.path, MAX_VIDEO_BYTES);
+            const mime = raw && videoMime(raw);
+            src = raw && mime ? bytesDataUrl(raw, mime) : null;
+            videoCache.set(relationship.path, src);
+          }
+          if (src) {
+            const posterRel = pictureRelationships.find(
+              (r) =>
+                r.id === relId(first(child(node, "blipFill"), "blip"), "embed"),
+            );
+            let poster = posterRel?.path
+              ? imageCache.get(posterRel.path)
+              : undefined;
+            if (!poster && posterRel?.path && !posterRel.external) {
+              const raw = await readBytes(posterRel.path, MAX_IMAGE),
+                mime = raw && rasterMime(raw);
+              if (raw && mime) {
+                poster = bytesDataUrl(raw, mime);
+                imageCache.set(posterRel.path, poster);
+              }
+            }
+            poster ??= EMPTY_POSTER;
+            if (
+              embeddedAssetBytes + (src.length + poster.length) * 0.75 <=
+              MAX_EXPANDED / 2
+            ) {
+              addElement({
+                id: uid(),
+                type: "video",
+                ...geometry,
+                opacity: 1,
+                src,
+                poster,
+                ...readVideoPlayback(doc, node),
+                flipH: ["1", "true"].includes(
+                  xfrm?.getAttribute("flipH") ?? "",
+                ),
+                flipV: ["1", "true"].includes(
+                  xfrm?.getAttribute("flipV") ?? "",
+                ),
+                alt:
+                  first(node, "cNvPr")?.getAttribute("descr") ||
+                  first(node, "cNvPr")?.getAttribute("name") ||
+                  "동영상",
+              });
+              return;
+            }
+          }
+        }
+        warn(
+          "외부 연결·지원하지 않는 동영상 또는 크기 제한을 넘는 영상은 정지 미리보기로 가져옵니다. 내장 MP4·WebM은 한 개당 20 MiB, 이미지·동영상 합계 100 MiB까지 지원합니다.",
+        );
+      }
       const blip = first(child(node, "blipFill"), "blip");
       const imageRel = pictureRelationships.find(
         (r) => r.id === relId(blip, "embed"),
@@ -2306,8 +2459,8 @@ export async function importPptx(
       const crop: [number, number, number, number] = ["t", "r", "b", "l"].map(
         (k) => attrNumber(cropNode, k, 0) / 100000,
       ) as [number, number, number, number];
-      if (first(node, "videoFile") || first(node, "audioFile"))
-        warn("오디오·비디오는 재생 가능한 미디어로 가져오지 않습니다.");
+      if (first(node, "audioFile"))
+        warn("오디오는 재생 가능한 미디어로 가져오지 않습니다.");
       const opacity = clamp(
         attrNumber(child(blip, "alphaModFix"), "amt", 100000) / 100000,
         0,
@@ -2323,8 +2476,8 @@ export async function importPptx(
         crop[1] + crop[3] < 0.999
           ? { crop }
           : {}),
-        flipH: xfrm?.getAttribute("flipH") === "1",
-        flipV: xfrm?.getAttribute("flipV") === "1",
+        flipH: ["1", "true"].includes(xfrm?.getAttribute("flipH") ?? ""),
+        flipV: ["1", "true"].includes(xfrm?.getAttribute("flipV") ?? ""),
         opacity,
         alt: first(node, "cNvPr")?.getAttribute("descr") ?? "",
       });
@@ -2937,6 +3090,11 @@ export async function importPptx(
             link: Element | undefined,
           ): SlideElement["hyperlink"] => {
             if (!link) return undefined;
+            if (
+              link.getAttribute("action") === "ppaction://media" &&
+              !relId(link)
+            )
+              return undefined;
             const relationship = sourceRelationships.find(
               (r) => r.id === relId(link),
             );
@@ -3018,5 +3176,36 @@ export async function importPptx(
     deck.slides.push(slide);
   }
   // Reuse the project validator as a final boundary before handing data to React.
+  // Raster artwork later in the presentation can consume the remaining asset
+  // budget. Prefer readable slides with video posters over rejecting the deck.
+  let assetBytes = deck.slides.reduce(
+    (sum, s) =>
+      sum +
+      s.elements.reduce(
+        (n, e) =>
+          n +
+          (["image", "video"].includes(e.type)
+            ? ((e.src?.length ?? 0) + (e.poster?.length ?? 0)) * 0.75
+            : 0),
+        0,
+      ),
+    0,
+  );
+  for (const s of [...deck.slides].reverse()) {
+    for (
+      let i = s.elements.length - 1;
+      i >= 0 && assetBytes > MAX_EXPANDED / 2;
+      i--
+    ) {
+      const e = s.elements[i];
+      if (e.type !== "video") continue;
+      const { src, poster, autoPlay, loop, muted, type, ...rest } = e;
+      assetBytes -= (src?.length ?? 0) * 0.75;
+      s.elements[i] = { ...rest, type: "image", src: poster ?? EMPTY_POSTER };
+      warn(
+        "이미지·동영상 합계 100 MiB 제한을 넘는 영상은 정지 미리보기로 가져왔습니다.",
+      );
+    }
+  }
   return { deck: parseDeckJson(JSON.stringify(deck)), warnings: [...warnings] };
 }

@@ -26,7 +26,7 @@ navigation skips them; starting at the selected slide or entering its number can
 still show a hidden slide explicitly.
 
 PPTX import reads the presentation relationship list for slide order, not file
-name sorting. It reads slide size, text, supported shapes, embedded raster images,
+name sorting. It reads slide size, text, supported shapes, embedded raster images and supported videos,
 speaker notes, theme colors/fonts, basic placeholder inheritance from layouts and
 masters, and group scale/translation, rotation, and reflection. Group hierarchy is
 retained while child geometry is resolved into slide coordinates; rotated groups under a nonuniform parent scale
@@ -104,6 +104,7 @@ Calibri Light uses a measured approximate fallback; other missing fonts use loca
 substitutes. See [font provenance and metrics](FONT_NOTES.md). Glyph appearance and line wrapping can
 therefore differ, even with matching geometry. Linear/centered radial gradients,
 dash patterns, outer shadows and 187 formula-defined presets are supported.
+Preset paths preserve light/dark face shading, adjustment guides, curved/bent connector markers, and the geometric radius angles used by DrawingML ellipses. Three-aspect-ratio import/export coverage includes all 187 presets; this does not establish pixel-identical rendering for every PowerPoint version or effect.
 Picture/pattern fills, advanced bullets, inner/3D effects, radial focus details
 and sheared groups remain partial or unsupported.
 The known layout regressions and current limits are documented in
@@ -122,15 +123,40 @@ Complete text with the same link can also be promoted to an object link. Importe
 number preserve their displayed text and report that automatic renumbering was
 not retained.
 
+Animated GIF data is never rasterized during insertion, project save, or PPTX
+import/export. Its frame delays, transparency, disposal and loop metadata remain
+in the original bytes; Chromium renders the animation. GIF loop count follows
+the file. No new APNG file input or APNG-specific controls are added.
+
+MP4 and WebM videos are embedded as original bytes, with a separate PNG poster.
+New insertions default to automatic start, loop and mute; each setting can be
+changed in the inspector. Only the active audience slide creates video players;
+editor thumbnails, presenter previews, printing and PDF use the poster. Changing
+slides, ending the show, or blanking the screen stops the player. A manual play
+control is shown if autoplay is blocked. Unsupported codecs show a visible error;
+H.264 MP4 and VP8/VP9 WebM were tested on the packaged Mac app. Windows/Linux
+native playback has not yet been run for this unreleased change.
+
+PPTX video uses native video/media relationships and standard PresentationML
+cMediaNode timing, including loop and mute. Simple immediate playback and
+immediate mediacall play commands are read; arbitrary animation/trigger chains,
+trim/fade/bookmark/play-across-slide settings are not reconstructed. External
+relationships never load. Oversize, unsupported or over-budget imported videos
+fall back to their poster with a warning so a large deck can still open. Original
+movie data for those fallback items is not retained in the imported project.
+A repeated video part is decoded/read once per import. The generated PPTX media
+and timing XML is round-trip tested; playback in Microsoft PowerPoint itself
+has not been verified on this Mac.
+
 Native chart data, SmartArt without saved drawing geometry, object animations, embedded OLE/ActiveX/macros,
-and playable media are not imported. SVG/EMF/WMF images are excluded. Unsupported
+and audio/external video are not imported. SVG/EMF/WMF images are excluded. Unsupported
 objects and alternative content without a usable fallback produce warnings.
 The JSON project is the format for lossless continuation in Slide Studio; PPTX
 interchange is a documented editable subset, not full PowerPoint compatibility.
 
 Imports never fetch relationships from the network or execute archive contents.
 Limits: 256 MiB archive (also enforced by the browser/native file dialog), 200 MiB total declared and actually read uncompressed data,
-5,000 ZIP entries, 24 MiB per part, 8 MiB XML part, 16 MiB raster image, 500 slides,
+5,000 ZIP entries, 24 MiB per part, 8 MiB XML part, 16 MiB raster image, 20 MiB video, 100 MiB combined embedded raster/video data, 500 slides,
 1,000 objects per slide, and 10,000 objects per deck. Archive paths and duplicate
 entries are checked before decompression; actual output is counted while
 streaming. Encrypted, multi-disk, and ZIP64 archives and XML DTD/entities are

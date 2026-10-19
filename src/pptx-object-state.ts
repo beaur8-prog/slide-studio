@@ -66,7 +66,7 @@ export function writeObjectState(doc: Document, elements: SlideElement[]) {
         );
       if (specific) {
         const name =
-          el.type === "image"
+          el.type === "image" || el.type === "video"
             ? "picLocks"
             : el.type === "table"
               ? "graphicFrameLocks"

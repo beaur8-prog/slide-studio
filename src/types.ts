@@ -49,6 +49,7 @@ export interface ShapePath {
   height: number;
   fill: boolean;
   stroke: boolean;
+  fillMode?: "norm" | "darken" | "darkenLess" | "lighten" | "lightenLess";
 }
 export interface TextBorder {
   opacity?: number;
@@ -128,7 +129,7 @@ export interface SlideElement {
   id: string;
   // Outer group first. Coordinates remain in slide space for fast editing.
   groups?: string[];
-  type: "text" | "shape" | "image" | "table";
+  type: "text" | "shape" | "image" | "table" | "video";
   table?: TableData;
   hyperlink?: ElementLink;
   field?: "slideNumber" | "date" | "fixedDate" | "footer";
@@ -182,6 +183,10 @@ export interface SlideElement {
   lineStart?: LineEnd;
   lineEnd?: LineEnd;
   src?: string;
+  poster?: string;
+  autoPlay?: boolean;
+  loop?: boolean;
+  muted?: boolean;
   alt?: string;
 }
 export interface Slide {

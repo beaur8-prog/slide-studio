@@ -50,7 +50,7 @@ export function hslToRgb([h, s, l]: number[]) {
 }
 /** Fold a uniform imported alpha into the existing object opacity control. */
 export function normalizeObjectAlpha(el: SlideElement) {
-  if (el.opacity !== 1 || el.type === "image" || el.gradient || el.shadow)
+  if (el.opacity !== 1 || el.type === "image" || el.type === "video" || el.gradient || el.shadow)
     return;
   const entries: { value: number; set: (n: number) => void }[] = [];
   const add = (value: number | undefined, set: (n: number) => void) =>

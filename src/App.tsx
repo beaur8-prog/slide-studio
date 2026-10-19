@@ -3,6 +3,7 @@ import {
   textUndoCheckpoints,
   type TextUndoSession,
 } from "./text-undo";
+import { isVideoFile, readVideo, VIDEO_ACCEPT } from "./video";
 import { usePresenterView } from "./PresenterView";
 import { duplicateSlides, moveSlides } from "./slide-operations";
 import type { InkStroke } from "./presentation-ink";
@@ -632,6 +633,7 @@ export default function App() {
     direction: 0,
   });
   const imageInput = useRef<HTMLInputElement>(null);
+  const videoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const transaction = useRef<Deck | null>(null);
   const clipboard = useRef<{
@@ -1490,6 +1492,19 @@ export default function App() {
       ),
     }));
 
+  const addVideo = async (file: File) => {
+    try {
+      const media = await readVideo(file);
+      const ratio = Math.min(1, deck.width * 0.7 / media.width, deck.height * 0.7 / media.height);
+      const width = media.width * ratio, height = media.height * ratio;
+      const next = element("video", { ...media, width, height, x: (deck.width - width) / 2, y: (deck.height - height) / 2,
+        alt: file.name, autoPlay: true, loop: true, muted: true });
+      changeSlide(s => ({ ...s, elements: [...s.elements, next] }));
+      setSelected([next.id]);
+      setInspectorVisible(true);
+      notify("동영상을 추가했습니다. 서식에서 자동 시작·반복·음소거를 설정하세요.");
+    } catch (error) { notify(error instanceof Error ? error.message : "동영상을 열 수 없습니다."); }
+  };
   const addImage = async (file: File) => {
     if (!/^image\/(png|jpeg|gif|webp)$/.test(file.type)) {
       notify("PNG, JPG, GIF, WebP 이미지를 선택해 주세요.");
@@ -1954,6 +1969,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (presenting) {
+        if (e.key !== "Escape" && e.target instanceof Element && e.target.closest(".video-visual")) return;
         if (presentationInk.current?.handleKey(e)) return;
         if (
           e.target instanceof Element &&
@@ -3138,6 +3154,7 @@ export default function App() {
                 label: "그림 삽입",
                 run: () => imageInput.current?.click(),
               },
+              { id: "video", label: "동영상 삽입", run: () => videoInput.current?.click() },
               {
                 id: "table",
                 label: "표 삽입",
@@ -3637,6 +3654,7 @@ export default function App() {
                   >
                     그림 삽입
                   </Tool>
+                  <Tool icon={<Play size={25} />} onClick={() => videoInput.current?.click()}>동영상</Tool>
                   <div className="tools-stack">
                     <button onClick={() => setModal("screenshot")}>
                       <Camera size={16} />
@@ -4154,7 +4172,7 @@ export default function App() {
                   onDrop={(e) => {
                     e.preventDefault();
                     const file = e.dataTransfer.files[0];
-                    if (file) void addImage(file);
+                    if (file) void (isVideoFile(file) ? addVideo(file) : addImage(file));
                   }}
                 >
                   <div className="canvas-scaler">
@@ -4504,7 +4522,7 @@ export default function App() {
                             ? "텍스트"
                             : selectedElement.type === "image"
                               ? "이미지"
-                              : "도형"}
+                              : selectedElement.type === "video" ? "동영상" : "도형"}
                       </span>
                     </h4>
                     <div className="number-grid" key={selected.join(",")}>
@@ -4548,6 +4566,14 @@ export default function App() {
                       />
                     </div>
                   </div>
+                  {selectedElement.type === "video" && <div className="inspector-section">
+                    <h4>동영상 재생</h4>
+                    {([["autoPlay", "슬라이드 쇼에서 자동 시작"], ["loop", "반복 재생"], ["muted", "음소거"]] as const).map(([key, label]) =>
+                      <label className="check-field" key={key}><input type="checkbox" checked={selectedElement[key] !== false} disabled={selectedElement.locked}
+                        onChange={event => updateSelected({ [key]: event.target.checked })} />{label}</label>)}
+                    <button className="text-button full" onClick={() => startPresent()}>현재 슬라이드에서 재생<Play size={14} /></button>
+                    <p>MP4·WebM, 한 개당 20 MiB까지 지원합니다.</p>
+                  </div>}
                   {selectedElement.type === "text" && (
                     <div className="inspector-section">
                       <h4>텍스트</h4>
@@ -4904,7 +4930,7 @@ export default function App() {
                     >
                       {e.type === "text" ? (
                         <Type size={13} />
-                      ) : e.type === "image" ? (
+                      ) : e.type === "video" ? (<Play size={13} />) : e.type === "image" ? (
                         <ImageIcon size={13} />
                       ) : (
                         <Square size={13} />
@@ -4914,7 +4940,7 @@ export default function App() {
                           ? (e.text || "텍스트").split("\n")[0]
                           : e.type === "image"
                             ? e.alt || "이미지"
-                            : "도형"}
+                            : e.type === "video" ? e.alt || "동영상" : "도형"}
                       </span>
                       {e.locked && <LockKeyhole size={11} />}
                     </button>
@@ -5018,6 +5044,8 @@ export default function App() {
           />
         )}
       </div>
+      <input ref={videoInput} type="file" hidden accept={VIDEO_ACCEPT}
+        onChange={event => { if (event.target.files?.[0]) void addVideo(event.target.files[0]); event.target.value = ""; }} />
       <input
         ref={imageInput}
         type="file"

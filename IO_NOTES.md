@@ -134,8 +134,9 @@ changed in the inspector. Only the active audience slide creates video players;
 editor thumbnails, presenter previews, printing and PDF use the poster. Changing
 slides, ending the show, or blanking the screen stops the player. A manual play
 control is shown if autoplay is blocked. Unsupported codecs show a visible error;
-H.264 MP4 and VP8/VP9 WebM were tested on the packaged Mac app. Windows/Linux
-native playback has not yet been run for this unreleased change.
+H.264 MP4 and VP8 WebM were tested on packaged Mac and Windows apps and installed
+Ubuntu 22.04/24.04 apps. VP9 WebM uses the bundled Chromium decoder but was not
+part of those fixtures. See the 1.6.2 release report for the native test runs.
 
 PPTX video uses native video/media relationships and standard PresentationML
 cMediaNode timing, including loop and mute. Simple immediate playback and

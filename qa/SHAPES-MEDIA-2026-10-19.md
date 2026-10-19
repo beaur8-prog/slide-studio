@@ -1,6 +1,6 @@
-# 도형 호환성과 GIF·동영상 (2026-10-19, 미배포)
+# 도형 호환성과 GIF·동영상 (2026-10-19)
 
-이 변경은 Git 소스와 로컬 앱용이다. 공개 v1.6.1 다운로드 및 리토스 공유 문서는 변경하지 않는다. APNG 전용 입력은 사용자 요청에 따라 범위에서 제외했다.
+아래는 공개 v1.6.1 이후 Git 소스와 로컬 앱에서 수행한 사전 검증 기록이다. 변경은 [1.6.2 배포](RELEASE-1.6.2.md)에 포함한다. APNG 전용 입력은 사용자 요청에 따라 범위에서 제외했다.
 
 ## 도형
 
@@ -24,7 +24,7 @@ GIF는 원본 프레임·지연·투명도·반복 정보를 유지한다. 그�
 
 `tests/animated-media.spec.ts`는 직접 만든 두 색상의 GIF/H.264 MP4/VP8 WebM으로 실제 프레임 변경, 반복 시 재생 시간 되돌림, 저장·복원, 원본 바이트, PPTX 설정/고유 ID/타이밍 순서, 과대 영상 미리보기 전환, 외부 URL 거부를 검사한다. `scripts/qa-animated-media.cjs`는 별도 프로필의 패키지 앱에서 세 형식을 삽입하고 자동 저장·다시 열기·발표 반복·종료를 검사한다.
 
-Mac 패키지의 실제 재생 검증은 통과했다. Windows/Linux 네이티브 동영상 재생과 Microsoft PowerPoint 자체의 내보낸 영상 재생은 이번 기기에서 검증하지 않았다. 외부 영상 링크·오디오·복잡한 트리거/자르기/북마크/여러 장에 걸친 재생은 지원하지 않는다.
+사전 검사에서는 Mac 패키지의 실제 재생을 확인했다. 이후 [1.6.2 배포 검증](RELEASE-1.6.2.md)에서 Windows 및 Ubuntu 22.04/24.04 설치 앱의 동영상 재생도 확인했다. Microsoft PowerPoint 자체의 내보낸 영상 재생은 검증하지 않았다. 외부 영상 링크·오디오·복잡한 트리거/자르기/북마크/여러 장에 걸친 재생은 지원하지 않는다.
 
 ## 재검증
 
@@ -35,11 +35,11 @@ node scripts/package-mac.cjs --no-install
 node scripts/qa-animated-media.cjs '/absolute/path/Slide Studio.app/Contents/MacOS/Slide Studio'
 ```
 
-네이티브 검사는 앞선 Playwright 실행이 만든 `qa/results/shapes-media/animated.*`를 사용한다. 실제 사용자 프로필을 테스트에 사용하지 않는다.
+네이티브 검사는 저장소의 합성 영상 `tests/fixtures/media/animated.*`를 사용한다. 실제 사용자 프로필을 테스트에 사용하지 않는다.
 
 구현 기준은 [Microsoft DrawingML ArcTo](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.arcto?view=openxml-3.0.1), [PathFillModeValues](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.pathfillmodevalues?view=openxml-3.0.1), [PresentationML CommonMediaNode](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.presentation.commonmedianode?view=openxml-3.0.1)를 참고했다. `stroke="false"`와 `stroke="0"`를 모두 지원해 음영 면에 불필요한 윤곽선을 추가하지 않는다.
 
-## 최종 결과
+## 초기 소스 검사 결과
 
 - `npm run build`, TypeScript와 엄격한 Mac 번들 서명 검증 통과.
 - 전체 274개 실행: 270개 통과, 환경 조건에 따른 2개 건너뜀. 기존 클립보드 테스트 2개는 v1.6.1 이전 기대값(붙여넣기 비활성화)과 비동기 붙여넣기 전에 저장 상태를 읽는 문제로 실패했다. 제품 코드는 바꾸지 않고 기대값 및 완료 대기를 수정했다. 이후 우클릭 메뉴 파일 5개와 해당 표 붙여넣기 1개를 별도 재검사하여 모두 통과했다. 최종 소스에서 실행 가능한 272개 항목의 통과를 확인했다.
@@ -68,7 +68,7 @@ node scripts/qa-animated-media.cjs '/absolute/path/Slide Studio.app/Contents/Mac
 
 별도 삼각형 검사에서는 0/10/20/50/80/90/100%의 꼭짓점과 점 편집으로 만든 사용자 경로를 좌표 계산으로 확인하고, 실제 파일 열기 후 편집 화면과 발표 화면의 SVG 경로 및 스크린샷도 검사했다. 기존 도형 검사 5건과 새 검사 2건이 통과했다. 이번 추가 검사에서는 제품 동작 코드를 더 변경하지 않았다.
 
-재현 파일과 결과는 `qa/results/shape-adjustments/triangle-apex.pptx`, `audit.json`, `released-comparison.json`, `triangle-editor.png`, `triangle-presentation.png`에 있다. 기준은 [Microsoft AdjustValueList](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.adjustvaluelist?view=openxml-3.0.1)다. 생성 파일을 이용한 일반 PPTX 검사이며, 사용자가 보고한 원본 파일과 별도로 추가된 Windows DRM 가져오기는 검증하지 않았다. 공개 배포판은 여전히 v1.6.1이므로 PC 빌드를 만들 때는 `61eb867` 이후의 소스를 포함해야 한다.
+재현 파일과 결과는 `qa/results/shape-adjustments/triangle-apex.pptx`, `audit.json`, `released-comparison.json`, `triangle-editor.png`, `triangle-presentation.png`에 있다. 기준은 [Microsoft AdjustValueList](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.adjustvaluelist?view=openxml-3.0.1)다. 생성 파일을 이용한 일반 PPTX 검사이며, 사용자가 보고한 원본 파일과 별도로 추가된 Windows DRM 가져오기는 검증하지 않았다. 기존 v1.6.1 배포 파일에는 이 수정이 없으므로 1.6.2로 업데이트하거나 PC 빌드를 만들 때 `61eb867` 이후의 소스를 포함해야 한다.
 
 ```sh
 npx playwright test tests/drawing-guides.spec.ts tests/shape-compatibility.spec.ts tests/shape-adjustments.spec.ts

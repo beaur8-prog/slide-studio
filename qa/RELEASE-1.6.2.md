@@ -18,3 +18,31 @@
 Mac ARM64 ZIP, Windows x64 Setup 및 portable ZIP, Linux amd64 DEB를 같은 실행 코드로 만든다. 배포 전 전체 회귀 검사와 패키지 해시·구성·버전 검사를 수행하고, Windows 및 Ubuntu 22.04/24.04의 실제 설치 앱에서 편집·발표·GIF/MP4/WebM 프레임 변화·반복·자동 저장 복원을 확인한다. 최종 결과는 검증 후 이 문서에 기록한다.
 
 Mac 앱은 Apple 공증을 받지 않았고 Windows 앱은 배포용 코드 서명이 없다. 다운로드 경고 및 **Windows의 PC 보호 → 추가 정보 → 실행** 안내를 다운로드 문서에 유지한다. Microsoft PowerPoint의 모든 조판·개체 애니메이션, 외부 미디어·오디오·복잡한 영상 타이밍은 지원하지 않는다. 실제 Windows 10/11의 SmartScreen 화면 수동 클릭, 키보드 IME 직접 입력, Wayland 및 종이 출력은 이번 자동 검사 범위에 포함하지 않는다.
+
+## 배포 전 최종 결과
+
+- 전체 회귀 276건 중 최종 274건 통과, 환경 조건에 따른 2건 제외. 최초 전체 실행에서는 273건 통과·1건 실패였다. 실패한 대용량 PPTX 검사는 `File.arrayBuffer()`가 끝나기 전 이전 문서를 읽는 완료 대기 문제였다. 문서 교체/예상 슬라이드 수를 기다리도록 검사만 보완한 뒤 관련 파일의 18건을 다시 검사하여 모두 통과했다. 앱 실행 코드는 바꾸지 않았다.
+- [Windows 설치·실행·재설치·제거](https://github.com/beaur8-prog/slide-studio/actions/runs/39254338817) 통과.
+- [Ubuntu 22.04·24.04 설치·실행·재설치·제거](https://github.com/beaur8-prog/slide-studio/actions/runs/39255093313) 통과. 샌드박스를 유지하고 사용자 자료 보존을 확인했다.
+- Mac과 Windows 및 Ubuntu 두 버전에서 실제 GIF·H.264 MP4·VP8 WebM의 화면 픽셀 변화, 반복, 자동 저장 후 재열기, 발표 종료 후 재생 중단을 확인했다. 최초 Ubuntu 24.04 검사에서는 WebM의 파란 프레임만 표본에 잡혔다. 100ms마다 색이 바뀌는 영상과 고정된 촬영 간격의 동기화 가능성을 배제하도록 간격을 달리하고 RGB·재생 시간 기록을 추가한 뒤, 같은 DEB 파일로 다시 검사해 통과했다. 두 색상과 반복 확인 조건은 유지했으며 앱 바이트는 바꾸지 않았다. VP9은 이 합성 영상 검사의 코덱에 포함하지 않았다.
+- 네 패키지의 `app.asar`가 동일하고 실행 파일 51개가 빌드 소스와 일치함을 확인했다. Mac ZIP 압축 해제 후 엄격한 서명 검사, Windows Setup의 전체 페이로드·버전·아이콘·권한, DEB 구성과 root 소유 4755 샌드박스 설치를 확인했다.
+- Mac 로컬 앱을 1.6.2로 교체하고 기존 6장 문서·수정한 본문·발표자 노트·저장 상태를 확인했다. 교체 전 사용자 프로필과 이전 앱을 별도로 백업했다.
+
+태그 `v1.6.2`는 `00401182d4eb5f752a31f3706bb62269777bceb2`다. 이후 `96b83d1`은 검사 완료 대기와 촬영 간격만 변경한다. 공통 ASAR SHA-256은 `718ac9ae53bc2889246910625f774758880c9544975626601912a5e76c38cc27`이다.
+
+| 파일 | 바이트 | SHA-256 |
+| --- | ---: | --- |
+| Mac ARM64 ZIP | 129798897 | `4cfbda2ef71d21887193a2cfee846181d21e90eac3fd30729175054a60e3802c` |
+| Windows x64 portable ZIP | 156971811 | `8d67bf84cc68d92046f049e1e6d8d6135d1faa115aeb08960530f69270a2a5c2` |
+| Windows x64 Setup | 109581609 | `16638e0b3ac977842d2ec5048ac4d6d30b84c6cca3f4c1cb121d4f23e84be638` |
+| Linux amd64 DEB | 132467518 | `8c3b902c91ee5553d6d53effd2075135fb9a97757d390e699ab77c8c3edf9668` |
+
+검증 자료는 `qa/results/release-1.6.2/`에 보관한다.
+
+## 공개 배포 확인
+
+[1.6.2 릴리스](https://github.com/beaur8-prog/slide-studio/releases/tag/v1.6.2)를 최신 공개 배포로 전환했다. 기존 `/releases/latest/download/` 주소에서 Mac ZIP·Windows ZIP·Windows Setup·Linux DEB·SHA256SUMS.txt를 실제로 다시 내려받아 바이트 수·SHA-256·1.6.2 리디렉션과 GitHub 자산 해시를 비교했다.
+
+[기존 리토스 다운로드 문서](https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6)를 같은 공유본으로 갱신했다. 1.6.2 버전·새 기능·동영상 사용법·설치 경고·이미지 15개를 확인했다. 표 교환 기능의 최소 지원 버전은 기존 Slide 1.6.1로 정확히 유지했다. 문서 URL·토큰·생성/만료·서버 PID/포트·터널 PID 및 다운로드 주소를 유지했고 공유 서버나 터널을 다시 시작하지 않았다. 마지막 문구 보정 후 공개 본문과 이미지도 다시 확인했다.
+
+Mac 로컬 앱도 게시한 것과 같은 1.6.2 코드로 실행 중이다. 공개 검증 결과는 `qa/results/release-1.6.2/publication-verification.json`, 배포 파일 검증은 `release/VERIFICATION.json`에 보관한다.

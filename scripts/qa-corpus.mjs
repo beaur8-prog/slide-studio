@@ -129,6 +129,10 @@ try {
         await page
           .locator('input[type=file][accept*=".pptx"]')
           .setInputFiles(path.join(root, "qa", "samples", filename));
+        await page.waitForFunction(slides =>
+          document.querySelectorAll(".thumbnail-row").length === slides,
+          stats.slides,
+        );
         await page.waitForFunction(() => !document.querySelector(".busy-backdrop"));
         const message = (await page.locator(".toast").allTextContents()).join("\n");
         if (message.includes("파일 열기 실패")) throw new Error(message);

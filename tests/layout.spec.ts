@@ -366,10 +366,23 @@ for (const item of [
     test.setTimeout(120000);
     const sample = path.resolve("qa/samples", item.file);
     test.skip(!fs.existsSync(sample), "Download the public QA corpus first.");
+    const slideCounts: Record<string, number> = {
+      "cmu-lecture-1.pptx": 70,
+      "cmu-lecture-2.pptx": 116,
+      "cmu-lecture-3.pptx": 151,
+      "cmu-lecture-4.pptx": 106,
+      "dsu-korean.pptx": 22,
+    };
     await page.goto("http://127.0.0.1:5190");
     await page
       .locator('input[type=file][accept*=".pptx"]')
       .setInputFiles(sample);
+    // File.arrayBuffer() finishes before the import busy state begins. The
+    // previous slide can still be visible while a large source file is read.
+    await expect(page.locator(".thumbnail-button")).toHaveCount(
+      slideCounts[item.file],
+      { timeout: 90000 },
+    );
     await expect(page.locator(".busy-backdrop")).toHaveCount(0, {
       timeout: 90000,
     });

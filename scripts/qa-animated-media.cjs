@@ -17,6 +17,7 @@ async function verifyAnimatedMedia(page, output, { app }) {
     await fs.writeFile(blank, JSON.stringify({ version: 1, id: 'native-media', name: 'GIF MP4 WebM native QA', width: 1280, height: 720, theme: 'studio', slides: [{ id: 's1', background: '#FFFFFF', notes: '', transition: 'none', elements: [] }] }));
     const results = [];
     for (const ext of ['gif', 'mp4', 'webm']) {
+      console.log('Native media verification: ' + ext);
       await page.locator('input[accept*=".pptx"]').setInputFiles(blank);
       await expect(page.locator('.editable-slide .slide-element')).toHaveCount(0);
       const input = ext === 'gif' ? page.locator('input[accept="image/png,image/jpeg,image/gif,image/webp"]') : page.locator('input[accept*="video/mp4"]');
@@ -30,13 +31,20 @@ async function verifyAnimatedMedia(page, output, { app }) {
       const media = page.locator(`.present-slide ${ext === 'gif' ? 'img.element-image' : 'video'}`);
       await expect(media).toBeVisible();
       if (ext !== 'gif') await expect.poll(() => media.evaluate(v => !v.paused && v.currentTime > 0)).toBe(true);
-      const colors = new Set(), times = [];
-      for (let i = 0; i < 14; i++) {
+      const colors = new Set(), times = [], samples = [];
+      // These clips alternate every 100 ms. A 100 ms screenshot plus a fixed
+      // 100 ms wait can sample the same color forever on Xvfb. Use coprime,
+      // varying intervals without weakening pixel/loop assertions.
+      const intervals = [37, 83, 131, 59, 107, 71, 149];
+      for (let i = 0; i < 18; i++) {
         const pixel = await sharp(await media.screenshot()).resize(1, 1).raw().toBuffer();
         colors.add(pixel[0] > pixel[2] ? 'red' : 'blue');
-        if (ext !== 'gif') times.push(await media.evaluate(v => v.currentTime));
-        await page.waitForTimeout(100);
+        const time = ext !== 'gif' ? await media.evaluate(v => v.currentTime) : null;
+        if (time !== null) times.push(time);
+        samples.push({ at: Date.now(), rgb: [...pixel.subarray(0, 3)], time });
+        await page.waitForTimeout(intervals[i % intervals.length]);
       }
+      await fs.writeFile(path.join(directory, `${ext}-frames.json`), JSON.stringify(samples, null, 2) + '\n');
       expect([...colors].sort()).toEqual(['blue', 'red']);
       if (ext !== 'gif') expect(times.some((t, i) => i && t < times[i - 1] - 0.2)).toBe(true);
       await page.screenshot({ path: path.join(directory, `${ext}-presentation.png`) });

@@ -60,9 +60,20 @@ test("production assets decode TIFF, load bundled fonts, restore Korean layout a
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(baseURL);
   const open = async (file: string) => {
+    const firstElement = page
+      .locator(".editable-slide [data-element-id]")
+      .first();
+    const previousId = await firstElement.getAttribute("data-element-id");
     await page
       .locator('input[type=file][accept*=".pptx"]')
       .setInputFiles(path.resolve(file));
+    await expect(firstElement).not.toHaveAttribute(
+      "data-element-id",
+      previousId ?? "",
+      {
+        timeout: 90000,
+      },
+    );
     await expect(page.locator(".busy-backdrop")).toHaveCount(0, {
       timeout: 90000,
     });

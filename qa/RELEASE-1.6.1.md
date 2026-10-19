@@ -29,3 +29,22 @@ Windows·Ubuntu 설치 앱 검사에 실제 OS 클립보드 시나리오를 추�
 Mac은 Apple 공증을 받지 않았고 Windows는 배포용 코드 서명이 없습니다. 다운로드 경고와 **‘Windows의 PC 보호’ → ‘추가 정보’ → ‘실행’** 안내를 유지합니다. 실제 Windows/Linux 키보드 IME 직접 입력, Wayland·종이 출력·Microsoft Office 상호 운용은 이번 검사 범위에 포함하지 않습니다.
 
 로컬 배포 검증 자료는 `qa/results/release-1.6.1/`에 보관합니다. [앞선 구현·Mac 왕복 검증](STUDIO-CLIPBOARD-1.6.1.md)을 함께 참고하세요.
+
+## 최종 공개 검증 — 2026-10-19
+
+- [Windows 설치·실행·재설치·제거](https://github.com/beaur8-prog/slide-studio/actions/runs/39190178586) 통과. 표 HTML/TSV OS 클립보드 검사 10개와 기존 편집·발표 검사, 실행 중 업데이트 차단 및 사용자 자료 보존을 확인했습니다.
+- [Ubuntu 22.04·24.04 설치·실행·재설치·제거](https://github.com/beaur8-prog/slide-studio/actions/runs/39189577260) 통과. 같은 클립보드 검사와 Chromium 샌드박스 유지도 확인했습니다.
+- Windows CI의 기본 화면 1024×768은 앱의 최소 창 폭 1080보다 작았습니다. 테스트 모니터를 1920×1080으로 구성한 뒤 기존 전체 화면 크기 판정을 그대로 통과했습니다. 창·콘텐츠·모니터 크기가 모두 1920×1080인 진단 기록을 보관했습니다. 이 과정에서 앱 실행 코드를 바꾸지 않았습니다.
+
+태그 `v1.6.1`은 `b41614bfc470124d84ef922216d5154a560c4139`이며 실행 코드 변경은 `3037492107fe06572c2042c2f534847895afd1a1`에 있습니다. 뒤의 커밋은 검증·CI·문서 변경입니다. 네 패키지는 동일한 `app.asar`를 포함합니다: SHA-256 `876b977516be860dfbfb39d9232e426353784109319824f9cbb9cae340a9b2b2`.
+
+| 파일 | 바이트 | SHA-256 |
+| --- | ---: | --- |
+| Mac ARM64 ZIP | 129793114 | `f708050ea017c8c52ef0f31858def164808dbb1fc46724c19e015bca28cd1df3` |
+| Windows x64 portable ZIP | 156966027 | `5ee02aacd4b04bc9139e47f754bf25ac0bb6e268c702293f3802d17af80b84ed` |
+| Windows x64 Setup | 109641498 | `d00bc305733cb857a4c3f60da413e3b0792afa7b4f9aee52f111a6deeb4ff1ee` |
+| Linux amd64 DEB | 132462246 | `91f696447b5b4f7057dc75b7353280561e4dd354a90637b09eb2e2be73bfde64` |
+
+[정식 1.6.1 릴리스](https://github.com/beaur8-prog/slide-studio/releases/tag/v1.6.1)를 최신 배포로 전환했습니다. 기존 `/releases/latest/download/` 주소에서 네 파일과 SHA256SUMS.txt를 실제로 다시 받아 크기·SHA-256·1.6.1 리디렉션과 GitHub 자산 해시를 비교했습니다.
+
+[기존 리토스 문서](https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6)의 1.6.1 버전·설명·설치 경고와 이미지 13개를 확인했습니다. 문서 URL·토큰·생성/만료·서버 PID/포트·터널 PID와 다운로드 주소를 유지했습니다. 공유 서버나 터널을 다시 시작하지 않았으며 브라우저에서도 갱신 내용을 확인했습니다.

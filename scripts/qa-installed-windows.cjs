@@ -231,6 +231,8 @@ const { execFile } = require('node:child_process');
     }
     if (version.localeCompare('1.6.0', undefined, { numeric: true }) >= 0)
       await require('./qa-remaining-regressions.cjs')(page, output, { app });
+    if (version.localeCompare('1.6.1', undefined, { numeric: true }) >= 0)
+      await require('./qa-studio-clipboard.cjs')(page, output, { app });
     // A silent update must fail rather than kill a running app or overwrite it.
     const busyExit = await new Promise((resolve, reject) => {
       execFile(process.env.SETUP_PATH, ['/S'], { timeout: 45000 }, error => {

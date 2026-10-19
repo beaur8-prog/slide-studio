@@ -19,3 +19,13 @@ Mac Apple Silicon ZIP, Windows x64 Setup, Linux amd64 DEB를 제공합니다. Ma
 Mac에서 개발 실행과 실제 패키지의 OS 클립보드를 사용해 Sheet↔Word, Sheet↔Slide, Word↔Slide 여섯 방향을 확인합니다. 사용자 문서를 열지 않는 격리 프로필로 검사하며 실행 취소·서식·병합·줄바꿈을 확인합니다. 운영체제별 설치·실행 검사는 해당 릴리즈의 GitHub Actions 결과를 따릅니다. 실제 Microsoft Office나 프린터의 전체 호환성을 검증한 결과는 아닙니다.
 
 [표 교환 계약·상대 앱 구현·재현 명령](https://github.com/beaur8-prog/sheet-studio/blob/main/docs/STUDIO-CLIPBOARD.md)
+
+## 배포 전 추가 검증
+
+클립보드·안전성·네이티브 파일·리본·프로덕션 관련 검사 **30개가 모두 통과**했습니다. Mac 앱의 실행 코드 51개는 빌드 소스와 일치하며, 사용자 프로필과 기존 6장 문서·노트를 보존한 로컬 앱 실행을 확인했습니다.
+
+Windows·Ubuntu 설치 앱 검사에 실제 OS 클립보드 시나리오를 추가했습니다. HTML·TSV의 홈/키보드 붙여넣기, 병합 표 편집·서식·한글·줄바꿈, 표 복사 출력, 오래된 내부 복사 대신 현재 외부 자료 사용, 부분 병합 보호, 범위 교체·실행 취소·재실행·재열기를 검사합니다. 같은 검사는 격리된 Mac 1.6.1 앱에서 통과했습니다. 세 앱을 함께 실행한 여섯 방향 검증은 Mac에서 수행했으며, Windows/Linux에서 상대 앱까지 모두 실행한 시험과 구분합니다.
+
+Mac은 Apple 공증을 받지 않았고 Windows는 배포용 코드 서명이 없습니다. 다운로드 경고와 **‘Windows의 PC 보호’ → ‘추가 정보’ → ‘실행’** 안내를 유지합니다. 실제 Windows/Linux 키보드 IME 직접 입력, Wayland·종이 출력·Microsoft Office 상호 운용은 이번 검사 범위에 포함하지 않습니다.
+
+로컬 배포 검증 자료는 `qa/results/release-1.6.1/`에 보관합니다. [앞선 구현·Mac 왕복 검증](STUDIO-CLIPBOARD-1.6.1.md)을 함께 참고하세요.

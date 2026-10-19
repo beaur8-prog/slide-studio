@@ -1,8 +1,14 @@
 # Verification record
 
+## 2026-10-19 · 1.6.1 Studio table exchange (local source, unpublished)
+
+- The build and **21 clipboard, priority-safety, native-file and office-shell browser tests** pass. The shared Sheet/Slide HTML module checks the 10 MB limit in UTF-8 bytes before parsing external table HTML.
+- Source applications and packaged macOS arm64 applications pass all six OS clipboard directions: Sheet↔Word, Sheet↔Slide and Word↔Slide. The harness uses real table-selection and Home copy/paste paths, isolated profiles and synthetic documents. It checks editable merged tables, displayed values, colors, line breaks, quoted TSV and one-step Word undo. Standard clipboard text, HTML, RTF and image contents are restored together after the test.
+- The packaged `dist/` and `electron/` files match the source build. Evidence is in the sibling Sheet repository: `.package/studio-clipboard-six-directions-source.log`, `.package/studio-clipboard-six-directions-packaged.log` and `test-results/suite-clipboard-*.png`. Native Windows/Linux and Microsoft Office clipboard exchange were not executed. Publishing remains a separate user request.
+
 Verified on 2026-10-18 (KST), macOS arm64.
 
-## Current release: 1.4.2 (slideshow wheel correction)
+## Historical release: 1.4.2 (slideshow wheel correction)
 
 Both the editor and slideshow now accept small mouse-wheel notches without
 waiting for 60 pixels or a fixed 350 ms cooldown. One continuous gesture performs

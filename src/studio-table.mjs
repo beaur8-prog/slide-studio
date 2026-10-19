@@ -14,6 +14,7 @@ export function colorHex(value,fallback='#222222'){
 export function tableText(cells){return cells.map(row=>row.map(cell=>{const text=String(typeof cell==='object'?cell.text:cell);return /[\t\r\n"]/.test(text)?'"'+text.replace(/"/g,'""')+'"':text;}).join('\t')).join('\n');}
 const pixels=value=>{const n=parseFloat(value);return /pt$/i.test(value)?n*4/3:n;};
 const number=(value,fallback,min=0,max=10000)=>Number.isFinite(Number(value))&&Number(value)>=min&&Number(value)<=max?Number(value):fallback;
+const checkHtmlSize=html=>{if(html.length>10*1024*1024||new TextEncoder().encode(html).byteLength>10*1024*1024)throw Error('붙여넣을 표 HTML은 10 MB 이하여야 합니다.');};
 export function tableToClipboard(table){
   const {cells,merges=[],columnWidths=[],rowHeights=[]}=table;
   if(!Array.isArray(cells)||!cells.length||!cells[0]?.length||cells.length*cells[0].length>100000)throw Error('복사할 표 크기가 올바르지 않습니다.');
@@ -42,7 +43,7 @@ function plainText(node){
 function inherited(element,key,table){for(let el=element;el;el=el.parentElement){if(el.style?.[key])return el.style[key];if(el===table)break;}return '';}
 /** Parse a detached <template>; never attach clipboard HTML or load resources. */
 export function tableFromHTML(html,{maxRows=1000,maxColumns=1000,maxCells=100000,maxText=2000000}={}){
-  if(!html)return null;if(typeof html!=='string'||html.length>10*1024*1024)throw Error('붙여넣을 표 HTML은 10 MB 이하여야 합니다.');
+  if(!html)return null;if(typeof html!=='string')throw Error('표 HTML 형식이 올바르지 않습니다.');checkHtmlSize(html);
   const template=document.createElement('template');template.innerHTML=html;
   template.content.querySelectorAll('script,style,iframe,object,embed,svg,math,template,input,textarea,button').forEach(node=>node.remove());
   const table=template.content.querySelector('table');if(!table)return null;

@@ -171,4 +171,4 @@ React + TypeScript 편집기, Electron 데스크톱 셸, IndexedDB 자동 저장
 
 ## Studio 앱 간 표 복사 (1.6.1 소스·로컬, 미배포)
 
-Sheet Studio 0.7.10의 표를 홈 붙여넣기 또는 Ctrl+V/⌘V로 받아 셀을 편집할 수 있습니다. 표를 복사하면 다른 Studio 앱으로도 보낼 수 있습니다. [사용법·교환 형식·각 앱 구현 및 제한](https://github.com/beaur8-prog/sheet-studio/blob/main/docs/STUDIO-CLIPBOARD.md)을 확인하세요.
+Sheet Studio 0.7.10과 Word Studio 1.2.11의 표를 홈 붙여넣기 또는 Ctrl+V/⌘V로 받아 셀을 편집할 수 있습니다. 표 하나나 셀 범위를 복사하면 두 앱으로도 보낼 수 있습니다. HTML의 10 MB 한도는 한글을 포함한 UTF-8 바이트로 계산합니다. [사용법·교환 형식·각 앱 구현 및 제한](https://github.com/beaur8-prog/sheet-studio/blob/main/docs/STUDIO-CLIPBOARD.md)을 확인하세요.

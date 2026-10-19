@@ -19,3 +19,13 @@ test('Sheet table HTML becomes an editable native table and copies back with mer
  expect(result.table.merges).toEqual([{row:0,column:0,rowSpan:1,columnSpan:2}]);expect(result.table.cellStyles![0][0]!.fontSize).toBeCloseTo(16/0.75);expect(result.round.cellStyles![0][0]!.fill).toBe('#FFF2CC');expect(result.round.cells[1][0]).toBe('줄1\n줄2');expect(result.pasted.cells[2][2]).toBe('untouched');expect(result.invalid).toBeTruthy();expect(result.safe!.cells[0][0]).toBe('safe');expect(result.bad).toBeUndefined();
  await page.screenshot({path:'test-results/studio-table-paste.png'});
 });
+
+test('the shared table parser checks the UTF-8 HTML limit before parsing', async ({ page }) => {
+ await page.goto('http://127.0.0.1:5190');
+ const message=await page.evaluate(async()=>{
+   const {readStudioTable}=await import('/src/table-exchange.ts');
+   const html='<table><tr><td>'+'가'.repeat(Math.ceil(10*1024*1024/3))+'</td></tr></table>';
+   try { readStudioTable(html); return ''; } catch(error) { return (error as Error).message; }
+ });
+ expect(message).toContain('10 MB');
+});

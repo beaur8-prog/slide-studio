@@ -56,6 +56,7 @@ import {
   hasTextBullets,
 } from "./text-bullets";
 import { LineShape } from "./LineShape";
+import { trianglePoints, moveTrianglePoint } from "./shape-points";
 import {
   selectionBounds,
   resizeElements,
@@ -691,9 +692,11 @@ export default function SlideCanvas({
     stopCellDrag();
     tableSelectionRef.current = null;
     selectTableCells(null);
-    const members = ev.altKey ? [el.id] : expandGroups(slide.elements, [el.id]);
+    const pointEdit = handle?.startsWith("triangle-point-");
+    const members =
+      ev.altKey || pointEdit ? [el.id] : expandGroups(slide.elements, [el.id]);
     let ids = selected.includes(el.id) ? selected : members;
-    if (!ev.altKey) ids = expandGroups(slide.elements, ids);
+    if (!ev.altKey && !pointEdit) ids = expandGroups(slide.elements, ids);
     if ((ev.shiftKey || ev.ctrlKey || ev.metaKey) && !handle) {
       ids = members.every((id) => selected.includes(id))
         ? selected.filter((id) => !members.includes(id))
@@ -767,6 +770,15 @@ export default function SlideCanvas({
       dy = (ev.clientY - d.startY) / scale;
     if (Math.abs(dx) + Math.abs(dy) < 2 && !d.moved) return;
     d.moved = true;
+    if (d.handle?.startsWith("triangle-point-")) {
+      const index = Number(d.handle.slice("triangle-point-".length));
+      preview(
+        d.elements.map((e) =>
+          e.id === d.ids[0] ? moveTrianglePoint(e, index, dx, dy) : e,
+        ),
+      );
+      return;
+    }
     if (d.handle === "rotate") {
       const canvas = ev.currentTarget.getBoundingClientRect();
       const bounds = selectionBounds(
@@ -1130,7 +1142,7 @@ export default function SlideCanvas({
           .map((e) => (
             <div
               key={e.id}
-              className={`slide-selection ${e.locked ? "locked" : ""} ${editing === e.id ? "editing" : ""}`}
+              className={`slide-selection ${e.locked ? "locked" : ""} ${editing === e.id ? "editing" : ""} ${trianglePoints(e) ? "has-shape-points" : ""}`}
               style={
                 {
                   ...elementStyle(e),
@@ -1210,6 +1222,60 @@ export default function SlideCanvas({
                   ↻
                 </button>
               )}
+              {!e.locked &&
+                selected.length === 1 &&
+                !editing &&
+                trianglePoints(e)?.map((point, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    className="shape-point-handle"
+                    data-testid={`triangle-point-${index}`}
+                    aria-label={`삼각형 꼭짓점 ${index + 1} 이동`}
+                    title="꼭짓점 이동 · 방향키: 1px · Shift: 10px"
+                    style={{
+                      left: `${(e.flipH ? 1 - point.x : point.x) * 100}%`,
+                      top: `${(e.flipV ? 1 - point.y : point.y) * 100}%`,
+                    }}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.currentTarget.focus({ preventScroll: true });
+                      down(event, e, `triangle-point-${index}`);
+                    }}
+                    onKeyDown={(event) => {
+                      const delta = {
+                        ArrowLeft: [-1, 0],
+                        ArrowRight: [1, 0],
+                        ArrowUp: [0, -1],
+                        ArrowDown: [0, 1],
+                      }[event.key];
+                      if (
+                        !delta ||
+                        event.ctrlKey ||
+                        event.metaKey ||
+                        event.altKey
+                      )
+                        return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const step = event.shiftKey ? 10 : 1;
+                      begin();
+                      preview(
+                        slide.elements.map((item) =>
+                          item.id === e.id
+                            ? moveTrianglePoint(
+                                item,
+                                index,
+                                delta[0] * step,
+                                delta[1] * step,
+                              )
+                            : item,
+                        ),
+                      );
+                      finish();
+                    }}
+                  />
+                ))}
               {selected.includes(e.id) && (
                 <span className="element-label">
                   {e.locked

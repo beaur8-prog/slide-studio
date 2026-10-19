@@ -267,11 +267,13 @@ export function restoreLayoutXml(
                 : "horz",
         );
       }
-      if (!el.paragraphs) continue;
-      for (const p of Array.from(body.children).filter(
-        (n) => n.localName === "p",
-      ))
-        p.remove();
+      // Plain text uses PptxGenJS's existing paragraphs. Do not skip the rest
+      // of the shape: its custom geometry still has to be written below.
+      if (el.paragraphs)
+        for (const p of Array.from(body.children).filter(
+          (n) => n.localName === "p",
+        ))
+          p.remove();
       const runProps = (parent: Element, run: TextRun, name = "rPr") => {
         const n = make(
           name,
@@ -316,7 +318,7 @@ export function restoreLayoutXml(
             n,
           );
       };
-      for (const paragraph of el.paragraphs) {
+      for (const paragraph of el.paragraphs ?? []) {
         const p = make("p", {}, body),
           pr = make(
             "pPr",

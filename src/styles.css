@@ -858,6 +858,47 @@ button:not(:disabled):active {
   border-radius: 1px;
   transform: translate(-50%, -50%);
 }
+.shape-point-handle {
+  position: absolute;
+  z-index: 5;
+  pointer-events: auto;
+  touch-action: none;
+  width: calc(18px * var(--inverse-scale));
+  height: calc(18px * var(--inverse-scale));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  cursor: crosshair;
+}
+.shape-point-handle::after {
+  content: "";
+  position: absolute;
+  inset: calc(4px * var(--inverse-scale));
+  border: calc(1px * var(--inverse-scale)) solid #795300;
+  background: #ffce45;
+  transform: rotate(45deg);
+}
+.shape-point-handle:focus-visible {
+  outline: calc(2px * var(--inverse-scale)) solid var(--accent);
+  outline-offset: calc(2px * var(--inverse-scale));
+}
+.slide-selection .shape-point-handle:active {
+  transform: translate(-50%, -50%);
+}
+/* Keep the white box resize handles accessible beside the yellow vertices. */
+.has-shape-points .resize-handle:is(.nw, .n, .ne) {
+  top: calc(-12px * var(--inverse-scale));
+}
+.has-shape-points .resize-handle:is(.sw, .s, .se) {
+  top: calc(100% + 12px * var(--inverse-scale));
+}
+.has-shape-points .resize-handle:is(.nw, .w, .sw) {
+  left: calc(-12px * var(--inverse-scale));
+}
+.has-shape-points .resize-handle:is(.ne, .e, .se) {
+  left: calc(100% + 12px * var(--inverse-scale));
+}
 .resize-handle.nw {
   top: 0;
   left: 0;

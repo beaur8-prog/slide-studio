@@ -37,6 +37,7 @@ async function verifyAnimatedMedia(page, output, { app }) {
         await expect(page.locator('.thumbnail-list img.element-image')).toHaveAttribute('src', gifStill);
         await expect(page.locator('.print-deck img.element-image')).toHaveAttribute('src', gifStill);
         await expect(page.locator(`img[src="${gifOriginal}"]`)).toHaveCount(0);
+        await page.screenshot({ path: path.join(directory, 'gif-editor-still.png') });
       }
       await page.getByRole('button', { name: '발표 모드', exact: true }).click();
       await expect(page.locator('.present-notes-toggle')).toHaveCount(0);

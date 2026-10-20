@@ -45,6 +45,20 @@ async function verifyAnimatedMedia(page, output, { app }) {
       await expect(media).toBeVisible();
       if (ext === 'gif') await expect(media).toHaveAttribute('src', gifOriginal);
       if (ext !== 'gif') await expect.poll(() => media.evaluate(v => !v.paused && v.currentTime > 0)).toBe(true);
+      // Screenshot capture takes longer than a frame on Windows CI. Observe
+      // every presented video frame as well, so screenshots cannot repeatedly
+      // miss a short red frame while playback and looping are working.
+      if (ext !== 'gif') await media.evaluate(v => {
+        const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        v.__qaFrames = [];
+        const sample = (_now, metadata) => {
+          context.drawImage(v, 0, 0, 1, 1);
+          v.__qaFrames.push({ time: metadata.mediaTime, rgb: [...context.getImageData(0, 0, 1, 1).data].slice(0, 3) });
+          v.__qaFrameCallback = v.requestVideoFrameCallback(sample);
+        };
+        v.__qaFrameCallback = v.requestVideoFrameCallback(sample);
+      });
       const colors = new Set(), times = [], samples = [];
       // These clips alternate every 100 ms. A 100 ms screenshot plus a fixed
       // 100 ms wait can sample the same color forever on Xvfb. Use coprime,
@@ -59,8 +73,19 @@ async function verifyAnimatedMedia(page, output, { app }) {
         await page.waitForTimeout(intervals[i % intervals.length]);
       }
       await fs.writeFile(path.join(directory, `${ext}-frames.json`), JSON.stringify(samples, null, 2) + '\n');
-      expect([...colors].sort()).toEqual(['blue', 'red']);
-      if (ext !== 'gif') expect(times.some((t, i) => i && t < times[i - 1] - 0.2)).toBe(true);
+      if (ext === 'gif') expect([...colors].sort()).toEqual(['blue', 'red']);
+      else {
+        const presented = await media.evaluate(v => {
+          v.cancelVideoFrameCallback(v.__qaFrameCallback);
+          const frames = v.__qaFrames; delete v.__qaFrames; delete v.__qaFrameCallback; return frames;
+        });
+        await fs.writeFile(path.join(directory, `${ext}-presented-frames.json`), JSON.stringify(presented, null, 2) + '\n');
+        expect([...new Set(presented.map(f => f.rgb[0] > f.rgb[2] ? 'red' : 'blue'))].sort()).toEqual(['blue', 'red']);
+        // Also require visible screenshot pixels to change, rather than only
+        // trusting the decoder, playback clock, or video properties.
+        expect(Math.max(...samples.flatMap(a => samples.map(b => Math.max(...a.rgb.map((c, i) => Math.abs(c - b.rgb[i]))))))).toBeGreaterThan(20);
+        expect(times.some((t, i) => i && t < times[i - 1] - 0.2)).toBe(true);
+      }
       await page.screenshot({ path: path.join(directory, `${ext}-presentation.png`) });
       await page.keyboard.press('Escape');
       await expect(page.locator('video')).toHaveCount(0);

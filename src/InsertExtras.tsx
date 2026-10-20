@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import type { Deck, ElementLink, Slide, SlideElement } from "./types";
 import { element, newSlide, slideTitle } from "./model";
+import { stillImageSource } from "./gif-preview";
+import { bytesDataUrl, EMPTY_POSTER } from "./video";
 import {
   todayText,
   validateElementLink,
@@ -399,6 +401,7 @@ export function PhotoAlbumDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const alive = useRef(true);
+  const gifPreviews = useRef(new WeakMap<File, Promise<string>>());
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -406,9 +409,41 @@ export function PhotoAlbumDialog({
     };
   }, []);
   useEffect(() => {
-    const next = files.map((f) => URL.createObjectURL(f));
+    let live = true;
+    const isGif = (file: File) => /^image\/gif$/i.test(file.type);
+    const next = files.map((f) =>
+      isGif(f) ? EMPTY_POSTER : URL.createObjectURL(f),
+    );
     setUrls(next);
-    return () => next.forEach((u) => URL.revokeObjectURL(u));
+    files.forEach((file, index) => {
+      if (!isGif(file)) return;
+      let preview = gifPreviews.current.get(file);
+      if (!preview) {
+        preview = file
+          .arrayBuffer()
+          .then(
+            (bytes) =>
+              stillImageSource(
+                bytesDataUrl(new Uint8Array(bytes), "image/gif"),
+              )!,
+          );
+        gifPreviews.current.set(file, preview);
+      }
+      void preview
+        .then((src) => {
+          if (live)
+            setUrls((urls) => urls.map((url, i) => (i === index ? src : url)));
+        })
+        .catch(() => {
+          if (live) setError("GIF 미리보기를 읽지 못했습니다.");
+        });
+    });
+    return () => {
+      live = false;
+      next.forEach((u) => {
+        if (u.startsWith("blob:")) URL.revokeObjectURL(u);
+      });
+    };
   }, [files]);
   const create = async () => {
     setBusy(true);

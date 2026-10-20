@@ -1,6 +1,7 @@
 import { GradientDefs, gradientCss } from "./gradient";
 import { CustomShape } from "./CustomShape";
 import { VideoVisual } from "./VideoVisual";
+import { ImageVisual } from "./ImageVisual";
 import { SlideLinks } from "./slide-links";
 import { alphaColor } from "./colors";
 import EditableText from "./EditableText";
@@ -139,6 +140,8 @@ export function ElementVisual({
 }) {
   if (element.type === "video")
     return <VideoVisual element={element} playing={playMedia} />;
+  if (element.type === "image")
+    return <ImageVisual element={element} playing={playMedia} />;
   if (element.type !== "shape")
     return <ArtworkVisual element={element} onTextHeight={onTextHeight} />;
   return (
@@ -162,37 +165,6 @@ function ArtworkVisual({
 }) {
   const gradientId = "fill-" + useId().replace(/[^a-z0-9]/gi, "");
   if (e.type === "table") return <TableVisual element={e} />;
-  if (e.type === "image")
-    return (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          overflow: "hidden",
-          position: "relative",
-          transform: `scale(${e.flipH ? -1 : 1},${e.flipV ? -1 : 1})`,
-        }}
-      >
-        <img
-          className="element-image"
-          src={e.src}
-          alt={e.alt || ""}
-          draggable={false}
-          style={
-            e.crop
-              ? {
-                  position: "absolute",
-                  maxWidth: "none",
-                  left: `${(-e.crop[3] / (1 - e.crop[3] - e.crop[1])) * 100}%`,
-                  top: `${(-e.crop[0] / (1 - e.crop[0] - e.crop[2])) * 100}%`,
-                  width: `${100 / (1 - e.crop[3] - e.crop[1])}%`,
-                  height: `${100 / (1 - e.crop[0] - e.crop[2])}%`,
-                }
-              : undefined
-          }
-        />
-      </div>
-    );
   if (e.type === "text")
     return <StaticText element={e} onHeight={onTextHeight} />;
   if (e.shape === "custom" && e.paths) return <CustomShape element={e} />;

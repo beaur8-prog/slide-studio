@@ -87,7 +87,26 @@ async function visiblyAnimates(image: Locator) {
   expect([...colors].sort()).toEqual(["blue", "red"]);
 }
 
-test("GIF animates in editing and slide show and keeps original frames through save and PPTX", async ({
+async function visiblyStill(image: Locator) {
+  const source = await image.getAttribute("src");
+  const metadata = await sharp(Buffer.from(source!.split(",")[1], "base64"), {
+    animated: true,
+  }).metadata();
+  expect(metadata.pages ?? 1).toBe(1);
+  const colors = new Set<string>();
+  for (let i = 0; i < 4; i++) {
+    const pixel = await sharp(await image.screenshot())
+      .resize(1, 1)
+      .raw()
+      .toBuffer();
+    colors.add(pixel[0] > pixel[2] ? "red" : "blue");
+    await image.page().waitForTimeout([137, 83, 211, 59][i]);
+  }
+  expect([...colors]).toEqual(["red"]);
+  return source;
+}
+
+test("GIF is still in editing/thumbnails/print, animates only in the current slideshow, and retains original frames", async ({
   page,
 }) => {
   await emptyDeck(page);
@@ -100,14 +119,28 @@ test("GIF animates in editing and slide show and keeps original frames through s
     });
   const image = page.locator(".editable-slide img.element-image");
   await expect(image).toBeVisible();
-  await visiblyAnimates(image);
-  const result = await page.evaluate(async () => {
+  const preview = await visiblyStill(image);
+  const original = `data:image/gif;base64,${gif.toString("base64")}`;
+  expect(preview).not.toBe(original);
+  await expect(
+    page.locator(".thumbnail-list img.element-image"),
+  ).toHaveAttribute("src", preview!);
+  await expect(page.locator(".print-deck img.element-image")).toHaveAttribute(
+    "src",
+    preview!,
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const { loadAutosave } = await import("/src/storage.ts");
+        return (await loadAutosave())?.slides[0].elements[0]?.src;
+      }),
+    )
+    .toBe(original);
+  const result = await page.evaluate(async (src) => {
     const { blankDeck, element } = await import("/src/model.ts");
     const { importPptx, exportPptx, serializeDeck, parseDeckJson } =
       await import("/src/io.ts");
-    const src = document.querySelector<HTMLImageElement>(
-      ".editable-slide img",
-    )!.src;
     const d = blankDeck();
     d.slides[0].elements = [element("image", { src })];
     const saved = parseDeckJson(serializeDeck(d));
@@ -120,7 +153,7 @@ test("GIF animates in editing and slide show and keeps original frames through s
       warnings: imported.warnings,
       json: serializeDeck(imported.deck),
     };
-  });
+  }, original);
   expect(result.saved).toBe(result.original);
   expect(result.imported).toBe(result.original);
   expect(result.warnings).toEqual([]);
@@ -130,8 +163,20 @@ test("GIF animates in editing and slide show and keeps original frames through s
     buffer: Buffer.from(result.json),
   });
   await page.getByRole("button", { name: "발표 모드", exact: true }).click();
-  await visiblyAnimates(page.locator(".present-slide img.element-image"));
+  const presented = page.locator(".present-slide img.element-image");
+  await expect(presented).toHaveAttribute("src", original);
+  await visiblyAnimates(presented);
+  await page.keyboard.press("b");
+  await expect(presented).toHaveAttribute("src", preview!);
+  await page.keyboard.press("b");
+  await expect(presented).toHaveAttribute("src", original);
+  await page.keyboard.press("w");
+  await expect(presented).toHaveAttribute("src", preview!);
+  await page.keyboard.press("w");
+  await expect(presented).toHaveAttribute("src", original);
   await page.keyboard.press("Escape");
+  await expect(image).toHaveAttribute("src", preview!);
+  await expect(page.locator(`img[src="${original}"]`)).toHaveCount(0);
 });
 
 for (const ext of ["mp4", "webm"])

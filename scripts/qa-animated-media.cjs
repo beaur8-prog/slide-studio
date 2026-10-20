@@ -26,10 +26,23 @@ async function verifyAnimatedMedia(page, output, { app }) {
       await expect(page.locator('.save-indicator')).toHaveText('저장됨');
       await page.reload();
       await expect(page.locator('.editable-slide .slide-element')).toHaveCount(1);
+      let gifOriginal, gifStill;
+      if (ext === 'gif') {
+        gifOriginal = 'data:image/gif;base64,' + (await fs.readFile(path.resolve(__dirname, '../tests/fixtures/media/animated.gif'))).toString('base64');
+        const preview = page.locator('.editable-slide img.element-image');
+        gifStill = await preview.getAttribute('src');
+        expect(gifStill).not.toBe(gifOriginal);
+        const decoded = Buffer.from(gifStill.split(',')[1], 'base64');
+        expect((await sharp(decoded, { animated: true }).metadata()).pages ?? 1).toBe(1);
+        await expect(page.locator('.thumbnail-list img.element-image')).toHaveAttribute('src', gifStill);
+        await expect(page.locator('.print-deck img.element-image')).toHaveAttribute('src', gifStill);
+        await expect(page.locator(`img[src="${gifOriginal}"]`)).toHaveCount(0);
+      }
       await page.getByRole('button', { name: '발표 모드', exact: true }).click();
       await expect(page.locator('.present-notes-toggle')).toHaveCount(0);
       const media = page.locator(`.present-slide ${ext === 'gif' ? 'img.element-image' : 'video'}`);
       await expect(media).toBeVisible();
+      if (ext === 'gif') await expect(media).toHaveAttribute('src', gifOriginal);
       if (ext !== 'gif') await expect.poll(() => media.evaluate(v => !v.paused && v.currentTime > 0)).toBe(true);
       const colors = new Set(), times = [], samples = [];
       // These clips alternate every 100 ms. A 100 ms screenshot plus a fixed
@@ -50,7 +63,11 @@ async function verifyAnimatedMedia(page, output, { app }) {
       await page.screenshot({ path: path.join(directory, `${ext}-presentation.png`) });
       await page.keyboard.press('Escape');
       await expect(page.locator('video')).toHaveCount(0);
-      results.push({ format: ext, autoSaveReload: true, animatedPixels: true, loop: ext === 'gif' ? 'original GIF loop preserved' : true, stoppedOnExit: true });
+      if (ext === 'gif') {
+        await expect(page.locator('.editable-slide img.element-image')).toHaveAttribute('src', gifStill);
+        await expect(page.locator(`img[src="${gifOriginal}"]`)).toHaveCount(0);
+      }
+      results.push({ format: ext, autoSaveReload: true, animatedPixels: true, loop: ext === 'gif' ? 'original GIF loop preserved' : true, stoppedOnExit: true, ...(ext === 'gif' ? { staticEditorThumbnailPrint: true } : {}) });
     }
     expect(errors).toEqual([]);
     const report = { version: await app.evaluate(({ app }) => app.getVersion()), platform: process.platform, results, errors };

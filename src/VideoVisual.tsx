@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SlideElement } from "./types";
+import { stillImageSource } from "./gif-preview";
 
 export function VideoVisual({
   element: e,
@@ -11,6 +12,7 @@ export function VideoVisual({
   const ref = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const poster = useMemo(() => stillImageSource(e.poster), [e.poster]);
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
@@ -25,7 +27,7 @@ export function VideoVisual({
     return (
       <img
         className="element-image"
-        src={e.poster}
+        src={poster}
         alt={e.alt || "동영상"}
         draggable={false}
         style={{ transform: `scale(${e.flipH ? -1 : 1},${e.flipV ? -1 : 1})` }}
@@ -41,7 +43,7 @@ export function VideoVisual({
       <video
         ref={ref}
         src={e.src}
-        poster={e.poster}
+        poster={poster}
         loop={e.loop !== false}
         muted={e.muted !== false}
         playsInline

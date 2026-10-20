@@ -17,7 +17,7 @@ GIF 40개가 있는 자료의 편집·축소판·인쇄와 현재 발표 장의 
 
 Mac 미공증·Windows 미서명 배포다. 다운로드 경고와 **Windows의 PC 보호 → 추가 정보 → 실행** 안내를 다운로드 문서에 유지한다. 일반 PPTX용 배포이며 별도로 추가된 Windows DRM 가져오기는 포함하지 않는다. 모든 상용 글꼴·PowerPoint 효과/조판의 완전 일치, 복잡한 곡선 점 편집, 외부 연결 미디어·오디오·복잡한 영상 타이밍, 실제 키보드 IME 직접 입력·Wayland·종이 출력은 이번 검증 범위에 포함하지 않는다.
 
-기존 [리토스 다운로드 문서](https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6)는 같은 공유본으로 갱신한다. 문서와 바이너리의 고정 다운로드 주소를 유지한다.
+기존 [리토스 다운로드 문서](https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6)는 같은 공유본으로 갱신했다. 문서와 바이너리의 고정 다운로드 주소를 유지했다.
 
 ## 배포 전 소스 검사
 
@@ -45,3 +45,9 @@ Windows의 첫 실행에서 영상은 재생·반복됐으나 스크린샷이 �
 | Slide-Studio-linux-amd64.deb | 132468902 | `20801f9bdb93b489676015db71743b8191c456537dec2186efcd577b9295b6fb` |
 
 배포용 Mac 번들은 ZIP을 다시 풀어 서명 무결성을 확인했다. Apple 공증을 뜻하지 않는다. 사용 중인 로컬 Mac 앱의 교체는 화면 잠금으로 보류했으며 기존 사용자 문서나 프로필을 종료·수정하지 않았다. 배포 번들은 별도 프로필에서 검증했다.
+
+## 게시 확인
+
+[GitHub v1.6.3](https://github.com/beaur8-prog/slide-studio/releases/tag/v1.6.3)을 최신 릴리스로 게시했다. 2026-10-20T06:05:35Z에 공개된 고정 다운로드 주소에서 Mac ZIP·Windows Setup/ZIP·Linux DEB·SHA256SUMS 파일 전체를 다시 내려받아 크기와 SHA-256을 대조했고 모두 일치했다.
+
+리토스는 기존 공유본을 갱신했다. 원본과 공개 본문이 같고 이미지 15개가 모두 일치하며, 문서 URL·공유 토큰·생성일·만료 설정과 다운로드 주소를 유지했다. 기존 서버와 외부 연결을 재시작하지 않았다. Windows 다운로드 경고 및 PC 보호의 추가 정보 → 실행 안내도 유지했다.

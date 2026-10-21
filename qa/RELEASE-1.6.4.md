@@ -47,3 +47,11 @@ Mac 미공증·Windows 미서명 빌드다. 다운로드 경고와 Windows의 PC
 | Slide-Studio-linux-amd64.deb | 132476406 | `fa0a93c006b9cc9e673a179033c34809cf32e13737501a3a38c5f0e702024a8f` |
 
 배포용 Mac 번들은 ZIP을 다시 풀어 서명 무결성을 확인했다. Apple 공증을 뜻하지 않는다. 사용 중인 로컬 Mac 앱의 교체는 화면 잠금으로 보류했으며 기존 사용자 문서나 프로필을 종료·수정하지 않았다. 배포 번들은 별도 프로필에서 검증했다.
+
+## 공개 배포 확인
+
+[GitHub v1.6.4](https://github.com/beaur8-prog/slide-studio/releases/tag/v1.6.4)를 공개하고 [기존 리토스 다운로드 문서](https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6)를 같은 URL·공유 토큰·생성일로 갱신했다. 서버와 터널도 재시작하지 않았다. Windows를 맨 위에 두고 PC 보호의 추가 정보 → 실행 안내와 다운로드 경고를 유지했다. 노트 크기 조절 사용법과 실제 설치판 화면을 추가했다.
+
+공개 문서 본문과 이미지 16개가 검토본과 일치하며, 기존 latest/download 주소 5개에서 1.6.4 파일을 끝까지 다시 받아 바이트 수·SHA-256·GitHub 첨부 파일 digest까지 확인했다. `qa/results/release-1.6.4/publication-verification.json`에 결과를 기록했다.
+
+현재 버전만 남기는 기존 정리 방침에 따라 1.6.3의 GitHub 첨부 파일 5개와 리토스/로컬 publication의 이전 이미지 폴더를 삭제했다. 이전 릴리스 설명과 Git 태그는 보존했고 1.6.4 다운로드에는 영향이 없다.

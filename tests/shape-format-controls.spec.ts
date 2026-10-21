@@ -14,7 +14,7 @@ test("inspector has one close action, preserves the selected shape and fits its 
   const panel = page.locator(".inspector");
   await expect(panel.locator(".inspector-heading")).toContainText("개체 서식");
   await expect(panel.locator(".inspector-heading button")).toHaveCount(1);
-  for (const width of [970, 1080, 1280, 1540]) {
+  for (const width of [970, 1080, 1100, 1200, 1250, 1280, 1540]) {
     await page.setViewportSize({ width, height: 900 });
     const bounds = await panel.evaluate(el => ({
       width: el.getBoundingClientRect().width,
@@ -23,6 +23,15 @@ test("inspector has one close action, preserves the selected shape and fits its 
     expect(bounds.width).toBeLessThanOrEqual(280);
     expect(bounds.horizontalOverflow).toBeLessThanOrEqual(1);
     expect(await page.locator('.ribbon').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+    const ribbonLayout = await page.locator('.ribbon').evaluate(el => {
+      const groups = Array.from(el.children);
+      const font = groups.findIndex(g => g.classList.contains('font-group'));
+      const shape = groups.findIndex(g => g.classList.contains('shape-format-group'));
+      return { height: el.getBoundingClientRect().height, shapeAfterFont: shape === font + 1,
+        nextGroup: groups[shape + 1]?.querySelector('.group-label')?.textContent,
+        sameRow: groups[font].getBoundingClientRect().top === groups[shape].getBoundingClientRect().top };
+    });
+    expect(ribbonLayout).toEqual({ height: 97, shapeAfterFont: true, nextGroup: '단락', sameRow: true });
     const controls = page.getByRole('group', { name: '도형 서식', exact: true });
     await expect(controls).toBeVisible();
     const clipped = await controls.evaluate(el => {
@@ -33,6 +42,8 @@ test("inspector has one close action, preserves the selected shape and fits its 
       });
     });
     expect(clipped).toBe(false);
+    if (width === 970 || width === 1540)
+      await page.screenshot({ path: info.outputPath(`home-ribbon-${width}.png`) });
   }
   await page.screenshot({ path: info.outputPath("compact-inspector.png") });
   await page.getByRole("button", { name: "서식 패널 닫기", exact: true }).click();

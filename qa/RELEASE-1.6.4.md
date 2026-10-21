@@ -13,7 +13,7 @@
 
 ## 검증
 
-소스와 Mac·Windows·Ubuntu 설치 앱에서 크기 조절·한글 노트·슬라이드 맞춤·노트 실행 취소·높이/내용 저장 복원·닫기/재열기·키보드·기본 높이 복원을 확인한다. 결과와 배포 검증값은 완료 후 기록한다.
+소스와 Mac·Windows·Ubuntu 설치 앱에서 크기 조절·한글 노트·슬라이드 맞춤·노트 실행 취소·높이/내용 저장 복원·닫기/재열기·키보드·기본 높이 복원을 확인했다. 네 패키지의 버전·동일 실행 코드·원본 파일 일치·SHA-256 검사도 통과했다.
 
 Mac 미공증·Windows 미서명 빌드다. 다운로드 경고와 Windows의 PC 보호 → 추가 정보 → 실행 안내를 유지한다. 원본 PowerPoint의 모든 글꼴·효과·조판 일치, Windows/Linux의 실제 키보드 IME 타이핑, Wayland·종이 출력은 검증 범위에 포함하지 않는다.
 
@@ -26,3 +26,24 @@ Mac 미공증·Windows 미서명 빌드다. 다운로드 경고와 Windows의 PC
 제외 항목은 이 Mac에 없는 Office Arial Nova Light와 Windows 네이티브 전체 화면 검사다. Windows 설치 앱 검증은 별도 CI에서 실행한다. 상세 결과는 `qa/results/release-1.6.4/full-regression.json`, `restart-baseline.json`, `related-recheck.json`, `final-regression-summary.json`에 있다.
 
 로컬 빌드 도구의 일부 파일 읽기가 멈춰 잠금 파일과 같은 버전의 npm 의존성을 다시 설치했다. TypeScript가 상위의 다른 프로젝트 타입을 자동으로 읽지 않도록 타입 검색 경로도 이 프로젝트로 제한했다. 복구 후 타입 검사를 통과했다. 의존성 버전은 변경하지 않았다.
+
+## 실제 배포 앱 검사
+
+| 환경 | 결과 |
+| --- | --- |
+| Mac ARM64 앱 번들 | 별도 프로필에서 노트 높이 드래그·텍스트 입력 공간·슬라이드 맞춤·실행 취소 유지·저장/다시 열기·키보드·초기 높이 복원, 삼각형 꼭짓점 편집·PPTX 왕복, 실제 GIF/MP4/WebM 정지 미리보기·발표 재생·반복·종료 통과 |
+| Windows 설치판 | 설치·전체 설치 파일 해시·바로가기·앱 등록·노트 높이 조절과 저장/복원·기존 편집 회귀·삼각형·GIF/MP4/WebM 검사·실행 중 업데이트 차단·재설치·제거·사용자 자료 보존 통과 |
+| Ubuntu 22.04/24.04 amd64 X11 | 두 배포판에서 DEB 설치·실행·노트 크기 조절과 저장/복원·편집/PDF·클립보드·삼각형·GIF/MP4/WebM 검사·재설치·제거·사용자 자료 보존 통과. Chromium 샌드박스 유지 |
+
+[Windows 실행 기록](https://github.com/beaur8-prog/slide-studio/actions/runs/39530829094) · [Ubuntu 두 버전 실행 기록](https://github.com/beaur8-prog/slide-studio/actions/runs/39530833495)
+
+런타임 소스와 `v1.6.4` 태그 커밋은 `95fbe7773c530085943c5c6286cd908b1a74152c`이다. 네 패키지의 실행 코드 SHA-256은 `7fa125f6879391e5fe14ce85a8a38e0013bf5af1a3d6f2394a6f812e6d30f29f`로 같고 빌드 소스 53개 파일과 일치한다.
+
+| 파일 | 바이트 | SHA-256 |
+| --- | ---: | --- |
+| Slide-Studio-mac-arm64.zip | 129816053 | `81a0877c33796fd7799083daa4207ffc7e97aff7e26ea5fbb0bdf7268f7bf7ba` |
+| Slide-Studio-win-x64.zip | 156989073 | `6e7a8c2aba2d3a7ade9c695ef5c920c27ba46997f8100e790a6e5cbfdde696da` |
+| Slide-Studio-Setup-x64.exe | 109622037 | `5ee9a48fd8ac7e28f12461f92f3d14e4daf9f541e2f8beffcec73b8e7da948ab` |
+| Slide-Studio-linux-amd64.deb | 132476406 | `fa0a93c006b9cc9e673a179033c34809cf32e13737501a3a38c5f0e702024a8f` |
+
+배포용 Mac 번들은 ZIP을 다시 풀어 서명 무결성을 확인했다. Apple 공증을 뜻하지 않는다. 사용 중인 로컬 Mac 앱의 교체는 화면 잠금으로 보류했으며 기존 사용자 문서나 프로필을 종료·수정하지 않았다. 배포 번들은 별도 프로필에서 검증했다.

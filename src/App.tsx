@@ -460,6 +460,12 @@ export default function App() {
     };
   }, [editing]);
   const selectedElement = slide.elements.find((e) => e.id === selected[0]);
+  const selectedShapes = slide.elements.filter(
+    (element) => element.type === "shape" && selected.includes(element.id),
+  );
+  const shapeStyleTarget =
+    selectedShapes.find((element) => !element.locked) ?? selectedShapes[0];
+  const shapeStylesDisabled = !selectedShapes.some((element) => !element.locked);
   const [tableSelection, setTableSelection] =
     useState<TableCellSelection | null>(null);
   const activeTableSelection =
@@ -786,6 +792,33 @@ export default function App() {
       elements: s.elements.map((e) =>
         selected.includes(e.id) && !e.locked ? patchText(e, patch) : e,
       ),
+    }));
+  const updateSelectedShapes = (update: (element: SlideElement) => SlideElement) => {
+    if (shapeStylesDisabled) return;
+    changeSlide((s) => ({
+      ...s,
+      elements: s.elements.map((element) =>
+        element.type === "shape" && selected.includes(element.id) && !element.locked
+          ? update(element)
+          : element,
+      ),
+    }));
+  };
+  const setShapeFill = (fill: string) =>
+    updateSelectedShapes((element) => ({ ...element, fill, gradient: undefined }));
+  const setShapeStroke = (stroke: string) =>
+    updateSelectedShapes((element) => ({
+      ...element,
+      stroke,
+      strokeWidth: element.strokeWidth || 2,
+      strokeOpacity: element.strokeOpacity === 0 ? undefined : element.strokeOpacity,
+    }));
+  const setShapeStrokeWidth = (strokeWidth: number) =>
+    updateSelectedShapes((element) => ({
+      ...element,
+      strokeWidth,
+      stroke: element.stroke && element.stroke !== "transparent" ? element.stroke : "#233D35",
+      strokeOpacity: element.strokeOpacity === 0 ? undefined : element.strokeOpacity,
     }));
   const selectSlide = (
     id: string,
@@ -3398,7 +3431,7 @@ export default function App() {
           </button>
         </nav>
         <div
-          className={`ribbon ${tab === "insert" ? "insert-ribbon" : ""}`}
+          className={`ribbon ${tab === "insert" ? "insert-ribbon" : ""} ${tab === "home" ? "has-shape-style" : ""}`}
           hidden={ribbonCollapsed}
         >
           {tab === "home" && (
@@ -3605,6 +3638,39 @@ export default function App() {
                   </button>
                 </div>
                 <span className="group-label">정렬</span>
+              </div>
+              <div className="shape-format-controls" role="group" aria-label="도형 서식">
+                <span>도형 서식</span>
+                <label>
+                  채우기
+                  <input type="color" aria-label="도형 채우기 색"
+                    value={shapeStyleTarget?.fill && shapeStyleTarget.fill !== "transparent" ? shapeStyleTarget.fill : "#FFFFFF"}
+                    disabled={shapeStylesDisabled}
+                    onChange={(event) => setShapeFill(event.target.value)} />
+                </label>
+                <label>
+                  <input type="checkbox" aria-label="도형 채우기 없음"
+                    checked={shapeStyleTarget?.fill === "transparent"}
+                    disabled={shapeStylesDisabled}
+                    onChange={(event) => setShapeFill(event.target.checked ? "transparent" : (THEMES.find(theme => theme.id === deck.theme)?.accent ?? "#D4613F"))} />
+                  채우기 없음
+                </label>
+                <label>
+                  선 색
+                  <input type="color" aria-label="도형 선 색"
+                    value={shapeStyleTarget?.stroke && shapeStyleTarget.stroke !== "transparent" ? shapeStyleTarget.stroke : "#233D35"}
+                    disabled={shapeStylesDisabled}
+                    onChange={(event) => setShapeStroke(event.target.value)} />
+                </label>
+                <label className="shape-line-width">
+                  선 두께
+                  <NumberInput aria-label="도형 선 두께"
+                    key={selected.join(",")}
+                    value={shapeStyleTarget?.strokeWidth || 0}
+                    min={0} max={30} step={0.5}
+                    disabled={shapeStylesDisabled}
+                    onChange={setShapeStrokeWidth} />
+                </label>
               </div>
             </>
           )}
@@ -4487,15 +4553,6 @@ export default function App() {
               >
                 <X size={14} />
               </button>
-              {selectedElement && (
-                <button
-                  className="icon-button"
-                  aria-label="선택 해제"
-                  onClick={() => setSelected([])}
-                >
-                  <X size={14} />
-                </button>
-              )}
             </div>
             <div className="inspector-body">
               {selectedElement ? (
@@ -4635,31 +4692,20 @@ export default function App() {
                       <ColorField
                         label="채우기"
                         value={selectedElement.fill || "#D4613F"}
-                        onChange={(fill) => updateSelected({ fill })}
+                        onChange={setShapeFill}
                       />
                       <label className="check-field">
                         <input
                           type="checkbox"
                           checked={selectedElement.fill === "transparent"}
-                          onChange={(e) =>
-                            updateSelected({
-                              fill: e.target.checked
-                                ? "transparent"
-                                : "#D4613F",
-                            })
-                          }
+                          onChange={(e) => setShapeFill(e.target.checked ? "transparent" : "#D4613F")}
                         />
                         채우기 없음
                       </label>
                       <ColorField
                         label="선 색상"
                         value={selectedElement.stroke || "#233D35"}
-                        onChange={(stroke) =>
-                          updateSelected({
-                            stroke,
-                            strokeWidth: selectedElement.strokeWidth || 2,
-                          })
-                        }
+                        onChange={setShapeStroke}
                       />
                       <NumberField
                         label="선 두께"
@@ -4667,9 +4713,7 @@ export default function App() {
                         value={selectedElement.strokeWidth || 0}
                         min={0}
                         max={30}
-                        onChange={(strokeWidth) =>
-                          updateSelected({ strokeWidth })
-                        }
+                        onChange={setShapeStrokeWidth}
                       />
                     </div>
                   )}

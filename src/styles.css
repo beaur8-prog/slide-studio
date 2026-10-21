@@ -1031,6 +1031,7 @@ button:not(:disabled):active {
 }
 .inspector {
   width: 242px;
+  min-width: 0;
   flex-shrink: 0;
   border-left: 1px solid #dfe3db;
   background: #fff;
@@ -1054,11 +1055,14 @@ button:not(:disabled):active {
 }
 .inspector-body {
   overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
   flex: 1;
   scrollbar-width: thin;
   scrollbar-color: #d7ddd0 transparent;
 }
 .inspector-section {
+  min-width: 0;
   padding: 18px 18px 20px;
   border-bottom: 1px solid #edf0e8;
   display: flex;
@@ -1235,7 +1239,7 @@ button:not(:disabled):active {
 }
 .number-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 .number-field {
@@ -1305,8 +1309,17 @@ button:not(:disabled):active {
   accent-color: var(--accent);
 }
 .inspector-tools {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.inspector-tools > button {
+  min-width: 0;
+  min-height: 30px;
+}
+.inspector-tools > button:not(.tool) {
+  grid-column: 1 / -1;
+  padding: 7px;
 }
 .object-actions {
   display: flex;
@@ -1342,6 +1355,7 @@ button:not(:disabled):active {
   border-radius: 4px;
 }
 .layers-section > button > span {
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

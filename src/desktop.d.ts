@@ -1,9 +1,10 @@
-export {};
+import type { RecentPresentationFile } from "./types";
 
 declare global {
   interface Window {
     desktop?: {
       readonly platform?: string;
+      readonly windowSessionId?: string;
       pasteTableClipboard?(): Promise<void>;
       editTextClipboard?(action: "copy" | "cut" | "paste"): Promise<void>;
       loadOfficeCalibriFonts?(): Promise<
@@ -28,6 +29,8 @@ declare global {
         extensions: ["pptx"];
       }): Promise<string | null>;
       openFile(): Promise<{ name: string; data: Uint8Array } | null>;
+      recentFiles?(): Promise<RecentPresentationFile[]>;
+      openRecentFile?(id: string): Promise<{ name: string; data: Uint8Array }>;
       exportPDF(name: string): Promise<string | null>;
       print(): Promise<boolean>;
       onMenu(callback: (action: string) => void): () => void;

@@ -6,6 +6,7 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { fileURLToPath } = require('node:url');
 const { readOfficeArialNovaLight, readOfficeCalibriFonts } = require('./office-fonts.cjs');
+const { RecentFiles } = require('./recent-files.cjs');
 
 const PRODUCT_NAME = 'Slide Studio';
 const APP_ICON = path.join(__dirname, 'assets', 'SlideStudio.png');
@@ -14,6 +15,7 @@ const IS_DEV = !app.isPackaged && process.env.SLIDE_STUDIO_DEV === '1';
 const INDEX_PATH = path.resolve(__dirname, '..', 'dist', 'index.html');
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
 const OPEN_EXTENSIONS = new Set(['slide', 'pptx']);
+const recentFiles = new RecentFiles(() => path.join(app.getPath('userData'), 'recent-presentations.json'), atomicWrite);
 const CHROME_THEMES = {
   dark: { color: '#151515', symbolColor: '#f2f2f2', height: 40 },
   light: { color: '#f3f3f3', symbolColor: '#242424', height: 40 },
@@ -239,7 +241,33 @@ function installMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+async function readPresentationFile(filename) {
+  const extension = path.extname(filename).slice(1).toLowerCase();
+  if (!OPEN_EXTENSIONS.has(extension)) throw new Error('Choose a .slide or .pptx presentation.');
+  const handle = await fs.open(filename, 'r');
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size > MAX_FILE_BYTES) throw new Error('Choose a presentation no larger than 256 MiB.');
+    const buffer = await handle.readFile();
+    if (buffer.length > MAX_FILE_BYTES) throw new Error('Choose a presentation no larger than 256 MiB.');
+    await rememberDocumentDirectory(filename);
+    await recentFiles.remember(filename).catch(() => {});
+    return { name: path.basename(filename),
+      data: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength) };
+  } finally {
+    await handle.close();
+  }
+}
+
 function installIPC() {
+  ipcMain.handle('slide-studio:recent-files', (event, ...args) => {
+    requireTrustedSender(event);
+    if (args.length) throw new TypeError('최근 파일 요청에는 인수가 필요하지 않습니다.');
+    return recentFiles.list();
+  });
+  ipcMain.handle('slide-studio:open-recent-file', (event, id) => withNativeDialog(event, async () => {
+    return readPresentationFile(await recentFiles.resolve(id));
+  }));
   ipcMain.handle('slide-studio:paste-table-clipboard', (event, ...args) => {
     requireTrustedSender(event);
     if(args.length || presentationWindowState || nativeOperationPending) throw new Error('지금은 표를 붙여넣을 수 없습니다.');
@@ -364,6 +392,7 @@ function installIPC() {
     }
     await atomicWrite(filename, file.data);
     await rememberDocumentDirectory(filename);
+    await recentFiles.remember(filename).catch(() => {});
     return filename;
   }));
 
@@ -375,22 +404,7 @@ function installIPC() {
       properties: ['openFile'],
     });
     if (result.canceled || result.filePaths.length !== 1) return null;
-    const filename = result.filePaths[0];
-    const extension = path.extname(filename).slice(1).toLowerCase();
-    if (!OPEN_EXTENSIONS.has(extension)) throw new Error('Choose a .slide or .pptx presentation.');
-    const handle = await fs.open(filename, 'r');
-    try {
-      const stat = await handle.stat();
-      if (!stat.isFile() || stat.size > MAX_FILE_BYTES) throw new Error('Choose a presentation no larger than 256 MiB.');
-      const buffer = await handle.readFile();
-      if (buffer.length > MAX_FILE_BYTES) throw new Error('Choose a presentation no larger than 256 MiB.');
-      await rememberDocumentDirectory(filename);
-      // Typed-array IPC avoids expanding every file byte into a JS number.
-      return { name: path.basename(filename),
-        data: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength) };
-    } finally {
-      await handle.close();
-    }
+    return readPresentationFile(result.filePaths[0]);
   }));
 
   ipcMain.handle('slide-studio:export-pdf', (event, name) => withNativeDialog(event, async () => {
@@ -495,6 +509,7 @@ async function createWindow() {
     } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
+      additionalArguments: ['--slide-studio-window-session=' + randomUUID()],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -598,6 +613,8 @@ if (!app.requestSingleInstanceLock()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
+    } else {
+      void app.whenReady().then(() => { if (!mainWindow) void createWindow(); });
     }
   });
   app.whenReady().then(async () => {

@@ -1599,6 +1599,20 @@ button:not(:disabled):active {
   border-style: dashed;
   color: #a6b892;
 }
+.library-grid .library-file {
+  min-width: 0;
+  padding-top: 28px;
+  align-items: center;
+  color: #8c674f;
+}
+.library-file strong,
+.library-file small {
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+.library-file:disabled {
+  opacity: .6;
+}
 .library-new strong {
   color: #91a37e;
 }

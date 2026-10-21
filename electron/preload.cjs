@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('desktop', Object.freeze({
   platform: process.platform,
+  windowSessionId: (process.argv || []).find(arg => arg.startsWith('--slide-studio-window-session='))?.split('=')[1],
   pasteTableClipboard: () => ipcRenderer.invoke('slide-studio:paste-table-clipboard'),
   editTextClipboard: action => ipcRenderer.invoke('slide-studio:edit-text-clipboard', action),
   loadOfficeCalibriFonts: () => ipcRenderer.invoke('slide-studio:load-office-calibri-fonts'),
@@ -20,6 +21,8 @@ contextBridge.exposeInMainWorld('desktop', Object.freeze({
   },
   saveFile: payload => ipcRenderer.invoke('slide-studio:save-file', payload),
   openFile: () => ipcRenderer.invoke('slide-studio:open-file'),
+  recentFiles: () => ipcRenderer.invoke('slide-studio:recent-files'),
+  openRecentFile: id => ipcRenderer.invoke('slide-studio:open-recent-file', id),
   exportPDF: name => ipcRenderer.invoke('slide-studio:export-pdf', name),
   print: () => ipcRenderer.invoke('slide-studio:print'),
   onMenu: callback => {

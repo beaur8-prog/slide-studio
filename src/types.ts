@@ -211,3 +211,10 @@ export interface ImportResult {
   deck: Deck;
   warnings: string[];
 }
+export interface RecentPresentationFile {
+  id: string;
+  name: string;
+  path: string;
+  lastUsedAt: number;
+  available: boolean;
+}

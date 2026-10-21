@@ -32,33 +32,10 @@ export async function saveAutosave(deck: Deck): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction("documents", "readwrite");
       tx.objectStore("documents").put(deck, "current");
-      tx.objectStore("documents").put(deck, deck.id);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
       tx.onabort = () =>
         reject(tx.error || new Error("저장이 취소되었습니다."));
-    });
-  } finally {
-    db.close();
-  }
-}
-export async function listAutosaves(): Promise<Deck[]> {
-  const db = await database();
-  try {
-    return await new Promise((resolve, reject) => {
-      const request = db
-        .transaction("documents")
-        .objectStore("documents")
-        .getAll();
-      request.onsuccess = () =>
-        resolve(
-          [
-            ...new Map(
-              (request.result as Deck[]).map((d) => [d.id, d]),
-            ).values(),
-          ].reverse(),
-        );
-      request.onerror = () => reject(request.error);
     });
   } finally {
     db.close();

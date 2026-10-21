@@ -138,7 +138,9 @@ import {
 } from "./model";
 import SlideCanvas, { SlideVisual } from "./SlideCanvas";
 import { exportPptx, importPptx, parseDeckJson } from "./io";
-import { listAutosaves, loadAutosave, saveAutosave } from "./storage";
+import { loadAutosave, saveAutosave } from "./storage";
+import { restoreWindowBuffer } from "./startup";
+import type { RecentPresentationFile } from "./types";
 import TableEditor from "./TableEditor";
 import {
   createTableElement,
@@ -304,31 +306,26 @@ function ColorField({
 }
 
 function LibraryContents({
-  deck,
   onOpen,
   onNew,
   notify,
 }: {
-  deck: Deck;
-  onOpen: (deck: Deck) => void;
+  onOpen: (id: string) => Promise<void>;
   onNew: () => void;
   notify: (message: string) => void;
 }) {
-  // Saved decks can contain large image payloads. Only the mounted library
-  // owns them, so every dismissal path releases the list with its component.
-  const [documents, setDocuments] = useState<Deck[] | null>(null);
+  const [documents, setDocuments] = useState<RecentPresentationFile[] | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
   useEffect(() => {
     let disposed = false;
     const load = async () => {
       try {
-        await saveAutosave(deck);
-        if (disposed) return;
-        const saved = await listAutosaves();
+        const saved = await window.desktop?.recentFiles?.() ?? [];
         if (!disposed) setDocuments(saved);
       } catch {
         if (!disposed) {
           setDocuments([]);
-          notify("저장된 문서를 불러오지 못했습니다.");
+          notify("최근 파일 목록을 불러오지 못했습니다.");
         }
       }
     };
@@ -336,39 +333,42 @@ function LibraryContents({
     return () => {
       disposed = true;
     };
-  }, [deck, notify]);
+  }, [notify]);
+  const open = async (id: string) => {
+    setOpening(id);
+    try {
+      await onOpen(id);
+    } catch {
+      notify("원본 파일을 열 수 없습니다. 파일이 이동되거나 삭제되었는지 확인하세요.");
+      try { setDocuments(await window.desktop?.recentFiles?.() ?? []); } catch {}
+    } finally {
+      setOpening(null);
+    }
+  };
   return (
     <>
       <div className="dialog-eyebrow">YOUR WORKSPACE</div>
       <h2>내 프레젠테이션</h2>
-      <p>이 기기에 자동 저장한 문서입니다.</p>
+      <p>최근에 열거나 저장한 실제 파일입니다. 삭제되거나 이동한 파일은 제외합니다.</p>
       {documents === null && (
-        <p role="status">저장한 문서를 불러오고 있습니다.</p>
+        <p role="status">최근 파일을 확인하고 있습니다.</p>
       )}
+      {documents?.length === 0 && <p>최근 파일이 없습니다. 파일을 열거나 PPTX로 저장하면 여기에 표시됩니다.</p>}
       <div className="library-grid">
         <button className="library-new" onClick={onNew}>
           <Plus size={27} />
           <strong>새 프레젠테이션</strong>
         </button>
-        {documents?.map((d) => (
-          <button key={d.id} onClick={() => onOpen(d)}>
-            <div
-              style={{
-                position: "relative",
-                width: 230,
-                height: (230 * d.height) / d.width,
-                overflow: "hidden",
-              }}
-            >
-              <SlideVisual
-                slide={d.slides[0]}
-                width={d.width}
-                height={d.height}
-                scale={230 / d.width}
-              />
-            </div>
-            <strong>{d.name}</strong>
-            <small>{d.slides.length}개의 슬라이드</small>
+        {documents?.map((file) => (
+          <button key={file.id} className="library-file" title={file.path}
+            aria-label={`파일 열기: ${file.name}`}
+            disabled={!file.available || opening !== null}
+            onClick={() => void open(file.id)}>
+            <Presentation size={36} aria-hidden="true" />
+            <strong>{file.name}</strong>
+            <small>{file.path}</small>
+            {!file.available && <small>파일에 접근할 수 없습니다.</small>}
+            {opening === file.id && <small role="status">열고 있습니다.</small>}
           </button>
         ))}
       </div>
@@ -928,7 +928,7 @@ export default function App() {
     loadAutosave()
       .then((saved) => {
         if (disposed) return;
-        if (saved) {
+        if (saved && restoreWindowBuffer) {
           try {
             const safe = parseDeckJson(JSON.stringify(saved));
             setHistory({ past: [], present: safe, future: [] });
@@ -5274,12 +5274,12 @@ export default function App() {
               </>
             ) : modal === "library" ? (
               <LibraryContents
-                deck={deck}
                 notify={notify}
                 onNew={() => setModal("new")}
-                onOpen={(saved) =>
-                  replaceDeck(parseDeckJson(JSON.stringify(saved)))
-                }
+                onOpen={async (id) => {
+                  const file = await window.desktop?.openRecentFile?.(id);
+                  if (file) await readFile(file.name, file.data);
+                }}
               />
             ) : modal === "shortcuts" ? (
               <>

@@ -6,7 +6,7 @@ type Point = { x: number; y: number };
 // either a preset or a custom path after Adjust Shape / Edit Points. Recognize
 // the actual three straight edges, never infer points from a bounding box.
 export function trianglePoints(element: SlideElement): Point[] | undefined {
-  if (element.type !== "shape") return;
+  if (element.type !== "shape" || !element.width || !element.height) return;
   if (element.shape === "triangle")
     return [
       { x: 0.5, y: 0 },

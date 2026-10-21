@@ -167,6 +167,34 @@ function ArtworkVisual({
   if (e.type === "table") return <TableVisual element={e} />;
   if (e.type === "text")
     return <StaticText element={e} onHeight={onTextHeight} />;
+  if ((!e.width || !e.height) && e.shape !== "line" && e.shape !== "arrow") {
+    // Keep zero-area artwork in the model. SVG viewBoxes / custom-path scale
+    // factors cannot be zero; only its outline can be visible at this size.
+    const vertical = !e.width && e.height > 0;
+    const outline = e.shape !== "custom" || e.paths?.some((path) => path.stroke);
+    const open = e.paths?.some((path) => path.stroke && !/Z\s*$/i.test(path.d));
+    const reverse = vertical ? e.flipV : e.flipH;
+    return (
+      <div
+        style={{
+          width: e.width || e.height,
+          height: 0,
+          transformOrigin: "0 0",
+          transform: vertical ? "rotate(90deg)" : undefined,
+        }}
+      >
+        <LineShape element={{
+          ...e,
+          width: e.width || e.height,
+          height: 0,
+          fill: "transparent",
+          stroke: outline ? e.stroke : "transparent",
+          lineStart: open ? (reverse ? e.lineEnd : e.lineStart) : undefined,
+          lineEnd: open ? (reverse ? e.lineStart : e.lineEnd) : undefined,
+        }} />
+      </div>
+    );
+  }
   if (e.shape === "custom" && e.paths) return <CustomShape element={e} />;
   if ((e.shape === "line" || e.shape === "arrow") && (e.lineStart || e.lineEnd))
     return <LineShape element={e} />;

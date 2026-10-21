@@ -17,15 +17,20 @@ export function drawingPaths(
       fallback?.height ?? 21600,
     );
     return Array.from(paths.children).map((path) => {
-      const width = Number(path.getAttribute("w") ?? fallback?.width),
+      let width = Number(path.getAttribute("w") ?? fallback?.width),
         height = Number(path.getAttribute("h") ?? fallback?.height);
       if (
         !Number.isFinite(width) ||
         !Number.isFinite(height) ||
-        width <= 0 ||
-        height <= 0
+        width < 0 ||
+        height < 0
       )
         throw Error("dimensions");
+      // A collapsed shape may omit a path dimension and inherit a zero
+      // extent. Its numeric coordinates are still valid. Use a nonzero local
+      // coordinate plane while retaining the object's original zero bounds.
+      width ||= 1;
+      height ||= 1;
       let x = 0,
         y = 0,
         startX = 0,

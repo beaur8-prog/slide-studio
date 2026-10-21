@@ -49,6 +49,10 @@ export function restoreLayoutXml(
         el.opacity * (el.fillOpacity ?? 1),
       );
     const outline = child(properties, "ln");
+    if (outline && el.type === "shape" && (!el.width || !el.height))
+      // PptxGenJS substitutes a default when line width is zero. Preserve
+      // invisible collapsed decoration as well as visible collapsed outlines.
+      outline.setAttribute("w", String(Math.round((el.strokeWidth ?? 0) * 9525)));
     if (outline && el.strokeDash) {
       child(outline, "prstDash")?.remove();
       child(outline, "custDash")?.remove();

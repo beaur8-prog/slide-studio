@@ -557,13 +557,10 @@ export function parseDeckJson(text: string): Deck {
             if (imageBytes > MAX_EXPANDED / 2)
               fail("내장 이미지·동영상의 합계가 100 MB를 초과합니다.");
           }
-          if (
-            (!el.width || !el.height) &&
-            !(
-              el.type === "shape" &&
-              (el.shape === "line" || el.shape === "arrow")
-            )
-          )
+          // DrawingML permits collapsed shapes (for example a stroked custom
+          // path with cy=0). Keep their exact bounds instead of rejecting the
+          // entire presentation or inflating invisible decoration into a box.
+          if (el.type !== "shape" && (!el.width || !el.height))
             fail(`${elLabel}: 너비와 높이는 0보다 커야 합니다.`);
           return el;
         }),

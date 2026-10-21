@@ -2,6 +2,7 @@ import { GradientDefs, gradientCss } from "./gradient";
 import { CustomShape } from "./CustomShape";
 import { VideoVisual } from "./VideoVisual";
 import { ImageVisual } from "./ImageVisual";
+import { SlideBackground } from "./SlideBackground";
 import { SlideLinks } from "./slide-links";
 import { alphaColor } from "./colors";
 import EditableText from "./EditableText";
@@ -306,6 +307,7 @@ export const SlideVisual = memo(function SlideVisual({
           transform: `scale(${scale})`,
         }}
       >
+        <SlideBackground slide={slide} width={width} height={height} playMedia={playMedia} />
         {slide.elements.map((e) => (
           <div
             key={e.id}
@@ -906,6 +908,7 @@ export default function SlideCanvas({
         }}
       >
         <div className="slide-artwork">
+          <SlideBackground slide={slide} width={deck.width} height={deck.height} />
           {snapLines.map((line, i) => (
             <div
               key={i}

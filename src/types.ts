@@ -194,6 +194,11 @@ export interface Slide {
   hidden?: boolean;
   background: string;
   backgroundGradient?: GradientFill;
+  backgroundImage?: {
+    src: string;
+    crop?: [number, number, number, number];
+    opacity?: number;
+  };
   notes: string;
   elements: SlideElement[];
   transition: "none" | "fade";

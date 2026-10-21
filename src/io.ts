@@ -35,6 +35,7 @@ import { paragraphLines, paragraphText } from "./text-layout";
 import { drawingPaths } from "./drawing-path";
 import { readTextBody } from "./pptx-text";
 import { restoreLayoutXml } from "./pptx-export-layout";
+import { writeBackgroundImage } from "./pptx-background";
 import { writeGroups } from "./object-groups";
 import {
   writeObjectState,
@@ -148,6 +149,20 @@ function safeImage(value: unknown, label: string): string {
   return `data:${match![1].toLowerCase()};base64,${match![2]}`;
 }
 
+function validateBackgroundImage(value: unknown, label: string): NonNullable<Slide["backgroundImage"]> {
+  const source = record(value, `${label} 그림 배경`);
+  const result: NonNullable<Slide["backgroundImage"]> = { src: safeImage(source.src, label) };
+  if (source.opacity !== undefined)
+    result.opacity = numberValue(source.opacity, `${label} 배경 불투명도`, 0, 1);
+  if (source.crop !== undefined) {
+    if (!Array.isArray(source.crop) || source.crop.length !== 4) fail(`${label}: 잘못된 배경 자르기 범위`);
+    result.crop = source.crop.map((v: unknown) => numberValue(v, `${label} 배경 자르기`, -10, 10)) as [number, number, number, number];
+    if (result.crop[0] + result.crop[2] >= 0.999 || result.crop[1] + result.crop[3] >= 0.999)
+      fail(`${label}: 배경 자르기 범위가 잘못되었습니다.`);
+  }
+  return result;
+}
+
 /** Validate and copy known fields; untrusted project properties never enter app state. */
 export function parseDeckJson(text: string): Deck {
   if (text.length > MAX_EXPANDED)
@@ -190,6 +205,12 @@ export function parseDeckJson(text: string): Deck {
           `프로젝트 개체는 ${MAX_ELEMENTS.toLocaleString()}개 이하여야 합니다.`,
         );
       const elementIds = new Set<string>();
+      const backgroundImage = slide.backgroundImage === undefined
+        ? undefined : validateBackgroundImage(slide.backgroundImage, label);
+      if (backgroundImage) {
+        imageBytes += backgroundImage.src.length * 0.75;
+        if (imageBytes > MAX_EXPANDED / 2) fail("내장 이미지·배경의 합계가 100 MB를 초과합니다.");
+      }
       return {
         id,
         ...(slide.hidden !== undefined
@@ -199,6 +220,7 @@ export function parseDeckJson(text: string): Deck {
         ...(slide.backgroundGradient !== undefined
           ? { backgroundGradient: validateGradient(slide.backgroundGradient) }
           : {}),
+        ...(backgroundImage ? { backgroundImage } : {}),
         notes: stringValue(slide.notes, `${label} 발표 노트`, 500000),
         transition: enumValue(
           slide.transition,
@@ -782,9 +804,12 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
   pptx.title = deck.name;
   pptx.company = "Slide Studio";
   pptx.theme = { headFontFace: "Arial", bodyFontFace: "Arial" };
-  for (const source of deck.slides) {
+  const backgroundNames = deck.slides.map(() => uid());
+  for (const [slideIndex, source] of deck.slides.entries()) {
     const slide = pptx.addSlide();
     slide.background = { color: hex(source.background, "FFFFFF") };
+    if (source.backgroundImage)
+      slide.addImage({ data: source.backgroundImage.src, x: 0, y: 0, w: deck.width / 96, h: deck.height / 96, objectName: backgroundNames[slideIndex] });
     if (source.notes) slide.addNotes(source.notes);
     for (const el of source.elements) {
       const linkedSlide = el.hyperlink?.slideId
@@ -996,7 +1021,9 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
     const doc = xmlDocument(xml, path);
     if (slide.hidden) doc.documentElement.setAttribute("show", "0");
     else doc.documentElement.removeAttribute("show");
-    if (slide.backgroundGradient) {
+    if (slide.backgroundImage)
+      writeBackgroundImage(doc, slide.backgroundImage, backgroundNames[index]);
+    else if (slide.backgroundGradient) {
       const cs = child(doc.documentElement, "cSld")!;
       let bg = child(cs, "bg");
       if (!bg) {
@@ -1773,8 +1800,9 @@ export async function importPptx(
               ? theme.minorFont
               : font
       ).replace(/\s*\((?:Headings|Body)\)\s*$/i, "");
-    const backgroundNode =
-      first(doc, "bg") ?? first(layout, "bg") ?? first(master, "bg");
+    const ownBackground = first(doc, "bg"), layoutBackground = first(layout, "bg");
+    const backgroundNode = ownBackground ?? layoutBackground ?? first(master, "bg");
+    const backgroundRels = ownBackground ? rels : layoutBackground ? layoutRels : masterRels;
     const bgColor =
       readColor(child(child(backgroundNode, "bgPr"), "solidFill"), theme) ??
       readColor(child(backgroundNode, "bgRef"), theme);
@@ -1782,7 +1810,37 @@ export async function importPptx(
       child(child(backgroundNode, "bgPr"), "gradFill"),
       (n) => readColor(n, theme),
     );
-    if (backgroundNode && !bgColor && !bgGradient)
+    let backgroundImage: Slide["backgroundImage"];
+    const backgroundFill = child(child(backgroundNode, "bgPr"), "blipFill");
+    if (backgroundFill) {
+      const blip = child(backgroundFill, "blip");
+      const imageRel = backgroundRels.find((r) => r.id === relId(blip, "embed") && r.type.endsWith("/image"));
+      const fillRect = child(child(backgroundFill, "stretch"), "fillRect");
+      const supportedPlacement = !child(backgroundFill, "tile") && !["t", "r", "b", "l"].some((key) => attrNumber(fillRect, key) !== 0);
+      if (imageRel?.path && !imageRel.external && supportedPlacement) {
+        let src = imageCache.get(imageRel.path);
+        if (!src) {
+          const raw = await readBytes(imageRel.path, MAX_IMAGE);
+          const mime = raw && rasterMime(raw);
+          if (raw && mime) {
+            let binary = "";
+            for (let i = 0; i < raw.length; i += 32768) binary += String.fromCharCode(...raw.subarray(i, i + 32768));
+            src = `data:${mime};base64,${btoa(binary)}`;
+            imageCache.set(imageRel.path, src);
+          }
+        }
+        if (src) {
+          const crop = ["t", "r", "b", "l"].map((key) => attrNumber(child(backgroundFill, "srcRect"), key) / 100000) as [number, number, number, number];
+          backgroundImage = validateBackgroundImage({ src,
+            ...(crop.some(v => v !== 0) ? { crop } : {}),
+            opacity: clamp(attrNumber(child(blip, "alphaModFix"), "amt", 100000) / 100000, 0, 1),
+          }, `${slideIndex + 1}번 슬라이드`);
+          embeddedAssetBytes += src.length * 0.75;
+          if (embeddedAssetBytes > MAX_EXPANDED / 2) fail("내장 이미지·배경의 합계가 100 MB를 초과합니다.");
+        }
+      }
+    }
+    if (backgroundNode && !bgColor && !bgGradient && !backgroundImage && !child(child(backgroundNode, "bgPr"), "noFill"))
       warn(
         "일부 배경의 그라데이션·이미지·효과는 단색 배경으로 대체되었습니다.",
       );
@@ -1795,6 +1853,7 @@ export async function importPptx(
         : {}),
       background: bgColor?.color ?? "#FFFFFF",
       ...(bgGradient ? { backgroundGradient: bgGradient } : {}),
+      ...(backgroundImage ? { backgroundImage } : {}),
       notes: "",
       transition: "none",
       elements: [],

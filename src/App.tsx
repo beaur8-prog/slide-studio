@@ -4845,7 +4845,7 @@ export default function App() {
                       label="단색 채우기"
                       value={slide.background}
                       onChange={(background) =>
-                        changeSlide((s) => ({ ...s, background }))
+                        changeSlide((s) => ({ ...s, background, backgroundGradient: undefined, backgroundImage: undefined }))
                       }
                     />
                     <div className="swatches">
@@ -4869,6 +4869,7 @@ export default function App() {
                               ...s,
                               background: color,
                               backgroundGradient: undefined,
+                              backgroundImage: undefined,
                             }))
                           }
                         >
@@ -4895,6 +4896,8 @@ export default function App() {
                           slides: d.slides.map((s) => ({
                             ...s,
                             background: slide.background,
+                            backgroundGradient: slide.backgroundGradient,
+                            backgroundImage: slide.backgroundImage,
                           })),
                         }))
                       }

@@ -106,6 +106,17 @@ there is no SmartArt layout engine or automatic reflow. Source formulas stored a
 not editable equations. Safe custom paths are reconstructed from numeric commands;
 arbitrary embedded SVG is still excluded.
 
+Embedded PNG/JPEG/GIF/WebP slide background pictures are resolved from the owning
+slide, layout, or master relationship part, with slide-local backgrounds overriding
+inherited ones. Stretched backgrounds retain source cropping and opacity in the
+editor, thumbnails, slideshow, and print view. PPTX export writes a native
+`p:bgPr/a:blipFill`, rather than adding an editable full-slide picture. Background
+assets share the 16 MiB image and 100 MiB combined asset limits; external image
+URLs are never fetched. Tiled backgrounds, offset stretch fill rectangles, and
+unsupported background image formats still fall back with an import warning.
+Empty title/subtitle placeholders are not literal document text; external editors
+may display their own editing hints such as “Click to add Title”.
+
 The app bundles Carlito as a Calibri substitute and NAVER Nanum Barun Gothic.
 Calibri Light uses a measured approximate fallback; other missing fonts use local
 substitutes. See [font provenance and metrics](FONT_NOTES.md). Glyph appearance and line wrapping can

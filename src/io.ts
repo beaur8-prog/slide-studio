@@ -2505,6 +2505,13 @@ export async function importPptx(
         warn("표의 행·열 크기를 읽을 수 없습니다.");
         return;
       }
+      const rowHeights = heights.map(
+        (n) => (n / EMU_PER_PX) * Math.abs(parent.sy),
+      );
+      const baseHeight = rowHeights.reduce((a, b) => a + b, 0);
+      // The saved frame can be shorter than its explicit DrawingML rows.
+      // Preserve those rows in every import path, including Studio metadata.
+      geometry.height = Math.max(geometry.height, baseHeight);
       // Our native tables retain a small style extension, but cell text and
       // geometry always come from DrawingML. Modified/complex cell formatting
       // falls back to the existing fidelity-preserving per-cell importer.
@@ -2611,9 +2618,6 @@ export async function importPptx(
       }
       const widths = columns.map(
         (n) => (n / columns.reduce((a, b) => a + b, 0)) * geometry.width,
-      );
-      const rowHeights = heights.map(
-        (n) => (n / EMU_PER_PX) * Math.abs(parent.sy),
       );
       const pendingCells: {
         el: SlideElement;
@@ -2801,7 +2805,6 @@ export async function importPptx(
       });
       // Saved row heights can be smaller than the frame: PowerPoint grows rows
       // to fit text. Give that extra height to the rows that need it first.
-      const baseHeight = rowHeights.reduce((a, b) => a + b, 0);
       let spare = Math.max(0, geometry.height - baseHeight);
       const needed = rowHeights.map(() => 0);
       for (const { el, row, span } of pendingCells) {
@@ -2839,10 +2842,6 @@ export async function importPptx(
         rowHeights.forEach((_, r) => {
           rowHeights[r] +=
             (spare * heights[r]) / heights.reduce((a, b) => a + b, 0);
-        });
-      if (baseHeight > geometry.height)
-        rowHeights.forEach((_, r) => {
-          rowHeights[r] *= geometry.height / baseHeight;
         });
       // Standard PowerPoint tables need no private extension to stay tables.
       // The cells retain their paragraphs, asymmetric edges, padding and merges.

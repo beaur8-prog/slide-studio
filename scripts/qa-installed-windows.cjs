@@ -25,6 +25,8 @@ const { execFile } = require('node:child_process');
     expect(version).toBe(process.env.EXPECTED_APP_VERSION);
     if (version.localeCompare('1.6.6', undefined, { numeric: true }) >= 0)
       await require('./qa-save-startup.cjs')(page, output, { app });
+    if (process.env.EXPECTED_APP_VERSION.localeCompare('1.6.7', undefined, { numeric: true }) >= 0)
+      await require('./qa-current-release.cjs')(page, output, { app });
     await require('./qa-open-sample.cjs')(page);
     const pointerTools = version.localeCompare('1.5.3', undefined, { numeric: true }) >= 0;
     const ribbonLayouts = [];

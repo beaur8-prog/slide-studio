@@ -22,6 +22,17 @@ module.exports = async function verifyTrianglePoints(page, output, { app }) {
   zip.file(filename, (await zip.file(filename).async('string')).replace('</p:spTree>', xml + '</p:spTree>'));
   const source = path.join(directory, 'powerpoint-edited-vertices.pptx');
   await fs.writeFile(source, await zip.generateAsync({ type: 'nodebuffer' }));
+  // macOS leaves native fullscreen asynchronously. Measure drag coordinates
+  // only after both fullscreen and the canvas size have settled.
+  await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen())).toBe(false);
+  let previousSize, lastResize = Date.now();
+  await expect.poll(async () => {
+    const size = await page.getByTestId('slide-canvas').evaluate(e => {
+      const b = e.getBoundingClientRect(); return [innerWidth, innerHeight, b.x, b.y, b.width, b.height].join(',');
+    });
+    if (size !== previousSize) { previousSize = size; lastResize = Date.now(); }
+    return Date.now() - lastResize > 400;
+  }, { timeout: 10000 }).toBe(true);
   const input = page.locator('input[accept*=".pptx"]');
   await input.setInputFiles(source);
   const shapes = page.locator('.editable-slide [data-type="shape"]');

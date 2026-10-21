@@ -31,6 +31,8 @@ const output = path.resolve('qa/results/linux-native');
     if (process.env.EXPECTED_APP_VERSION.localeCompare('1.6.6', undefined, { numeric: true }) >= 0)
       await require('./qa-save-startup.cjs')(page, output, { app });
 
+    if (process.env.EXPECTED_APP_VERSION.localeCompare('1.6.7', undefined, { numeric: true }) >= 0)
+      await require('./qa-current-release.cjs')(page, output, { app });
     // Open a real PPTX through the production file input (no mocked renderer).
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_WIDE';

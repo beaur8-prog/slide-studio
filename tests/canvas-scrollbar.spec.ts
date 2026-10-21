@@ -1,3 +1,4 @@
+import openSample from "../scripts/qa-open-sample.cjs";
 import { test, expect } from "@playwright/test";
 
 test.use({ launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] } });
@@ -9,7 +10,7 @@ test("main scrollbar stays visible at Fit and navigates independently of thumbna
 }, testInfo) => {
   await page.setViewportSize({ width: 1080, height: 720 });
   await page.goto("http://127.0.0.1:5190");
-  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await openSample(page);
   const bar = page.getByRole("scrollbar", {
     name: "슬라이드 편집 영역 스크롤",
   });
@@ -76,7 +77,7 @@ test("main scrollbar pans zoomed content before advancing, with horizontal scrol
 }, testInfo) => {
   await page.setViewportSize({ width: 1080, height: 720 });
   await page.goto("http://127.0.0.1:5190");
-  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await openSample(page);
   await page.getByRole("slider", { name: "확대 비율" }).fill("150");
   const area = page.locator(".canvas-area");
   const bar = page.getByRole("scrollbar", {

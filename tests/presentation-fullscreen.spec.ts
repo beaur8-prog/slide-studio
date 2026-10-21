@@ -1,3 +1,4 @@
+import openSample from "../scripts/qa-open-sample.cjs";
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,7 +25,7 @@ test("Windows slideshow covers the display and restores normal, maximized, and f
   const app = await electron.launch({ args: [harness], env });
   try {
     const page = await app.firstWindow();
-    await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+    await openSample(page);
     const windowState = () =>
       app.evaluate(({ BrowserWindow, screen }) => {
         const win = BrowserWindow.getAllWindows()[0];
@@ -154,7 +155,7 @@ test("browser slideshow enters fullscreen automatically and follows native fulls
   page,
 }) => {
   await page.goto("http://127.0.0.1:5190");
-  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await openSample(page);
   await page.keyboard.press("F5");
   await expect(page.getByTestId("presentation-view")).toBeVisible();
   await expect
@@ -196,7 +197,7 @@ test("browser slideshow preserves existing fullscreen on Esc but stops when that
   page,
 }) => {
   await page.goto("http://127.0.0.1:5190");
-  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await openSample(page);
   await page.evaluate(() => document.documentElement.requestFullscreen());
   await page.keyboard.press("F5");
   await expect(page.getByTestId("presentation-view")).toBeVisible();
@@ -220,7 +221,7 @@ test("browser slideshow preserves existing fullscreen on Esc but stops when that
 
 test("browser restart survives the previous show's pending fullscreen exit", async ({ page }) => {
   await page.goto("http://127.0.0.1:5190");
-  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await openSample(page);
   await page.keyboard.press("F5");
   const view = page.getByTestId("presentation-view");
   await expect(view).toBeVisible();

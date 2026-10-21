@@ -379,7 +379,7 @@ function LibraryContents({
 export default function App() {
   const [history, setHistory] = useState<History>(() => ({
     past: [],
-    present: sampleDeck(),
+    present: { ...blankDeck(), slides: [newSlide()] },
     future: [],
   }));
   const deck = useMemo(
@@ -934,7 +934,7 @@ export default function App() {
             setHistory({ past: [], present: safe, future: [] });
             setActiveId(safe.slides[0].id);
           } catch {
-            notify("저장된 문서를 읽지 못해 새 예제를 열었습니다.");
+            notify("저장된 문서를 읽지 못해 빈 프레젠테이션을 열었습니다.");
           }
         }
         loadedRef.current = true;

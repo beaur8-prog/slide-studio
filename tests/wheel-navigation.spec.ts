@@ -1,3 +1,4 @@
+import openSample from "../scripts/qa-open-sample.cjs";
 import { test, expect } from "@playwright/test";
 
 const current = (page: import("@playwright/test").Page) =>
@@ -7,7 +8,7 @@ test("small mouse-wheel notches advance immediately and distinct notches do not 
   page,
 }) => {
   await page.goto("http://127.0.0.1:5190");
-  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await openSample(page);
   const area = page.locator(".canvas-area");
   await area.hover();
   // Low-resolution mouse notches on macOS can be far below 60 CSS pixels.
@@ -35,7 +36,7 @@ test("tiny jitter does not change slides and a long momentum tail stays on one s
   page,
 }) => {
   await page.goto("http://127.0.0.1:5190");
-  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await openSample(page);
   const area = page.locator(".canvas-area");
   // Model arrival times rather than OS scheduling delays: renderer layout can
   // stretch a 40 ms wall-clock timer beyond the intentional 80 ms quiet gap.
@@ -75,7 +76,7 @@ test("wheel changes one slide per burst, clamps at ends and follows the active t
 }) => {
   await page.setViewportSize({ width: 1080, height: 720 });
   await page.goto("http://127.0.0.1:5190");
-  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await openSample(page);
   const area = page.locator(".canvas-area");
   await area.hover();
   await page.mouse.wheel(0, -120);
@@ -127,7 +128,7 @@ test("zoomed canvas scrolls before advancing; Ctrl-wheel zoom and sidebar scroll
 }) => {
   await page.setViewportSize({ width: 1080, height: 720 });
   await page.goto("http://127.0.0.1:5190");
-  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await openSample(page);
   await page.getByRole("slider", { name: "확대 비율" }).fill("150");
   const area = page.locator(".canvas-area");
   await area.evaluate((el) => {

@@ -22,3 +22,9 @@ npm run build
 Mac Electron 프로덕션 빌드를 별도 임시 프로필에서 실제로 두 번 실행했다. 네이티브 IPC를 통해 파일을 열고 PPTX/PDF를 디스크에 저장했으며 ZIP/PDF 읽기, 문서 폴더의 우선 사용·재실행 후 기억·PDF 출력 후 유지, 이전 `.slide` 원본 보존과 PPTX 변환을 확인했다. 파일 선택 창의 응답은 검사용으로 지정하고 전달된 네이티브 대화상자 옵션을 검사했다. 잠긴 화면에서 OS 대화상자를 직접 조작한 수동 검사는 아니다.
 
 로컬 증거는 `qa/results/pptx-save/`의 `baseline.log`, `regression.log`, `build.log`, `native.json`, `native-pptx-save.png`에 있다. 사용 중인 앱·사용자 문서·프로필은 유지했다. 실제 사용 중인 Mac 앱 교체는 화면 잠금으로 보류했다.
+
+## 첫 실행 빈 문서
+
+자동 저장 문서가 없는 첫 실행은 예제 대신 텍스트·도형·노트가 없는 빈 슬라이드 한 장으로 시작한다. 기존 자동 저장 문서의 복원과 새 문서 메뉴의 예제 선택은 유지했다. 여러 장이 필요한 기존 검사는 `scripts/qa-open-sample.cjs`로 예제를 명시적으로 선택한다.
+
+프로덕션 빌드가 통과했다. 스크롤·발표 격리/전체 화면·노트 크기 조절·한글/300장 편집·PPTX 가져오기/저장·화면 구성 검사 **23개가 통과**했고 Windows 네이티브 전체 화면 검사 한 개는 Mac에서 건너뛰었다. 별도 임시 프로필의 Mac Electron 앱을 세 번 실행하여 최초 빈 문서, 문서 이름·노트 편집의 재실행 후 복원, 예제 선택 및 기존 예제 복원을 확인했다. 로컬 증거는 `qa/results/blank-start/native.json`, `first-launch.png`, `restored-sample.png`, `regression/`에 있다. 공개 배포와 사용 중인 앱 교체는 하지 않았다.

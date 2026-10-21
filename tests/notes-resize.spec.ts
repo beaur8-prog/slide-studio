@@ -1,3 +1,4 @@
+import openSample from "../scripts/qa-open-sample.cjs";
 import { expect, test } from "@playwright/test";
 import verifyNotesResize from "../scripts/qa-notes-resize.cjs";
 
@@ -58,6 +59,7 @@ test("notes height survives slide changes and storage restrictions", async ({
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("http://127.0.0.1:5190");
+  await openSample(page);
   const handle = page.getByRole("separator", { name: "발표자 노트 높이 조절" });
   const notes = page.getByRole("textbox", { name: "발표자 노트", exact: true });
   const original = await notes.inputValue();

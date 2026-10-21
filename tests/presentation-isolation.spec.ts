@@ -1,3 +1,4 @@
+import openSample from "../scripts/qa-open-sample.cjs";
 import { expect, test, type Page } from "@playwright/test";
 
 async function openDesktopEditor(page: Page) {
@@ -41,7 +42,7 @@ async function openDesktopEditor(page: Page) {
     };
   });
   await page.goto("http://127.0.0.1:5190");
-  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await openSample(page);
 }
 
 test("native editor commands are ignored during a show and Ctrl+Enter advances it", async ({
@@ -177,7 +178,7 @@ test("browser Ctrl+P is suppressed during a show and works again in the editor",
     };
   });
   await page.goto("http://127.0.0.1:5190");
-  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await openSample(page);
   await page.keyboard.press("F5");
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("Control+p");

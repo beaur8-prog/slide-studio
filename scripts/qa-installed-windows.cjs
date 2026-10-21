@@ -23,7 +23,7 @@ const { execFile } = require('node:child_process');
     await expect(page.locator('.save-indicator')).toHaveText('저장됨', { timeout: 30000 });
     const version = await app.evaluate(({ app }) => app.getVersion());
     expect(version).toBe(process.env.EXPECTED_APP_VERSION);
-    expect(await page.locator('.thumbnail-button').count()).toBeGreaterThan(1);
+    await require('./qa-open-sample.cjs')(page);
     const pointerTools = version.localeCompare('1.5.3', undefined, { numeric: true }) >= 0;
     const ribbonLayouts = [];
     if (pointerTools) {

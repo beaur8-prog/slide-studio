@@ -39,3 +39,11 @@ Mac 배포 앱은 별도 임시 프로필에서 최초 빈 문서, 실제 네이
 | Slide-Studio-win-x64.zip | 156990321 | `8a43b4a0ccbf21a720e4b76a1540fdb31e296368966be98f551df6062d76cbff` |
 | Slide-Studio-Setup-x64.exe | 109593044 | `7c59608b43a9e81d470b08f08e9007133057308da873431b6a3998487345ae83` |
 | Slide-Studio-linux-amd64.deb | 132477382 | `09c5c79c42f56c8100313cff5351b8b24ff8acf592d070b6e75b1910de4d6a42` |
+
+## 공개 배포 확인
+
+[GitHub v1.6.6](https://github.com/beaur8-prog/slide-studio/releases/tag/v1.6.6)을 공개하고 [기존 리토스 다운로드 문서](https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6)를 같은 URL·토큰·생성일로 갱신했다. 공유 서버와 터널을 재시작하지 않았다. Windows 설치 경고를 맨 위에 유지하고 저장 안내를 PPTX로 통일했다. 첫 실행 빈 문서·문서 폴더 기억·이전 .slide를 여는 방법과 실제 설치 앱 화면을 반영했다.
+
+공개 문서 본문과 이미지 19개가 검토본과 일치한다. 고정 latest/download 주소 5개에서 1.6.6 파일을 끝까지 다시 받아 바이트 수·SHA-256·GitHub digest와 버전 리다이렉트를 확인했다. 증거는 `qa/results/release-1.6.6/publication-verification.json`, `live-update.json`, `native/`에 있다.
+
+현재 버전만 남기는 기존 정리 방침에 따라 1.6.5의 GitHub 첨부 파일 5개와 리토스/로컬 publication의 이전 이미지 폴더를 삭제했다. 이전 릴리스 설명과 Git 태그, 현재 1.6.6 다운로드는 보존했다. 사용 중인 Mac 앱은 화면 잠금으로 교체하지 않았으며 배포 앱을 별도 프로필에서 검증했다.

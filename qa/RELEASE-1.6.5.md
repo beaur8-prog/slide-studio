@@ -30,3 +30,11 @@
 | Slide-Studio-win-x64.zip | 156989085 | `8cb7bd2355ec9b4da4d7b5e519d250e6f54e77679d38645858eaff03fec2ffac` |
 | Slide-Studio-Setup-x64.exe | 109723790 | `a2addd2d28a4abb2158e4a94d92b381af082af2d2cc7a5024c7f66f75b281a00` |
 | Slide-Studio-linux-amd64.deb | 132476352 | `41dad959617c2063d473fb6d737370735414170265c7f6b60a2155b79402eaed` |
+
+## 공개 배포 확인
+
+[GitHub v1.6.5](https://github.com/beaur8-prog/slide-studio/releases/tag/v1.6.5)를 공개하고 [기존 리토스 다운로드 문서](https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6)를 같은 URL·토큰·생성일로 갱신했다. 서버와 터널을 재시작하지 않았다. Windows 설치 안내를 맨 위에 유지하고, 표 높이 수정 설명과 원본 PPTX를 다시 여는 방법 및 실제 설치판 화면을 추가했다.
+
+공개 문서와 이미지 17개가 검토본과 일치한다. 기존 latest/download 주소 5개에서 1.6.5 파일을 끝까지 다시 받아 바이트 수·SHA-256·GitHub digest를 확인했다. 검증의 마지막 상태 JSON 기록에서 지역 변수 이름이 겹치는 오류를 수정하고 공유 상태·문서 본문을 다시 확인해 기록을 완료했다. 실행 코드와 배포 파일은 변경하지 않았다. 증거는 `qa/results/release-1.6.5/publication-verification.json`과 `record-finalization.json`에 있다.
+
+현재 버전만 남기는 기존 정리 방침에 따라 1.6.4 GitHub 첨부 파일 5개와 리토스/로컬 publication의 이전 이미지 폴더를 삭제했다. 이전 릴리스 설명과 Git 태그, 1.6.5 다운로드는 보존했다.

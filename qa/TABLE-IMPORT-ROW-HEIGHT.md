@@ -22,4 +22,4 @@ npm run build
 
 재현 데이터는 `tests/table-import-height.spec.ts`가 생성하며 각 검사의 출력 폴더에 `input.pptx`를 남긴다. 로컬 증거는 `qa/results/table-import-height/`에 있다: `frame-72pt-rows-32pt-x4.pptx`, `fixture.json`, 수정 전후 로그/화면, `native.json`, `native-table-height.png`.
 
-이 수정은 다음 배포용 소스 변경이며 공개 1.6.4 설치 파일·리토스 문서는 갱신하지 않았다. 사용 중인 Mac 앱 교체는 화면 잠금으로 보류했다.
+이 수정은 [1.6.5 배포](RELEASE-1.6.5.md)에 반영했다. Mac·Windows·Ubuntu 22.04/24.04 설치 앱에서도 재현 표의 높이와 한글·자동 저장 복원을 확인했다. 리토스 다운로드 문서는 기존 URL을 유지해 갱신했다. 사용 중인 Mac 앱 교체는 화면 잠금으로 보류했다.

@@ -1,6 +1,6 @@
 {
   "name": "slide-studio",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -8,7 +8,7 @@
   "author": "Slide Studio",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5190",
-    "prebuild": "node scripts/create-icon.cjs --runtime",
+    "prebuild": "node scripts/copy-third-party-licenses.cjs && node scripts/create-icon.cjs --runtime",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 5190",
     "start": "node scripts/launch-desktop.cjs",

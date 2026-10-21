@@ -124,10 +124,16 @@
 .canvas-scroll-thumb { position: absolute; left: 3px; right: 3px; min-height: 0; border: 1px solid var(--chrome-border); background: var(--thumbnail-scroll-thumb); border-radius: 2px; }
 .canvas-scroll-thumb:hover { background: var(--chrome-secondary); }
 .office-shell .ruler { color: var(--chrome-secondary); border-color: var(--chrome-border); }
-.office-shell .notes-pane { height: 73px; padding: 7px 20px 4px; background: var(--chrome-surface); border-color: var(--chrome-border); }
+.office-shell .notes-pane { position: relative; display: flex; flex-direction: column; min-height: 73px; padding: 7px 20px 4px; background: var(--chrome-surface); border-color: var(--chrome-border); }
 .office-shell .notes-pane > div, .office-shell .notes-pane small { color: var(--chrome-secondary); }
-.office-shell .notes-pane textarea { height: 40px; padding-top: 5px; color: var(--chrome-text); font-size: 12px; }
+.office-shell .notes-pane > div { flex-shrink: 0; }
+.office-shell .notes-pane textarea { flex: 1; min-height: 0; height: auto; padding-top: 5px; color: var(--chrome-text); font-size: 12px; }
 .office-shell .notes-pane textarea::placeholder { color: var(--chrome-secondary); }
+.notes-resize-handle { position: absolute; z-index: 2; top: -5px; left: 0; width: 100%; height: 10px; cursor: row-resize; touch-action: none; user-select: none; }
+.notes-resize-handle::after { content: ""; position: absolute; top: 4px; left: calc(50% - 22px); width: 44px; height: 3px; border-radius: 2px; background: var(--chrome-secondary); opacity: .55; }
+.notes-resize-handle:is(:hover, :focus-visible)::after { background: var(--accent); opacity: 1; }
+.notes-resize-handle:focus-visible { outline: 1px solid var(--accent); outline-offset: -3px; }
+.notes-resizing, .notes-resizing * { cursor: row-resize !important; user-select: none !important; }
 .office-shell .inspector { width: 256px; background: var(--chrome-surface); border-color: var(--chrome-border); }
 .office-shell .inspector-heading { height: 40px; }
 .office-shell .inspector-heading, .office-shell .inspector-section { border-color: var(--chrome-border); }

@@ -217,3 +217,32 @@ test("browser slideshow preserves existing fullscreen on Esc but stops when that
     "true",
   );
 });
+
+test("browser restart survives the previous show's pending fullscreen exit", async ({ page }) => {
+  await page.goto("http://127.0.0.1:5190");
+  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  await page.keyboard.press("F5");
+  const view = page.getByTestId("presentation-view");
+  await expect(view).toBeVisible();
+  await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(true);
+  await page.evaluate(() => {
+    const original = document.exitFullscreen.bind(document);
+    document.exitFullscreen = () => new Promise<void>((resolve) => {
+      (window as any).__finishOldExit = () => {
+        document.exitFullscreen = original;
+        document.addEventListener("fullscreenchange", () => { (window as any).__oldExitObserved = true; }, { once: true });
+        return original().then(resolve);
+      };
+    });
+  });
+  await page.keyboard.press("Escape");
+  await expect(view).toBeHidden();
+  await page.keyboard.press("F5");
+  await expect(view).toBeVisible();
+  await page.evaluate(() => (window as any).__finishOldExit());
+  await expect.poll(() => page.evaluate(() => !!(window as any).__oldExitObserved)).toBe(true);
+  await page.keyboard.press("ArrowRight");
+  await expect(view).toHaveAttribute("aria-label", /^발표 슬라이드 2 \//);
+  await page.keyboard.press("Escape");
+  await expect(view).toBeHidden();
+});

@@ -5,7 +5,7 @@ on:
       release_tag:
         description: Release containing the exact Debian package
         required: true
-        default: v1.6.3
+        default: v1.6.4
       deb_sha256:
         description: Expected SHA-256 of Slide-Studio-linux-amd64.deb
         required: true

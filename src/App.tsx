@@ -94,6 +94,7 @@ import FontManager from "./FontManager";
 import CommandSearch from "./CommandSearch";
 import TextColorPalette from "./TextColorPalette";
 import NumberInput from "./NumberInput";
+import NotesPane from "./NotesPane";
 import {
   copyElements,
   expandGroups,
@@ -600,6 +601,7 @@ export default function App() {
   const presentationView = useRef<HTMLDivElement>(null);
   const presentationInk = useRef<PresentationInkHandle>(null);
   const browserPresentationFullscreen = useRef(false);
+  const browserFullscreenExitPending = useRef(false);
   const [presentIndex, setPresentIndex] = useState(0);
   const [presentEnded, setPresentEnded] = useState(false);
   const presentationPosition = useRef({ index: 0, ended: false });
@@ -1702,6 +1704,10 @@ export default function App() {
       void window.desktop
         .setPresentationMode(true)
         .catch(() => notify("전체 화면을 사용할 수 없습니다."));
+    } else if (browserFullscreenExitPending.current) {
+      // A previous show may still be exiting. Its fullscreenchange event will
+      // enter fullscreen for the new show instead of closing that new session.
+      return;
     } else if (!document.fullscreenElement) {
       browserPresentationFullscreen.current = true;
       void document.documentElement
@@ -1780,7 +1786,10 @@ export default function App() {
       document.fullscreenElement
     ) {
       browserPresentationFullscreen.current = false;
-      void document.exitFullscreen().catch(() => {});
+      browserFullscreenExitPending.current = true;
+      void document.exitFullscreen().catch(() => {
+        browserFullscreenExitPending.current = false;
+      });
     }
   };
   useEffect(() => {
@@ -1791,6 +1800,11 @@ export default function App() {
       // Observe exits even if the editor was fullscreen before the show began.
       // Ownership only controls whether stopping the show exits fullscreen.
       if (!document.fullscreenElement) {
+        if (browserFullscreenExitPending.current) {
+          browserFullscreenExitPending.current = false;
+          if (presentationActive.current) enterPresentationFullscreen();
+          return;
+        }
         browserPresentationFullscreen.current = false;
         leavePresentation();
       }
@@ -4454,7 +4468,7 @@ export default function App() {
               </div>
             )}
             {notesVisible && (
-              <div className="notes-pane">
+              <NotesPane>
                 <div>
                   <StickyNote size={14} />
                   <span>발표자 노트</span>
@@ -4468,6 +4482,7 @@ export default function App() {
                   </button>
                 </div>
                 <textarea
+                  id="speaker-notes-editor"
                   aria-label="발표자 노트"
                   placeholder="이 슬라이드에서 이야기할 내용을 적어두세요…"
                   value={slide.notes}
@@ -4482,7 +4497,7 @@ export default function App() {
                   }
                   onBlur={finish}
                 />
-              </div>
+              </NotesPane>
             )}
           </section>
           <aside className="inspector" hidden={!inspectorVisible}>

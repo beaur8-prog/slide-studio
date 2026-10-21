@@ -155,6 +155,8 @@ const output = path.resolve('qa/results/linux-native');
       await require('./qa-triangle-points.cjs')(page, output, { app });
     if (process.env.EXPECTED_APP_VERSION.localeCompare('1.6.4', undefined, { numeric: true }) >= 0)
       await require('./qa-notes-resize.cjs')(page, output, { app });
+    if (process.env.EXPECTED_APP_VERSION.localeCompare('1.6.5', undefined, { numeric: true }) >= 0)
+      await require('./qa-table-row-height.cjs')(page, output, { app });
     await fs.writeFile(path.join(output, 'native-app.json'), JSON.stringify({
       version: process.env.EXPECTED_APP_VERSION, protection, installedApp: true, pptxImport: true,
       koreanText: true, systemKoreanFallback: true, objectContext: true, selectedTextColorAndSelection: true,

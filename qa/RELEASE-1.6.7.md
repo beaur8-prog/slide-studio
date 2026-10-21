@@ -42,3 +42,11 @@ Mac에서는 완전 종료·재실행, 창 닫기 후 활성화·두 번째 인�
 | Slide-Studio-win-x64.zip | 156991777 | `0eda8531b155a995ebd9043cafb9e227dcfcfb48cdb2232ed2727d614405e673` |
 | Slide-Studio-Setup-x64.exe | 109585610 | `add70eb5e4d562aaf80ca7cab9acb7332c324c97ebffa8c03a135c89b1b51802` |
 | Slide-Studio-linux-amd64.deb | 132487764 | `a54213753411c58e2cc399068da8b6aacbe49463900aa56dc051bbba22c6934e` |
+
+## 공개 배포 확인
+
+[GitHub v1.6.7](https://github.com/beaur8-prog/slide-studio/releases/tag/v1.6.7)을 공개하고 [기존 리토스 다운로드 문서](https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6)를 같은 URL·토큰·생성일로 갱신했다. 공유 서버와 터널을 재시작하지 않았다. 새 기능과 매 실행 빈 문서·실제 최근 파일·종료 전 PPTX 저장 안내, 최신 설치 앱 화면을 반영했다. Windows 설치 경고를 맨 위에 유지했다.
+
+공개 문서 본문과 이미지 파일 22개가 검토본과 일치한다. 데스크톱·모바일에서 모든 그림이 로드되고 가로 넘침·브라우저 오류가 없음을 확인했다. 고정 latest/download 주소 5개에서 파일을 끝까지 다시 받아 바이트 수·SHA-256·GitHub digest와 v1.6.7 리다이렉트를 확인했다. 증거는 `qa/results/release-1.6.7/publication-verification.json`, `live-update.json`, `native/`에 있다.
+
+현재 버전만 남기는 기존 정리 방침에 따라 1.6.6의 GitHub 첨부 파일 5개와 이전 리토스/publication 이미지 폴더를 삭제했다. 이전 릴리스 설명과 Git 태그, 현재 1.6.7 다운로드는 보존했다. 이 Mac의 설치 앱도 1.6.7로 교체하고 기존 원본 IXPE 파일을 다시 열어 그림 배경 표시를 확인했다. 원본 문서는 변경하지 않았다.

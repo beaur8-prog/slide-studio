@@ -13,7 +13,7 @@ const DEV_URL = 'http://127.0.0.1:5190';
 const IS_DEV = !app.isPackaged && process.env.SLIDE_STUDIO_DEV === '1';
 const INDEX_PATH = path.resolve(__dirname, '..', 'dist', 'index.html');
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = new Set(['slide', 'pptx']);
+const OPEN_EXTENSIONS = new Set(['slide', 'pptx']);
 const CHROME_THEMES = {
   dark: { color: '#151515', symbolColor: '#f2f2f2', height: 40 },
   light: { color: '#f3f3f3', symbolColor: '#242424', height: 40 },
@@ -22,6 +22,8 @@ const CHROME_THEMES = {
 let mainWindow = null;
 const presenterWindows = new Set();
 let nativeOperationPending = false;
+let documentDirectory;
+let dialogDirectoryLoaded = false;
 let officeLightFont;
 let officeCalibriFonts;
 let presentationWindowState = null;
@@ -95,9 +97,8 @@ function decodeFilePayload(payload) {
     throw new Error('The file is missing a name.');
   }
   const extensions = payload.extensions;
-  if (!Array.isArray(extensions) || extensions.length < 1 || extensions.length > 2 ||
-      extensions.some(extension => !ALLOWED_EXTENSIONS.has(extension))) {
-    throw new Error('Only Slide Studio and PowerPoint files can be saved.');
+  if (!Array.isArray(extensions) || extensions.length !== 1 || extensions[0] !== 'pptx') {
+    throw new Error('Presentations are saved as .pptx files.');
   }
   const data = payload.data;
   if (!(data instanceof Uint8Array) || data.byteLength === 0 || data.byteLength > MAX_FILE_BYTES) {
@@ -126,6 +127,40 @@ async function atomicWrite(filename, buffer) {
   } finally {
     await fs.rm(temporary, { force: true }).catch(() => {});
   }
+}
+
+function dialogDirectoryFile() {
+  return path.join(app.getPath('userData'), 'file-dialog-location.json');
+}
+
+async function defaultDialogPath(name) {
+  if (!dialogDirectoryLoaded) {
+    dialogDirectoryLoaded = true;
+    try {
+      const file = dialogDirectoryFile();
+      if ((await fs.stat(file)).size <= 64 * 1024) {
+        const saved = JSON.parse(await fs.readFile(file, 'utf8'));
+        if (saved.version === 1 && typeof saved.directory === 'string' &&
+            path.isAbsolute(saved.directory)) documentDirectory = saved.directory;
+      }
+    } catch { /* First launch or unavailable preference storage. */ }
+  }
+  let directory = app.getPath('documents');
+  try {
+    if (documentDirectory && (await fs.stat(documentDirectory)).isDirectory())
+      directory = documentDirectory;
+  } catch { /* A moved/deleted folder falls back to Documents. */ }
+  return name ? path.join(directory, name) : directory;
+}
+
+async function rememberDocumentDirectory(filename) {
+  documentDirectory = path.dirname(filename);
+  dialogDirectoryLoaded = true;
+  try {
+    await atomicWrite(dialogDirectoryFile(), Buffer.from(JSON.stringify({
+      version: 1, directory: documentDirectory,
+    })));
+  } catch { /* Saving a preference must not fail the user's file operation. */ }
 }
 
 function sendMenuAction(action) {
@@ -182,8 +217,7 @@ function installMenu() {
         { label: 'New Presentation', accelerator: 'CmdOrCtrl+N', click: () => sendMenuAction('new') },
         { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => sendMenuAction('open') },
         { type: 'separator' },
-        { label: 'Save Slide Studio File…', accelerator: 'CmdOrCtrl+S', click: () => sendMenuAction('save') },
-        { label: 'Export PowerPoint…', accelerator: 'CmdOrCtrl+Shift+E', click: () => sendMenuAction('export-pptx') },
+        { label: 'Save PowerPoint…', accelerator: 'CmdOrCtrl+S', click: () => sendMenuAction('save') },
         { label: 'Export PDF…', click: () => sendMenuAction('export-pdf') },
         { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: () => sendMenuAction('print') },
         { type: 'separator' },
@@ -313,32 +347,44 @@ function installIPC() {
   ipcMain.handle('slide-studio:save-file', (event, payload) => withNativeDialog(event, async () => {
     const file = decodeFilePayload(payload);
     const result = await dialog.showSaveDialog(mainWindow, {
-      title: file.extensions[0] === 'pptx' ? 'Export PowerPoint' : 'Save Presentation',
-      defaultPath: path.join(app.getPath('documents'), file.name),
-      filters: [{ name: file.extensions[0] === 'pptx' ? 'PowerPoint Presentation' : 'Slide Studio Presentation', extensions: file.extensions }],
+      title: 'Save PowerPoint',
+      defaultPath: await defaultDialogPath(file.name),
+      filters: [{ name: 'PowerPoint Presentation', extensions: ['pptx'] }],
       properties: ['createDirectory', 'showOverwriteConfirmation'],
     });
     if (result.canceled || !result.filePath) return null;
-    await atomicWrite(result.filePath, file.data);
-    return result.filePath;
+    const filename = /\.pptx$/i.test(result.filePath) ? result.filePath : result.filePath + '.pptx';
+    if (filename !== result.filePath && await fs.stat(filename).then(() => true, () => false)) {
+      // The native overwrite prompt covered the typed name, not this completed name.
+      const answer = await dialog.showMessageBox(mainWindow, {
+        type: 'question', message: '같은 이름의 PPTX 파일이 있습니다. 바꾸시겠습니까?',
+        detail: filename, buttons: ['바꾸기', '취소'], defaultId: 1, cancelId: 1, noLink: true,
+      });
+      if (answer.response !== 0) return null;
+    }
+    await atomicWrite(filename, file.data);
+    await rememberDocumentDirectory(filename);
+    return filename;
   }));
 
   ipcMain.handle('slide-studio:open-file', event => withNativeDialog(event, async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Open Presentation',
+      defaultPath: await defaultDialogPath(),
       filters: [{ name: 'Presentations', extensions: ['slide', 'pptx'] }],
       properties: ['openFile'],
     });
     if (result.canceled || result.filePaths.length !== 1) return null;
     const filename = result.filePaths[0];
     const extension = path.extname(filename).slice(1).toLowerCase();
-    if (!ALLOWED_EXTENSIONS.has(extension)) throw new Error('Choose a .slide or .pptx presentation.');
+    if (!OPEN_EXTENSIONS.has(extension)) throw new Error('Choose a .slide or .pptx presentation.');
     const handle = await fs.open(filename, 'r');
     try {
       const stat = await handle.stat();
       if (!stat.isFile() || stat.size > MAX_FILE_BYTES) throw new Error('Choose a presentation no larger than 256 MiB.');
       const buffer = await handle.readFile();
       if (buffer.length > MAX_FILE_BYTES) throw new Error('Choose a presentation no larger than 256 MiB.');
+      await rememberDocumentDirectory(filename);
       // Typed-array IPC avoids expanding every file byte into a JS number.
       return { name: path.basename(filename),
         data: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength) };
@@ -351,7 +397,7 @@ function installIPC() {
     if (typeof name !== 'string') throw new Error('The PDF is missing a name.');
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Export PDF',
-      defaultPath: path.join(app.getPath('documents'), safeFilename(name, 'pdf')),
+      defaultPath: await defaultDialogPath(safeFilename(name, 'pdf')),
       filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
       properties: ['createDirectory', 'showOverwriteConfirmation'],
     });

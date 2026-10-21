@@ -10,7 +10,7 @@ async function open(page: Page, link = false) {
       openFile: async () => null,
       saveFile: async (payload) => {
         (window as any).__saved = Array.from(payload.data);
-        return "qa.slide";
+        return "qa.pptx";
       },
       exportPDF: async () => null,
       print: async () => {
@@ -269,12 +269,22 @@ test("context tools choose color and width, fit screen edges, and Escape dismiss
   await expect(page.getByTestId("presentation-view")).toBeHidden();
 });
 
-test("session ink is not saved to the project and never remains in the next show", async ({
+test("session ink is not saved to PPTX and never remains in the next show", async ({
   page,
 }) => {
   await open(page);
-  await page.keyboard.press("Control+s");
-  const before = await page.evaluate(() => (window as any).__saved);
+  const savedContent = async () => {
+    await page.evaluate(() => { (window as any).__saved = null; });
+    await page.keyboard.press("Control+s");
+    await expect.poll(() => page.evaluate(() => (window as any).__saved?.slice(0, 2))).toEqual([80, 75]);
+    await expect(page.locator('.busy-backdrop')).toHaveCount(0);
+    return page.evaluate(async () => {
+      const { importPptx } = await import('/src/io.ts');
+      const { deck } = await importPptx(Uint8Array.from((window as any).__saved));
+      return deck.slides.map(slide => ({ notes: slide.notes, elements: slide.elements }));
+    });
+  };
+  const before = await savedContent();
   await page.keyboard.press("F5");
   await page.keyboard.press("Control+p");
   await draw(page, page.getByTestId("presentation-ink"));
@@ -285,8 +295,7 @@ test("session ink is not saved to the project and never remains in the next show
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog",{name:"발표 판서 보관"})).toBeVisible();
   await page.getByRole("button",{name:"판서 버리기",exact:true}).click();
-  await page.keyboard.press("Control+s");
-  expect(await page.evaluate(() => (window as any).__saved)).toEqual(before);
+  expect(await savedContent()).toEqual(before);
   await page.keyboard.press("F5");
   await expect(page.getByTestId("presentation-ink")).toHaveAttribute(
     "data-tool",

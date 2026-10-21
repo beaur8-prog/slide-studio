@@ -25,7 +25,7 @@ declare global {
       saveFile(payload: {
         name: string;
         data: Uint8Array;
-        extensions: string[];
+        extensions: ["pptx"];
       }): Promise<string | null>;
       openFile(): Promise<{ name: string; data: Uint8Array } | null>;
       exportPDF(name: string): Promise<string | null>;

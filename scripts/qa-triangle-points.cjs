@@ -62,7 +62,7 @@ module.exports = async function verifyTrianglePoints(page, output, { app }) {
   }
   const saved = path.join(directory, 'edited-triangles.pptx');
   await app.evaluate(({ dialog }, filePath) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath }); }, saved);
-  await page.getByRole('button', { name: 'PPTX 내보내기', exact: true }).click();
+  await page.getByRole('button', { name: 'PPTX 저장', exact: true }).click();
   await expect.poll(async () => { try { return (await fs.stat(saved)).size; } catch { return 0; } }).toBeGreaterThan(1000);
   const oldId = await shapes.first().getAttribute('data-element-id');
   await input.setInputFiles(saved);

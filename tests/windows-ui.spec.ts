@@ -6,7 +6,7 @@ test('Windows shortcut labels, Ctrl save and desktop print actions work in the s
     (window as any).__saved = null;
     (window as any).__prints = 0;
     window.desktop = {
-      saveFile: async payload => { (window as any).__saved = { ...payload, data: [...payload.data] }; return 'saved.slide'; },
+      saveFile: async payload => { (window as any).__saved = { ...payload, data: [...payload.data] }; return 'saved.pptx'; },
       openFile: async () => null,
       exportPDF: async () => null,
       print: async () => { (window as any).__prints++; return true; },
@@ -17,12 +17,15 @@ test('Windows shortcut labels, Ctrl save and desktop print actions work in the s
   await expect(page.getByRole('button', { name: '실행 취소', exact: true })).toHaveAttribute('title', '실행 취소 Ctrl+Z');
   await expect(page.getByRole('button', { name: '다시 실행', exact: true })).toHaveAttribute('title', '다시 실행 Ctrl+Y');
   await page.getByRole('button', { name: '파일', exact: true }).click();
-  await expect(page.getByRole('button', { name: '프로젝트 저장' })).toContainText('Ctrl+S');
+  await expect(page.locator('.file-popover').getByRole('button', { name: /^PPTX 저장/ })).toContainText('Ctrl+S');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Control+s');
-  await expect.poll(() => page.evaluate(() => (window as any).__saved?.extensions)).toEqual(['slide']);
-  const saved = await page.evaluate(() => JSON.parse(new TextDecoder().decode(Uint8Array.from((window as any).__saved.data))));
-  expect(JSON.stringify(saved)).toContain('slides');
+  await expect.poll(() => page.evaluate(() => (window as any).__saved?.extensions)).toEqual(['pptx']);
+  const saved = await page.evaluate(async () => {
+    const { importPptx } = await import('/src/io.ts');
+    return (await importPptx(Uint8Array.from((window as any).__saved.data))).deck;
+  });
+  expect(saved.slides.length).toBeGreaterThan(0);
   // Electron consumes Ctrl+P through its native menu before renderer keydown.
   // Exercise the actual menu-to-renderer callback with the desktop bridge mock.
   await page.evaluate(() => (window as any).__menu('print'));

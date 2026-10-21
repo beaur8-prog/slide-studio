@@ -33,7 +33,6 @@ import {
   ChevronRight,
   Circle,
   Copy,
-  Download,
   EyeOff,
   File,
   FolderOpen,
@@ -138,7 +137,7 @@ import {
   uid,
 } from "./model";
 import SlideCanvas, { SlideVisual } from "./SlideCanvas";
-import { exportPptx, importPptx, parseDeckJson, serializeDeck } from "./io";
+import { exportPptx, importPptx, parseDeckJson } from "./io";
 import { listAutosaves, loadAutosave, saveAutosave } from "./storage";
 import TableEditor from "./TableEditor";
 import {
@@ -538,6 +537,7 @@ export default function App() {
   );
   const [busy, setBusy] = useState("");
   const printing = useRef(false);
+  const savingPptx = useRef(false);
   const [modal, setModal] = useState<Modal>(null);
   const modalRef = useRef<Modal>(modal);
   modalRef.current = modal;
@@ -1552,13 +1552,12 @@ export default function App() {
   const saveBytes = async (
     name: string,
     data: Uint8Array,
-    extensions: string[],
   ) => {
     if (window.desktop)
       return !!(await window.desktop.saveFile({
         name,
         data,
-        extensions,
+        extensions: ["pptx"],
       }));
     const url = URL.createObjectURL(new Blob([new Uint8Array(data)]));
     const link = document.createElement("a");
@@ -1568,35 +1567,22 @@ export default function App() {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
     return true;
   };
-  const saveProject = async () => {
+  const savePptx = async () => {
+    if (savingPptx.current || printing.current || busy) return;
+    savingPptx.current = true;
     setMenu(null);
-    try {
-      if (
-        await saveBytes(
-          `${deck.name}.slide`,
-          new TextEncoder().encode(serializeDeck(deck)),
-          ["slide"],
-        )
-      )
-        notify("편집 가능한 프로젝트 파일을 저장했습니다.");
-    } catch (error) {
-      notify(
-        `저장 실패: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  };
-  const exportDeck = async () => {
-    setMenu(null);
+    finish();
     setBusy("PowerPoint 파일을 만들고 있습니다");
     try {
       const bytes = await exportPptx(deck);
-      if (await saveBytes(`${deck.name}.pptx`, bytes, ["pptx"]))
+      if (await saveBytes(`${deck.name}.pptx`, bytes))
         notify("PPTX 파일을 저장했습니다.");
     } catch (error) {
       notify(
-        `PPTX 내보내기 실패: ${error instanceof Error ? error.message : String(error)}`,
+        `PPTX 저장 실패: ${error instanceof Error ? error.message : String(error)}`,
       );
     } finally {
+      savingPptx.current = false;
       setBusy("");
     }
   };
@@ -2067,7 +2053,7 @@ export default function App() {
       }
       if (cmd && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        void saveProject();
+        void savePptx();
         return;
       }
       if (cmd && e.key.toLowerCase() === "o") {
@@ -2488,8 +2474,7 @@ export default function App() {
       }
       if (action === "new") setModal("new");
       if (action === "open") void openProject();
-      if (action === "save") void saveProject();
-      if (action === "export-pptx") void exportDeck();
+      if (action === "save") void savePptx();
       if (action === "export-pdf") void exportPdf();
       if (action === "print") void printDeck();
       if (action === "present") startPresent();
@@ -3105,8 +3090,8 @@ export default function App() {
             <button
               className="icon-button quick-save"
               aria-label="빠른 저장"
-              title={`프로젝트 저장 ${shortcut("S")}`}
-              onClick={() => void saveProject()}
+              title={`PPTX 저장 ${shortcut("S")}`}
+              onClick={() => void savePptx()}
             >
               <Save size={16} />
             </button>
@@ -3146,9 +3131,9 @@ export default function App() {
               },
               {
                 id: "save",
-                label: "프로젝트 저장",
+                label: "PPTX 저장",
                 hint: shortcut("S"),
-                run: () => void saveProject(),
+                run: () => void savePptx(),
               },
               {
                 id: "text",
@@ -3251,11 +3236,6 @@ export default function App() {
                 keywords: "확대 축소",
                 run: () => setZoom(null),
               },
-              {
-                id: "export",
-                label: "PPTX 내보내기",
-                run: () => void exportDeck(),
-              },
               { id: "pdf", label: "PDF 내보내기", run: () => void exportPdf() },
               ...deck.slides.map((item, index) => ({
                 id: item.id,
@@ -3272,10 +3252,10 @@ export default function App() {
           <div className="document-actions">
             <button
               className="button secondary export-button"
-              onClick={() => void exportDeck()}
+              onClick={() => void savePptx()}
             >
-              <Download size={15} />
-              PPTX 내보내기
+              <Save size={15} />
+              PPTX 저장
             </button>
             <button className="button primary" onClick={() => startPresent()}>
               <Play size={15} fill="currentColor" />
@@ -3339,13 +3319,9 @@ export default function App() {
                   원본 글꼴 추가
                 </button>
                 <hr />
-                <button onClick={() => void saveProject()}>
+                <button onClick={() => void savePptx()}>
                   <Save size={16} />
-                  프로젝트 저장<span>{shortcut("S")}</span>
-                </button>
-                <button onClick={() => void exportDeck()}>
-                  <FileDown size={16} />
-                  PowerPoint (.pptx)
+                  PPTX 저장<span>{shortcut("S")}</span>
                 </button>
                 <button onClick={() => void exportPdf()}>
                   <FileDown size={16} />
@@ -5311,7 +5287,7 @@ export default function App() {
                 <h2>키보드 단축키</h2>
                 <div className="shortcut-list">
                   {[
-                    ["파일 저장", "⌘ / Ctrl + S"],
+                    ["PPTX 저장", "⌘ / Ctrl + S"],
                     ["파일 열기", "⌘ / Ctrl + O"],
                     ["인쇄", "⌘ / Ctrl + P"],
                     ["새 슬라이드", "⌘ / Ctrl + M"],

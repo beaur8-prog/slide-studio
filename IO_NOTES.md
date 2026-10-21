@@ -1,7 +1,14 @@
 # Presentation file compatibility
 
-Slide Studio saves its complete editable model as a versioned JSON project. JSON
-loading validates object kinds, IDs, slide and object limits, finite geometry,
+Slide Studio saves user files as PowerPoint (.pptx). The separate .slide save
+command has been removed. Existing .slide files remain readable so users can
+migrate them to PPTX. The complete editor model is still autosaved locally in
+IndexedDB; this local recovery is separate from a saved PPTX file. Native open,
+save and PDF dialogs start in the last successfully opened/saved document folder,
+remembered across app launches. Cancelled/failed operations and PDF output do not
+change that document folder. Deleted folders fall back to Documents.
+
+Legacy JSON loading validates object kinds, IDs, slide and object limits, finite geometry,
 font sizes, opacity, colors, embedded raster image signatures, rich paragraphs,
 image crops, cell borders, and bounded numeric drawing paths. Unknown JSON
 properties are discarded. Raw SVG, external image URLs, and script-bearing URLs

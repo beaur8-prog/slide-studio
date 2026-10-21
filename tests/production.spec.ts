@@ -124,7 +124,7 @@ test("production assets decode TIFF, load bundled fonts, restore Korean layout a
   expect(fonts).toBe(true);
   const downloadPromise = page.waitForEvent("download");
   await page
-    .getByRole("button", { name: "PPTX 내보내기", exact: true })
+    .getByRole("button", { name: "PPTX 저장", exact: true })
     .click();
   const download = await downloadPromise;
   const exported = testInfo.outputPath("production-roundtrip.pptx");

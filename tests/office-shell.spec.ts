@@ -81,7 +81,7 @@ test("Windows titlebar leaves room for native window buttons and quick save uses
   await page.addInitScript(() => {
     window.desktop = {
       platform: "win32", setChromeTheme: async () => {},
-      saveFile: async payload => { (window as any).__saved = payload.name; return "saved.slide"; },
+      saveFile: async payload => { (window as any).__saved = payload.name; return "saved.pptx"; },
       openFile: async () => null, exportPDF: async () => null, print: async () => true, onMenu: () => () => {},
     };
   });

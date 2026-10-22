@@ -144,8 +144,13 @@ module.exports = async function verifyCurrentRelease(page, output, { app }) {
     }, arrowFile);
     await expect(page.locator('.editable-slide [data-element-id]')).toHaveCount(5); await idle();
     const restoredArrows = (await readDeck()).slides[0].elements.slice(-2);
+    // OOXML reconstruction can insert whitespace between commands and numbers.
+    // Compare command/number tokens and all other path properties, not spelling.
+    const geometry = paths => paths.map(({ d, ...properties }) => ({ ...properties,
+      tokens: d.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/g)
+        .map(token => /^[a-zA-Z]$/.test(token) ? token : Number(token)) }));
     for (let i = 0; i < 2; i++) {
-      expect(restoredArrows[i].paths).toEqual(arrows[i].paths);
+      expect(geometry(restoredArrows[i].paths)).toEqual(geometry(arrows[i].paths));
       expect(restoredArrows[i].fill.toUpperCase()).toBe('#4472C4');
     }
     const version = await app.evaluate(({ app }) => app.getVersion());

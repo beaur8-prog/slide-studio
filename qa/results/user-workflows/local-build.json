@@ -1,0 +1,255 @@
+{
+  "version": "1.6.8",
+  "bundle": "/var/folders/mb/t3ql4k3n78jg88_k5sl46dp40000gn/T/slide-studio-build-zIZwxi/Slide Studio.app",
+  "asarSHA256": "e0cddc7d0ed31a1470ae6a786c14b3a19dd1c19953a3ca8e6074a5c6242df406",
+  "sourceFilesMatch": true,
+  "fileCount": 54,
+  "files": [
+    {
+      "path": "dist/assets/UTIF-D2YiLSfQ.js",
+      "sha256": "6a0fe05bddcfc1178d017760517d8348c470b14bdba2ae04a4851b3b5f3de9f6"
+    },
+    {
+      "path": "dist/assets/__vite-browser-external-BIHI7g3E.js",
+      "sha256": "82507b0bb9ac4affaeb17c40968d830cbd6d14a2ffa04d8994faf1a78e58e1b5"
+    },
+    {
+      "path": "dist/assets/carlito-cyrillic-400-italic-BBq3u1wn.woff2",
+      "sha256": "b1542998e5478497d26b48954dd6856abc9cdb5ff2312c8a8605e9ae5100124a"
+    },
+    {
+      "path": "dist/assets/carlito-cyrillic-400-normal-Bzv-FGbj.woff2",
+      "sha256": "cafc72cdaa5c4eb086a88bd8ca5f1c7ab71e28147817c384c3cec3f4465f18b9"
+    },
+    {
+      "path": "dist/assets/carlito-cyrillic-700-italic-BWpxjWJ1.woff2",
+      "sha256": "c598f6c40db2091b66f82c6b5cd7d09d6f36ba1aa9bcca3cb25f4d829b1cbcba"
+    },
+    {
+      "path": "dist/assets/carlito-cyrillic-700-normal-Cj42L3Bs.woff2",
+      "sha256": "7a80bce01b6fb4ac4d8739488801a2c35d9a8c6c7c4c8f616cd799e2d711e163"
+    },
+    {
+      "path": "dist/assets/carlito-cyrillic-ext-400-italic-BiZjW1hk.woff2",
+      "sha256": "381456852a656be90a28c3e6b6fb4fd5030e6d5f1d178dfc0de01fcccf08452a"
+    },
+    {
+      "path": "dist/assets/carlito-cyrillic-ext-400-normal-DYs6OoL4.woff2",
+      "sha256": "fcf4e79fab227061270f5e8a56f31528e936e46ae699a2aba8b078f0a967da04"
+    },
+    {
+      "path": "dist/assets/carlito-cyrillic-ext-700-italic-ClXPMqhh.woff2",
+      "sha256": "77eb6d495b3a9103755fa951546f758be3da6a62d950ad99a5ce91a7b1f71ef9"
+    },
+    {
+      "path": "dist/assets/carlito-cyrillic-ext-700-normal-BAPhAm-q.woff2",
+      "sha256": "350e5de19d2a4e998a2f1e1875ea8bac4da2ecb3595115b96439d0a5ef56ff68"
+    },
+    {
+      "path": "dist/assets/carlito-greek-400-italic-C1DqF7JR.woff2",
+      "sha256": "c0f736457516a4d280a4e2553f50223e070673757937ecc822c40d452c85156b"
+    },
+    {
+      "path": "dist/assets/carlito-greek-400-normal-Cv5gcxdy.woff2",
+      "sha256": "9b91d375f8870a961a45f2b23da20b5242c584c839c143d16bff0aff47e09423"
+    },
+    {
+      "path": "dist/assets/carlito-greek-700-italic-VWqy950O.woff2",
+      "sha256": "af68eeff437b5ed9f0c7fba65df1f5c000c31ae97f84b2c97e1d328f6a051029"
+    },
+    {
+      "path": "dist/assets/carlito-greek-700-normal-BXGaow7Z.woff2",
+      "sha256": "1fd4092f4f605d0f59bba93d65dba41629c0e410313d43ce460453a8ad35cd35"
+    },
+    {
+      "path": "dist/assets/carlito-greek-ext-400-italic-o-WxseCy.woff2",
+      "sha256": "5d249a2f9bdedd9fcc3e15a24c399bd8fa68d9401b2cc96f84f51ac9ae625af3"
+    },
+    {
+      "path": "dist/assets/carlito-greek-ext-400-normal-DnfnTswf.woff2",
+      "sha256": "64436c9285fea73ff565dad6a70a67d8115a23cdee7871e59441c98ae4ec4cc1"
+    },
+    {
+      "path": "dist/assets/carlito-greek-ext-700-italic-DiO5Rxw8.woff2",
+      "sha256": "04c446708f2bc45c312397afbe29e5c180cecda85fc3e5060fdd820a2e5c50f9"
+    },
+    {
+      "path": "dist/assets/carlito-greek-ext-700-normal-COKnZ-5a.woff2",
+      "sha256": "3294b4f6cbd92b29d246d3e34d09e787f957366a1ba3fea8b9dfaf983567dcdb"
+    },
+    {
+      "path": "dist/assets/carlito-latin-400-italic-BiMes9J5.woff2",
+      "sha256": "6bbdd83c5797d207bd2027f2687a70e428513c56130feaad1ffc0a1a7ace7c07"
+    },
+    {
+      "path": "dist/assets/carlito-latin-400-italic-DcRV6skQ.woff",
+      "sha256": "cc05f59e9f9481be092d322dc4d42d9ff1faeda46d307ca972aca1c7159be53a"
+    },
+    {
+      "path": "dist/assets/carlito-latin-400-normal-R-CeALMm.woff2",
+      "sha256": "a29c4a4e61863753cf6a10831efaa05f849dcaa8f580422dbc41bc058c3b6b64"
+    },
+    {
+      "path": "dist/assets/carlito-latin-400-normal-jEGHVXAP.woff",
+      "sha256": "5682bcf0a218b3b0f229ecc0440909644517fa29d5aa57978383f87a9f6ef123"
+    },
+    {
+      "path": "dist/assets/carlito-latin-700-italic-BkeTGILl.woff",
+      "sha256": "c628524fda03a16eb14d303b0b449bc0c22f9d8dbae5b7c41b6599730b72e531"
+    },
+    {
+      "path": "dist/assets/carlito-latin-700-italic-Ckstd88m.woff2",
+      "sha256": "e1bbd00245b0b22d0c540413ac73a91f7afff587899260a683acec3564f06ac3"
+    },
+    {
+      "path": "dist/assets/carlito-latin-700-normal-CjG3MLqY.woff",
+      "sha256": "c97340859680cc2be316715a367d6966b5cc34df4b74fd4cb9b4b596d2adaad1"
+    },
+    {
+      "path": "dist/assets/carlito-latin-700-normal-DQ6DOkPk.woff2",
+      "sha256": "af249cfe4107221070ff077c29a043004e8f2efea977dcbaaf217a24f3b7680e"
+    },
+    {
+      "path": "dist/assets/carlito-latin-ext-400-italic-CqQQuoTt.woff2",
+      "sha256": "8ebd4b55d954992bd302c1339e3be920459bb6de9e9c647b1f9a4717433f37b7"
+    },
+    {
+      "path": "dist/assets/carlito-latin-ext-400-normal-DPZWia0-.woff2",
+      "sha256": "c62f0fc5db6a6c05165f542e6703d743d94a49312271de0876697f892bd5c14d"
+    },
+    {
+      "path": "dist/assets/carlito-latin-ext-700-italic-BvVMpuZ3.woff2",
+      "sha256": "768c03cb653619038eacf3522a6186c616c3183b597a7c24064e071c9712f488"
+    },
+    {
+      "path": "dist/assets/carlito-latin-ext-700-normal-D2WO8ap1.woff2",
+      "sha256": "ac72169e5c95728df58cd1cf18625228dd2fb7b49a0eb558d213a52529bdc4ce"
+    },
+    {
+      "path": "dist/assets/carlito-vietnamese-400-italic-vBbFSHZk.woff2",
+      "sha256": "b26d0b04b2ebc805e5f9bb80a4e6799579f49b8f4afaba4f3c8f7d3d4fb5d9a0"
+    },
+    {
+      "path": "dist/assets/carlito-vietnamese-400-normal-BA1ASEPx.woff2",
+      "sha256": "3cfac637f4b55fdec1bb978f16ce4ee8ce2fd686425d9f108dbb67fae0593d32"
+    },
+    {
+      "path": "dist/assets/carlito-vietnamese-700-italic-tiFMON_I.woff2",
+      "sha256": "d4240b5101adeb3b6be0a4a13c664077fdeb970a36005f863fb7a810d64e4c73"
+    },
+    {
+      "path": "dist/assets/carlito-vietnamese-700-normal-gG8ns3Xg.woff2",
+      "sha256": "e25d2d98eb5361bf9df83a5f53a73708042cf7d530d97d6b96ea7a2d831d65d5"
+    },
+    {
+      "path": "dist/assets/index-BRHIf476.js",
+      "sha256": "1024be2e864512274ceddf952cf44563416605a8d8928c7bf1941c8a1183ce08"
+    },
+    {
+      "path": "dist/assets/index-DUhjxS3G.css",
+      "sha256": "651ac400ec5f187877c44896535adbf82c5292dceae9de18bde89d8d513a2ad8"
+    },
+    {
+      "path": "dist/fonts/NanumBarunGothic.ttf",
+      "sha256": "9b872773134e2e4d8c0b17021266786576db06c843ede0d0b523b214a450756c"
+    },
+    {
+      "path": "dist/fonts/NanumBarunGothicBold.ttf",
+      "sha256": "39bba4cd9bd2986143825c8654abbb62443914ab33b346c0c929a916f5d98bf2"
+    },
+    {
+      "path": "dist/fonts/NanumBarunGothicLight.ttf",
+      "sha256": "741c050acf9673158b6e5c9c863d05c9ee0f56cc77cf7e3d7a2ae0ee6502c3a4"
+    },
+    {
+      "path": "dist/index.html",
+      "sha256": "f38e44baf35b55bbcbae37e4e4a7d21a733ca492cc2fec342327dd7ac7ead6ad"
+    },
+    {
+      "path": "dist/licenses/Apache-POI-LICENSE.txt",
+      "sha256": "6e7c918e5a49f677c1b85a9eb2d035cd85c217fc42af6b4a336964a434001a9c"
+    },
+    {
+      "path": "dist/licenses/Apache-POI-NOTICE.txt",
+      "sha256": "8e41ec916a59981a28397e2b46d7fb851eea02f7d179d75f030eb248916a4a09"
+    },
+    {
+      "path": "dist/licenses/Carlito-OFL.txt",
+      "sha256": "da106485c940d21672382473486ea643c08be09321e6946545d2af982cdf34a8"
+    },
+    {
+      "path": "dist/licenses/NanumBarunGothic-OFL.txt",
+      "sha256": "0b57f6e60475c103a3177383ab4ddf3c6c3ad390ea6b48cc9820783a856e1b90"
+    },
+    {
+      "path": "dist/licenses/THIRD-PARTY-NOTICES.txt",
+      "sha256": "94c93807f65e29715293b491647704382d6f1814b7c2004e6e08e5d898af60a8"
+    },
+    {
+      "path": "dist/licenses/UTIF-MIT.txt",
+      "sha256": "c1fb8861eca211bf5aea574358aba7039396c0c1824c2a1477cc126d398efd89"
+    },
+    {
+      "path": "dist/licenses/pako-MIT.txt",
+      "sha256": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539"
+    },
+    {
+      "path": "electron/assets/SlideStudio.png",
+      "sha256": "de8bc738e335725ea288a36eb779cabe8d965819511da743df5facfbf2a27a01"
+    },
+    {
+      "path": "electron/main.cjs",
+      "sha256": "8c3d1f345819fede8feefc9a3b9319b58add7e3b85a65e1bdb803fbea646171b"
+    },
+    {
+      "path": "electron/office-fonts.cjs",
+      "sha256": "448f47839638ef0e5016172b5df0c03d33dfc7d864ad5229cf799e7d0197ae93"
+    },
+    {
+      "path": "electron/preload.cjs",
+      "sha256": "62116121ab89439a02274a721fe0f9801bc95d9ca9de7bcc76793ced5a2d7c68"
+    },
+    {
+      "path": "electron/presentation-window.cjs",
+      "sha256": "c5dbb6af1f1450f0e749ea990fdc828c16b1861295e7abf79574e07f005d3d71"
+    },
+    {
+      "path": "electron/presenter-preload.cjs",
+      "sha256": "0bf1e4161e16c3d956f90fd1ec812055230711d1c90ce892cc9333b6277d21a9"
+    },
+    {
+      "path": "electron/recent-files.cjs",
+      "sha256": "bef7b4664d46ee672a87c6a312f09ecc5aa32e4c6bf818ef7cda64256d05b1b9"
+    }
+  ],
+  "sources": [
+    {
+      "path": "src/App.tsx",
+      "sha256": "5a76fd8e3b1087dc76c620b5723338236dfaeb9f091c739bb887763723eee18f"
+    },
+    {
+      "path": "src/io.ts",
+      "sha256": "b9f4db028446f2fdba00ab0f94a0dd4ad852ff4da6af068f305dd043d7ac740e"
+    },
+    {
+      "path": "src/colors.ts",
+      "sha256": "636e0ace0ebca9a80e22ce33b0afd3281ef53353360bcc7789ef4e5771be5a72"
+    },
+    {
+      "path": "src/pptx-table-style.ts",
+      "sha256": "2b6b2d816a52a65c2585275cf2323cde71496d423d36f5bc3caaa23083aa3d2c"
+    },
+    {
+      "path": "src/document-limits.ts",
+      "sha256": "22e0d43710caa496c6c084d81672479765170bdda0a19e1ba2428020b23d0971"
+    },
+    {
+      "path": "electron/main.cjs",
+      "sha256": "8c3d1f345819fede8feefc9a3b9319b58add7e3b85a65e1bdb803fbea646171b"
+    },
+    {
+      "path": "electron/presentation-window.cjs",
+      "sha256": "c5dbb6af1f1450f0e749ea990fdc828c16b1861295e7abf79574e07f005d3d71"
+    }
+  ]
+}

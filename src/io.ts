@@ -35,6 +35,8 @@ import { paragraphLines, paragraphText } from "./text-layout";
 import { drawingPaths } from "./drawing-path";
 import { readTextBody } from "./pptx-text";
 import { restoreLayoutXml } from "./pptx-export-layout";
+import { inheritTableCellStyle } from "./pptx-table-style";
+import { MAX_SLIDES, MAX_SLIDE_ELEMENTS, MAX_ELEMENTS } from "./document-limits";
 import { writeBackgroundImage } from "./pptx-background";
 import { writeGroups } from "./object-groups";
 import {
@@ -66,8 +68,6 @@ const MAX_EXPANDED = 200 * 1024 * 1024;
 const MAX_PART = 24 * 1024 * 1024;
 const MAX_XML = 8 * 1024 * 1024;
 const MAX_IMAGE = 16 * 1024 * 1024;
-const MAX_SLIDES = 500;
-const MAX_ELEMENTS = 10000;
 const MAX_ZIP_FILES = 5000;
 const REL_NS =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -197,7 +197,7 @@ export function parseDeckJson(text: string): Deck {
       const id = stringValue(slide.id, `${label} ID`, 160, false);
       if (slideIds.has(id)) fail("슬라이드 ID가 중복되어 있습니다.");
       slideIds.add(id);
-      if (!Array.isArray(slide.elements) || slide.elements.length > 1000)
+      if (!Array.isArray(slide.elements) || slide.elements.length > MAX_SLIDE_ELEMENTS)
         fail(`${label}: 개체는 1,000개 이하여야 합니다.`);
       elementCount += slide.elements.length;
       if (elementCount > MAX_ELEMENTS)
@@ -681,7 +681,9 @@ function restoreTableXml(doc: Document, elements: SlideElement[]) {
         const style = tableCellStyle(data, r, c),
           body = child(cell, "txBody"),
           cp = child(cell, "tcPr");
-        if (body && style.paragraphs) {
+        // PptxGenJS omits the insertion style of empty cells. Emit a native
+        // empty run so typing after reopening keeps the cell's font/color.
+        if (body && (style.paragraphs || !cells[r][c])) {
           const P =
             "http://schemas.openxmlformats.org/presentationml/2006/main";
           const temporary = doc.implementation.createDocument(P, "p:sp"),
@@ -697,7 +699,9 @@ function restoreTableXml(doc: Document, elements: SlideElement[]) {
               id: name,
               type: "text",
               text: cells[r][c],
-              paragraphs: style.paragraphs,
+              paragraphs: style.paragraphs ?? [
+                { align: style.align, runs: [{ text: "" }] },
+              ],
               x: 0,
               y: 0,
               width: widths[c] / EMU_PER_PX,
@@ -2906,20 +2910,38 @@ export async function importPptx(
         columns.length <= MAX_TABLE_COLUMNS
       ) {
         try {
-          const data = createTable(rows.length, columns.length);
+          let data = createTable(rows.length, columns.length);
           data.autoRows = false;
+          data.header = false;
+          data.striped = false;
+          let authoredBase = false;
           try {
-            const meta = JSON.parse(marker?.textContent ?? "null");
-            if (
-              meta?.version === 1 &&
-              typeof meta.style?.autoRows === "boolean"
-            )
-              data.autoRows = meta.style.autoRows;
+            const meta = JSON.parse(
+              marker && (marker.textContent?.length ?? 0) <= 256 * 1024
+                ? (marker.textContent ?? "null")
+                : "null",
+            );
+            if (meta?.version === 1) {
+              // Rich cell formatting need not discard the table's editable
+              // base style. Read all actual cell content below from DrawingML;
+              // metadata supplies only validated defaults, never cell data.
+              data = validateTable({
+                ...meta.style,
+                cells: data.cells,
+                cellStyles: undefined,
+                merges: undefined,
+              });
+              data.header = ["1", "true"].includes(
+                props?.getAttribute("firstRow") ?? "",
+              );
+              data.striped = ["1", "true"].includes(
+                props?.getAttribute("bandRow") ?? "",
+              );
+              authoredBase = true;
+            }
           } catch {
             /* Optional editor behavior. */
           }
-          data.header = false;
-          data.striped = false;
           data.cells = rows.map(() => columns.map(() => ""));
           data.cellStyles = rows.map(() => columns.map(() => null));
           data.columnWidths = widths;
@@ -2945,6 +2967,11 @@ export async function importPptx(
               borders: el.borders,
               paragraphs: el.paragraphs,
             };
+            if (authoredBase)
+              data.cellStyles[row][column] = inheritTableCellStyle(
+                data.cellStyles[row][column]!,
+                tableCellStyle({ ...data, cellStyles: undefined }, row, column),
+              );
             if (span > 1 || columnSpan > 1)
               data.merges.push({ row, column, rowSpan: span, columnSpan });
           }

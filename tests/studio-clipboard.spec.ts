@@ -50,6 +50,11 @@ test('rich tables take precedence over an accompanying clipboard preview image',
 for (const change of ['slide','document','focus','modal'] as const) {
  test(`a delayed Home paste is cancelled after a ${change} change`,async({page})=>{
   await page.goto('http://127.0.0.1:5190');await expect(page.locator('.save-indicator')).toHaveText('저장됨');
+  // Fresh documents now contain one title slide; explicitly create the target.
+  if(change==='slide') {
+   await page.getByRole('button',{name:'새 슬라이드',exact:true}).click();
+   await page.locator('.thumbnail-button').first().click();
+  }
   await page.getByTestId('slide-canvas').click({position:{x:10,y:10}});
   await page.evaluate(rich=>{
    Object.defineProperty(navigator.clipboard,'read',{configurable:true,value:()=>new Promise(resolve=>{

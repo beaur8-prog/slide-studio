@@ -7,6 +7,7 @@ const { randomUUID } = require('node:crypto');
 const { fileURLToPath } = require('node:url');
 const { readOfficeArialNovaLight, readOfficeCalibriFonts } = require('./office-fonts.cjs');
 const { RecentFiles } = require('./recent-files.cjs');
+const { createPresentationWindowController } = require('./presentation-window.cjs');
 
 const PRODUCT_NAME = 'Slide Studio';
 const APP_ICON = path.join(__dirname, 'assets', 'SlideStudio.png');
@@ -28,7 +29,7 @@ let documentDirectory;
 let dialogDirectoryLoaded = false;
 let officeLightFont;
 let officeCalibriFonts;
-let presentationWindowState = null;
+let presentationWindowController = null;
 const captureSources = new Map();
 let captureExpiry;
 let captureOperationPending = false;
@@ -172,23 +173,7 @@ function sendMenuAction(action) {
 }
 
 function setPresentationMode(enabled) {
-  if (enabled) {
-    // Let the OS cover the taskbar and preserve the window's normal/maximized
-    // bounds. A renderer overlay alone only fills the existing client area.
-    presentationWindowState ??= {
-      fullScreen: mainWindow.isFullScreen(),
-      menuBarVisible: mainWindow.isMenuBarVisible(),
-    };
-    mainWindow.setMenuBarVisibility(false);
-    mainWindow.webContents.setBackgroundThrottling(false);
-    mainWindow.setFullScreen(true);
-  } else if (presentationWindowState) {
-    const previous = presentationWindowState;
-    presentationWindowState = null;
-    mainWindow.setFullScreen(previous.fullScreen);
-    mainWindow.setMenuBarVisibility(previous.menuBarVisible);
-    mainWindow.webContents.setBackgroundThrottling(true);
-  }
+  presentationWindowController?.set(enabled);
 }
 
 async function preparePrint(contents) {
@@ -270,14 +255,14 @@ function installIPC() {
   }));
   ipcMain.handle('slide-studio:paste-table-clipboard', (event, ...args) => {
     requireTrustedSender(event);
-    if(args.length || presentationWindowState || nativeOperationPending) throw new Error('지금은 표를 붙여넣을 수 없습니다.');
+    if(args.length || presentationWindowController?.isPresenting || nativeOperationPending) throw new Error('지금은 표를 붙여넣을 수 없습니다.');
     event.sender.paste();
   });
   ipcMain.handle('slide-studio:edit-text-clipboard', (event, ...args) => {
     requireTrustedSender(event);
     const action = args[0];
     if (args.length !== 1 || !['copy', 'cut', 'paste'].includes(action)) throw new TypeError('Unknown text clipboard action');
-    if (presentationWindowState || nativeOperationPending) throw new Error('Text editing is not available now');
+    if (presentationWindowController?.isPresenting || nativeOperationPending) throw new Error('Text editing is not available now');
     if (action === 'copy') event.sender.copy();
     else if (action === 'cut') event.sender.cut();
     else event.sender.pasteAndMatchStyle();
@@ -545,17 +530,20 @@ async function createWindow() {
     child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     child.webContents.on('will-navigate', (event, url) => { if (!isTrustedURL(url)) event.preventDefault(); });
   });
-  mainWindow.on('enter-full-screen', () => {
-    // macOS creates a new Space for the audience window. Keep the movable
-    // presenter window accessible there, including after the transition ends.
-    for (const child of presenterWindows) {
-      if (!child.isDestroyed()) { child.show(); child.focus(); }
-    }
+  presentationWindowController = createPresentationWindowController(mainWindow, {
+    onEntered: () => {
+      // macOS creates a new Space for the audience window. Keep the movable
+      // presenter window accessible there after a completed transition.
+      for (const child of presenterWindows) {
+        if (!child.isDestroyed()) { child.show(); child.focus(); }
+      }
+    },
+    onEnded: () => mainWindow.webContents.send('slide-studio:presentation-ended'),
   });
   mainWindow.webContents.on('before-input-event', (event, input) => {
     // Native Edit/Print accelerators otherwise consume these before the
     // renderer can choose a slideshow pointer or undo a session ink stroke.
-    if (!presentationWindowState || input.type !== 'keyDown' || input.alt ||
+    if (!presentationWindowController?.isPresenting || input.type !== 'keyDown' || input.alt ||
         !(input.control || input.meta)) return;
     const command = { a: 'arrow', l: 'laser', p: 'pen', h: 'highlighter', e: 'eraser',
       z: input.shift ? 'redo' : 'undo', y: 'redo' }[input.key.toLowerCase()];
@@ -568,30 +556,21 @@ async function createWindow() {
   mainWindow.webContents.on('will-prevent-unload', event => {
     const response = dialog.showMessageBoxSync(mainWindow, {
       type: 'warning',
-      title: 'Close Slide Studio?',
-      message: 'Some changes may not have been saved.',
-      detail: 'Keep editing to save your presentation, or close without saving the pending changes.',
-      buttons: ['Keep Editing', 'Close Without Saving'],
+      title: 'Slide Studio 닫기',
+      message: 'PPTX 파일에 저장하지 않은 변경 사항이 있습니다.',
+      detail: '계속 편집한 뒤 PPTX로 저장해 주세요. 저장하지 않고 닫으면 다음 실행에서 이 내용이 열리지 않습니다.',
+      buttons: ['계속 편집', '저장하지 않고 닫기'],
       defaultId: 0,
       cancelId: 0,
       noLink: true,
     });
     if (response === 1) event.preventDefault();
   });
-  mainWindow.on('leave-full-screen', () => {
-    // Native fullscreen shortcuts must also dismiss the renderer's slideshow.
-    if (!presentationWindowState) return;
-    const previous = presentationWindowState;
-    presentationWindowState = null;
-    mainWindow.setMenuBarVisibility(previous.menuBarVisible);
-    mainWindow.webContents.setBackgroundThrottling(true);
-    mainWindow.webContents.send('slide-studio:presentation-ended');
-  });
   mainWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
     if (mainFrame && !inPlace) { clearCaptureSources(); setPresentationMode(false); }
   });
   mainWindow.webContents.on('render-process-gone', () => { clearCaptureSources(); setPresentationMode(false); });
-  mainWindow.on('closed', () => { for(const child of presenterWindows)if(!child.isDestroyed())child.destroy();presenterWindows.clear();clearCaptureSources(); presentationWindowState = null; mainWindow = null; });
+  mainWindow.on('closed', () => { for(const child of presenterWindows)if(!child.isDestroyed())child.destroy();presenterWindows.clear();clearCaptureSources(); presentationWindowController?.dispose(); presentationWindowController = null; mainWindow = null; });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
   try {

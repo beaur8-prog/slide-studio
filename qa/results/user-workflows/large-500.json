@@ -1,0 +1,94 @@
+{
+  "scenario": "Real PPTX open, navigate, edit, undo/redo, save, reopen and repeat reopen",
+  "measured_at": "2026-10-22T14:44:32.115Z",
+  "label": "mixed-500",
+  "status": "passed",
+  "bytes": 61946577,
+  "slides": 500,
+  "elements": 3100,
+  "images": 500,
+  "tables": 100,
+  "stage_ms": {
+    "open_ui_and_autosave": 4831.4,
+    "navigate_first_to_last": 132.2,
+    "navigate_last_to_middle": 541.5,
+    "type_ten_characters": 1106.9,
+    "edit_blur_and_autosave": 678,
+    "undo_redo": 1222.7,
+    "save_pptx_ui": 5029.1,
+    "reopen_saved_ui_and_autosave": 4853.4,
+    "repeat_open_1": 4972.9
+  },
+  "saved_bytes": 57415806,
+  "verified_persistence": [
+    "all slide counts",
+    "all text",
+    "all notes",
+    "all table cell text",
+    "all image SHA-256 digests"
+  ],
+  "repeated_reopens": 1,
+  "memory": {
+    "before": {
+      "js_heap_mb": 15.8,
+      "nodes": 745,
+      "documents": 1
+    },
+    "after_open": {
+      "js_heap_mb": 123.4,
+      "nodes": 153596,
+      "documents": 2
+    },
+    "after_edit_undo_redo": {
+      "js_heap_mb": 120.6,
+      "nodes": 153620,
+      "documents": 2
+    },
+    "after_reopen": {
+      "js_heap_mb": 126.5,
+      "nodes": 153613,
+      "documents": 2
+    },
+    "repeated_reopen": [
+      {
+        "js_heap_mb": 126.7,
+        "nodes": 153613,
+        "documents": 2
+      }
+    ]
+  },
+  "main_thread_long_tasks": {
+    "count": 25,
+    "total_ms": 13758,
+    "max_ms": 2260,
+    "over_1000_ms": [
+      {
+        "start": 2868.2000000476837,
+        "ms": 2010
+      },
+      {
+        "start": 10631.200000047684,
+        "ms": 1805
+      },
+      {
+        "start": 17815.200000047684,
+        "ms": 2260
+      },
+      {
+        "start": 23376.300000190735,
+        "ms": 2043
+      }
+    ]
+  },
+  "errors": [],
+  "runtime_source_unchanged_during_run": true,
+  "runtime_source_sha256": {
+    "src/App.tsx": "5a76fd8e3b1087dc76c620b5723338236dfaeb9f091c739bb887763723eee18f",
+    "src/io.ts": "b9f4db028446f2fdba00ab0f94a0dd4ad852ff4da6af068f305dd043d7ac740e",
+    "src/document-limits.ts": "22e0d43710caa496c6c084d81672479765170bdda0a19e1ba2428020b23d0971",
+    "src/pptx-table-style.ts": "2b6b2d816a52a65c2585275cf2323cde71496d423d36f5bc3caaa23083aa3d2c",
+    "src/colors.ts": "636e0ace0ebca9a80e22ce33b0afd3281ef53353360bcc7789ef4e5771be5a72",
+    "electron/main.cjs": "94b13e2732f2e2d1fd11c6a64ba7639de9495c6b2ff182e16e2f83b2ae4dd8c0"
+  },
+  "raw_metrics": ".cache/qa-user-large-final/mixed-500/metrics.json"
+}

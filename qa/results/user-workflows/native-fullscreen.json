@@ -1,0 +1,243 @@
+{
+  "date": "2026-10-23 KST",
+  "platform": "darwin-arm64",
+  "version": "1.6.8",
+  "scenario": "Presenter view -> stop -> immediate F5 restart -> highlighter -> retain ink -> undo/redo -> reload",
+  "deterministicTests": {
+    "nativeTransition": {
+      "passed": 5
+    },
+    "browserFullscreen": {
+      "passed": 3,
+      "skippedWindowsNative": 1
+    }
+  },
+  "before": {
+    "events": [
+      {
+        "ms": 0,
+        "event": "setFullScreen",
+        "value": true,
+        "fullscreen": false
+      },
+      {
+        "ms": 299,
+        "event": "setFullScreen",
+        "value": false,
+        "fullscreen": true
+      },
+      {
+        "ms": 613,
+        "event": "enter-full-screen",
+        "fullscreen": true
+      },
+      {
+        "ms": 720,
+        "event": "setFullScreen",
+        "value": true,
+        "fullscreen": false
+      },
+      {
+        "ms": 1168,
+        "event": "leave-full-screen",
+        "fullscreen": false
+      },
+      {
+        "ms": 1767,
+        "event": "enter-full-screen",
+        "fullscreen": true
+      }
+    ],
+    "rendererPresentationEndedCount": 1
+  },
+  "afterRapidRestart": {
+    "events": [
+      {
+        "ms": 0,
+        "event": "setFullScreen",
+        "value": true,
+        "fullscreen": false
+      },
+      {
+        "ms": 584,
+        "event": "setFullScreen",
+        "value": false,
+        "fullscreen": true
+      },
+      {
+        "ms": 584,
+        "event": "enter-full-screen",
+        "fullscreen": true
+      },
+      {
+        "ms": 1182,
+        "event": "setFullScreen",
+        "value": true,
+        "fullscreen": false
+      },
+      {
+        "ms": 1182,
+        "event": "leave-full-screen",
+        "fullscreen": false
+      },
+      {
+        "ms": 1755,
+        "event": "enter-full-screen",
+        "fullscreen": true
+      },
+      {
+        "ms": 2790,
+        "event": "setFullScreen",
+        "value": false,
+        "fullscreen": true
+      },
+      {
+        "ms": 3370,
+        "event": "leave-full-screen",
+        "fullscreen": false
+      }
+    ],
+    "rendererPresentationEndedCount": 0
+  },
+  "afterCombinedWorkflows": {
+    "events": [
+      {
+        "ms": 0,
+        "event": "ipc-presentation-mode",
+        "value": true,
+        "fullscreen": false,
+        "enabled": true
+      },
+      {
+        "ms": 1,
+        "event": "setFullScreen",
+        "value": true,
+        "fullscreen": false,
+        "enabled": true
+      },
+      {
+        "ms": 211,
+        "event": "ipc-presentation-mode",
+        "value": false,
+        "fullscreen": true,
+        "enabled": true
+      },
+      {
+        "ms": 600,
+        "event": "setFullScreen",
+        "value": false,
+        "fullscreen": true,
+        "enabled": true
+      },
+      {
+        "ms": 600,
+        "event": "enter-full-screen",
+        "fullscreen": true,
+        "enabled": true
+      },
+      {
+        "ms": 1184,
+        "event": "leave-full-screen",
+        "fullscreen": false,
+        "enabled": true
+      },
+      {
+        "ms": 1193,
+        "event": "ipc-presentation-mode",
+        "value": true,
+        "fullscreen": false,
+        "enabled": true
+      },
+      {
+        "ms": 1193,
+        "event": "setFullScreen",
+        "value": true,
+        "fullscreen": false,
+        "enabled": true
+      },
+      {
+        "ms": 1760,
+        "event": "enter-full-screen",
+        "fullscreen": true,
+        "enabled": true
+      },
+      {
+        "ms": 2336,
+        "event": "ipc-presentation-mode",
+        "value": false,
+        "fullscreen": true,
+        "enabled": true
+      },
+      {
+        "ms": 2336,
+        "event": "setFullScreen",
+        "value": false,
+        "fullscreen": true,
+        "enabled": true
+      },
+      {
+        "ms": 2901,
+        "event": "leave-full-screen",
+        "fullscreen": false,
+        "enabled": true
+      }
+    ],
+    "rendererPresentationEndedCount": 0
+  },
+  "geometry": {
+    "fullscreen": true,
+    "transitionComplete": true,
+    "window": {
+      "x": 0,
+      "y": 0,
+      "width": 2560,
+      "height": 1440
+    },
+    "content": {
+      "x": 0,
+      "y": 0,
+      "width": 2560,
+      "height": 1440
+    },
+    "minimum": [
+      1080,
+      720
+    ],
+    "display": {
+      "x": 0,
+      "y": 0,
+      "width": 2560,
+      "height": 1440
+    },
+    "scaleFactor": 1,
+    "platform": "darwin"
+  },
+  "combinedWorkflowChecks": {
+    "shapeTextPaste": true,
+    "pasteDoesNotDuplicateObjects": true,
+    "groupSelectionAndDuplicateUndo": true,
+    "nativeMergedTable": true,
+    "inlineKoreanCells": true,
+    "mergedCellTab": true,
+    "presenterControls": true,
+    "privateNotes": true,
+    "highlighter": true,
+    "retainedInk": true,
+    "undoRedoAndReload": true
+  },
+  "combinedEarlierStages": [
+    "native startup/save/PPTX reopen/PDF",
+    "current release editor/inspector/recent files",
+    "partial italics/numeric fields/bullet continuation"
+  ],
+  "harnessFinding": {
+    "notAnAppDefect": true,
+    "reproduction": "Fresh Electron window enabled=true -> window.confirm -> Playwright dialog.accept resolves true -> parent enabled=false after 1s, F5 ignored",
+    "resolution": "Only exact generated-fixture discard confirmation is controlled; no production window.setEnabled workaround."
+  },
+  "commands": [
+    "npx playwright test tests/native-presentation-transition.spec.ts tests/presentation-fullscreen.spec.ts --output=.cache/qa-user-editing/fullscreen-regressions",
+    "node scripts/qa-user-workflows.cjs '/path/Slide Studio.app/Contents/MacOS/Slide Studio' .cache/qa-user-workflows-native"
+  ],
+  "note": "Controller event handlers run before instrumentation listeners; a next setFullScreen request logged at the same millisecond as a completion event is issued inside that completion handler."
+}

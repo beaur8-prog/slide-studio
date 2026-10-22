@@ -65,7 +65,9 @@ export function normalizeObjectAlpha(el: SlideElement) {
         if (style.paragraphs) {
           for (const p of style.paragraphs)
             for (const run of p.runs)
-              if (run.text)
+              // Empty cells can carry an explicit insertion alpha. Normalize
+              // it with the table so subsequent saves do not multiply it twice.
+              if (run.text || run.opacity !== undefined)
                 add(run.opacity ?? style.textOpacity, (n) => (run.opacity = n));
         } else if (el.table.cells[r][c])
           add(style.textOpacity, (n) => (style.textOpacity = n));

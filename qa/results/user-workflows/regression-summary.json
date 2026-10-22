@@ -1,0 +1,44 @@
+{
+  "command": "npx playwright test --workers=2",
+  "stats": {
+    "startTime": "2026-10-22T14:45:18.118Z",
+    "duration": 385834.631,
+    "expected": 332,
+    "skipped": 2,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "skipped": [
+    {
+      "file": "office-fonts.spec.ts",
+      "title": "existing Office light font renders with its true light face and reference width",
+      "annotations": [
+        {
+          "type": "skip",
+          "description": "Arial Nova Light is not present in the local Office cache",
+          "location": {
+            "file": "/Users/swryu/Documents/ChatGPT/rea-test/slide-studio/tests/office-fonts.spec.ts",
+            "line": 141,
+            "column": 8
+          }
+        }
+      ]
+    },
+    {
+      "file": "presentation-fullscreen.spec.ts",
+      "title": "Windows slideshow covers the display and restores normal, maximized, and fullscreen editors",
+      "annotations": [
+        {
+          "type": "skip",
+          "description": "Windows native fullscreen regression",
+          "location": {
+            "file": "/Users/swryu/Documents/ChatGPT/rea-test/slide-studio/tests/presentation-fullscreen.spec.ts",
+            "line": 8,
+            "column": 8
+          }
+        }
+      ]
+    }
+  ],
+  "scope": "Full renderer/source suite after seven fixes; native fullscreen fix added afterward and verified by focused and packaged-app checks."
+}

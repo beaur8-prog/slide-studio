@@ -69,6 +69,10 @@ test("left slide list reserves a visible draggable scrollbar without cutting thu
   await page.setViewportSize({ width: 1080, height: 720 });
   await page.goto("http://127.0.0.1:5190");
   await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  // Build a scrollable deck explicitly; fresh documents contain one title slide.
+  for (let i = 0; i < 6; i++)
+    await page.getByRole("button", { name: "새 슬라이드", exact: true }).click();
+  await page.locator(".thumbnail-button").first().click();
   const list = page.locator(".thumbnail-list");
   const metrics = await list.evaluate((el) => ({
     gutter: el.getBoundingClientRect().width - el.clientWidth,

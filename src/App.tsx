@@ -6,6 +6,7 @@ import {
 import { isVideoFile, readVideo, VIDEO_ACCEPT } from "./video";
 import { usePresenterView } from "./PresenterView";
 import { duplicateSlides, moveSlides } from "./slide-operations";
+import { documentCapacityError, type DocumentAddition } from "./document-limits";
 import type { InkStroke } from "./presentation-ink";
 import { fitTableRows } from "./table-layout";
 import { arrangeElements } from "./object-arrange";
@@ -537,6 +538,14 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">(
     "saving",
   );
+  // The window's recovery buffer is not a saved PPTX. Keep the last file
+  // snapshot so autosave cannot silently authorize discarding a user's work.
+  const [fileSnapshot, setFileSnapshot] = useState<Deck | null>(history.present);
+  const hasFileChanges = history.present !== fileSnapshot;
+  const restoredFileChanges = useRef((() => {
+    try { return restoreWindowBuffer && sessionStorage.getItem("slide-studio-file-dirty") === "true"; }
+    catch { return false; }
+  })());
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -648,6 +657,7 @@ export default function App() {
     elements?: SlideElement[];
     slide?: Slide;
     slides?: Slide[];
+    cutDeckId?: string;
     cells?: string[][];
     cellStyles?: TableCellFormat[][];
   }>({});
@@ -707,6 +717,9 @@ export default function App() {
       row?: number,
       column?: number,
     ) => {
+      // Native Save can finish a transaction without blurring the text editor.
+      // Further typing must start a new transaction for document-level undo.
+      if (!transaction.current) transaction.current = deckRef.current;
       setHistory((h) => {
         const next = update(h.present);
         return {
@@ -781,6 +794,25 @@ export default function App() {
         : h,
     );
   }, []);
+  const inlineUndoAvailable = !!editing && !!history.textUndo && history.textUndo.cursor > 0;
+  const inlineRedoAvailable = !!editing && !!history.textUndo &&
+    history.textUndo.cursor < history.textUndo.entries.length - 1;
+  const pendingPreview = !editing && !!transaction.current &&
+    transaction.current !== history.present;
+  const runToolbarHistory = (direction: "undo" | "redo") => {
+    const host = document.querySelector<HTMLElement>(".editing-text");
+    const inlineAvailable = direction === "undo" ? inlineUndoAvailable : inlineRedoAvailable;
+    if (host && inlineAvailable) {
+      // Keep Chromium's text edit grouping and selection, just like the keyboard
+      // shortcut. Blurring first would discard the inline redo branch.
+      host.focus();
+      document.execCommand(direction);
+      return;
+    }
+    finish();
+    if (direction === "undo") undo();
+    else redo();
+  };
   const changeSlide = (update: (s: Slide) => Slide) =>
     commit((d) => ({
       ...d,
@@ -864,6 +896,8 @@ export default function App() {
     // Leave the old deck's presentation before its slide indexes become invalid.
     if (presentationActive.current) stopPresent();
     setHistory({ past: [], present: next, future: [] });
+    setFileSnapshot(next);
+    transaction.current = null;
     setActiveId(next.slides[0].id);
     setSelected([]);
     setEditing(null);
@@ -965,6 +999,7 @@ export default function App() {
           try {
             const safe = parseDeckJson(JSON.stringify(saved));
             setHistory({ past: [], present: safe, future: [] });
+            setFileSnapshot(restoredFileChanges.current ? null : safe);
             setActiveId(safe.slides[0].id);
           } catch {
             notify("저장된 문서를 읽지 못해 새 프레젠테이션을 열었습니다.");
@@ -1006,15 +1041,20 @@ export default function App() {
     };
   }, [deck, ready, notify]);
   useEffect(() => {
+    if (!ready) return;
+    try { sessionStorage.setItem("slide-studio-file-dirty", String(hasFileChanges)); }
+    catch { /* File protection still works when session storage is unavailable. */ }
+  }, [ready, hasFileChanges]);
+  useEffect(() => {
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (saveStatus !== "saved") {
+      if (hasFileChanges || saveStatus !== "saved") {
         e.preventDefault();
         e.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", beforeUnload);
     return () => window.removeEventListener("beforeunload", beforeUnload);
-  }, [saveStatus]);
+  }, [hasFileChanges, saveStatus]);
   useEffect(() => {
     if (!deck.slides.some((s) => s.id === activeId)) {
       setActiveId(
@@ -1055,8 +1095,20 @@ export default function App() {
     return () => window.removeEventListener("pointerdown", close);
   }, [menu]);
 
+  const withinCapacity = (addition: DocumentAddition = {}, current = deckRef.current) => {
+    const error = documentCapacityError(current, addition);
+    if (error) notify(error);
+    return !error;
+  };
+  const canAddElements = (count: number) => {
+    // A file read may complete after the document was replaced.
+    if (deckRef.current.id !== deck.id || !deckRef.current.slides.some((s) => s.id === slide.id))
+      return false;
+    return withinCapacity({ elements: { [slide.id]: count } });
+  };
   const addSlide = (chosen = "content") => {
     const next = newSlide(chosen, deck.theme, deck.width, deck.height);
+    if (!withinCapacity({ slides: [next] })) return;
     commit((d) => {
       const slides = [...d.slides];
       slides.splice(activeIndex + 1, 0, next);
@@ -1066,13 +1118,9 @@ export default function App() {
     setSorter(false);
   };
   const duplicateCurrentSlide = () => {
-    const copies = duplicateSlides(
-      deck.slides.filter((s) => selectedSlideIds.includes(s.id)),
-    );
-    if (deck.slides.length + copies.length > 500) {
-      notify("슬라이드는 500장까지 만들 수 있습니다.");
-      return;
-    }
+    const source = deck.slides.filter((s) => selectedSlideIds.includes(s.id));
+    if (!withinCapacity({ slides: source })) return;
+    const copies = duplicateSlides(source);
     commit((d) => ({
       ...d,
       slides: [
@@ -1099,39 +1147,24 @@ export default function App() {
     selectSlide(remaining[Math.min(activeIndex, remaining.length - 1)].id);
   };
   const applySlideLayout = (layout: string) => {
+    const next = newSlide(layout, deck.theme, deck.width, deck.height);
+    const content = slide.elements.filter((e) => e.type === "text");
+    let index = 0;
+    const slots = next.elements.map((e) => {
+      if (e.type !== "text") return e;
+      const old = content[index++];
+      return old ? { ...e, text: old.text, paragraphs: old.paragraphs, field: old.field } : e;
+    });
+    // Preserve every source object; reflow text into the new slots and retain artwork.
+    const elements = layout === "blank" ? slide.elements : [
+      ...slots,
+      ...slide.elements.filter((e) => !content.slice(0, index).includes(e)),
+    ];
+    if (!canAddElements(elements.length - slide.elements.length)) return;
     finish();
     setEditing(null);
     setSelected([]);
-    changeSlide((s) => {
-      const next = newSlide(layout, deck.theme, deck.width, deck.height);
-      const content = s.elements.filter((e) => e.type === "text");
-      let index = 0;
-      const elements = next.elements.map((e) => {
-        if (e.type !== "text") return e;
-        const old = content[index++];
-        return old
-          ? {
-              ...e,
-              text: old.text,
-              paragraphs: old.paragraphs,
-              field: old.field,
-            }
-          : e;
-      });
-      // Preserve every source object; reflow text into the new slots and retain artwork.
-      return {
-        ...s,
-        elements:
-          layout === "blank"
-            ? s.elements
-            : [
-                ...elements,
-                ...s.elements.filter(
-                  (e) => !content.slice(0, index).includes(e),
-                ),
-              ],
-      };
-    });
+    changeSlide((s) => ({ ...s, elements }));
     setMenu(null);
   };
   const slideContext = (id: string, x: number, y: number) => {
@@ -1166,6 +1199,7 @@ export default function App() {
     dragSlideIds.current = [];
   };
   const addElement = (type: SlideElement["type"], shape?: ShapeKind) => {
+    if (!canAddElements(1)) return;
     const theme = THEMES.find((t) => t.id === deck.theme) || THEMES[0];
     const next = element(type, {
       x: deck.width * 0.28,
@@ -1194,15 +1228,7 @@ export default function App() {
       const checked = parseDeckJson(
         JSON.stringify({ ...deck, slides: [{ ...slide, elements }] }),
       ).slides[0].elements;
-      if (
-        slide.elements.length + checked.length > 1000 ||
-        deck.slides.reduce((n, s) => n + s.elements.length, 0) +
-          checked.length >
-          10000
-      )
-        throw new Error(
-          "슬라이드에는 1,000개, 문서에는 10,000개까지 개체를 넣을 수 있습니다.",
-        );
+      if (!canAddElements(checked.length)) return;
       changeSlide((s) => ({ ...s, elements: [...s.elements, ...checked] }));
       setSelected(checked.map((el) => el.id));
       setEditing(null);
@@ -1292,11 +1318,9 @@ export default function App() {
       duplicateCurrentSlide();
       return;
     }
-    const copies = copyElements(
-      slide.elements.filter((e) => selected.includes(e.id)),
-      24,
-      24,
-    ).map((e) => ({ ...e, locked: false }));
+    const source = slide.elements.filter((e) => selected.includes(e.id));
+    if (!canAddElements(source.length)) return;
+    const copies = copyElements(source, 24, 24).map((e) => ({ ...e, locked: false }));
     changeSlide((s) => ({ ...s, elements: [...s.elements, ...copies] }));
     setSelected(copies.map((e) => e.id));
   };
@@ -1393,6 +1417,20 @@ export default function App() {
       selected.length ? "개체를 복사했습니다." : "슬라이드를 복사했습니다.",
     );
   };
+  const cutSelection = (nativeClipboard?: DataTransfer | null) => {
+    if (!selected.length && selectedSlideIds.length === deck.slides.length) {
+      notify("프레젠테이션에는 슬라이드가 하나 이상 필요합니다.");
+      return;
+    }
+    copySelection(nativeClipboard);
+    if (selected.length) removeSelected();
+    else {
+      // A cut/paste move keeps slide IDs so links from the remaining slides
+      // still point to the moved slide. A later paste duplicates normally.
+      clipboard.current.cutDeckId = deck.id;
+      removeSlide();
+    }
+  };
   const pasteSelection = () => {
     if (clipboard.current.cells) {
       if (
@@ -1472,15 +1510,18 @@ export default function App() {
         );
       }
     } else if (clipboard.current.elements) {
+      if (!canAddElements(clipboard.current.elements.length)) return;
       const copies = copyElements(clipboard.current.elements, 24, 24).map(
         (e) => ({ ...e, locked: false }),
       );
       changeSlide((s) => ({ ...s, elements: [...s.elements, ...copies] }));
       setSelected(copies.map((e) => e.id));
     } else if (clipboard.current.slides || clipboard.current.slide) {
-      const copies = duplicateSlides(
-        clipboard.current.slides ?? [clipboard.current.slide!],
-      );
+      const source = clipboard.current.slides ?? [clipboard.current.slide!];
+      if (!withinCapacity({ slides: source })) return;
+      const moving = clipboard.current.cutDeckId === deck.id &&
+        source.every((slide) => !deck.slides.some((current) => current.id === slide.id));
+      const copies = moving ? clone(source) : duplicateSlides(source);
       const next = copies[0];
       commit((d) => {
         const slides = [...d.slides];
@@ -1530,8 +1571,10 @@ export default function App() {
     }));
 
   const addVideo = async (file: File) => {
+    if (!canAddElements(1)) return;
     try {
       const media = await readVideo(file);
+      if (!canAddElements(1)) return;
       const ratio = Math.min(1, deck.width * 0.7 / media.width, deck.height * 0.7 / media.height);
       const width = media.width * ratio, height = media.height * ratio;
       const next = element("video", { ...media, width, height, x: (deck.width - width) / 2, y: (deck.height - height) / 2,
@@ -1543,6 +1586,7 @@ export default function App() {
     } catch (error) { notify(error instanceof Error ? error.message : "동영상을 열 수 없습니다."); }
   };
   const addImage = async (file: File) => {
+    if (!canAddElements(1)) return;
     if (!/^image\/(png|jpeg|gif|webp)$/.test(file.type)) {
       notify("PNG, JPG, GIF, WebP 이미지를 선택해 주세요.");
       return;
@@ -1561,6 +1605,7 @@ export default function App() {
       const image = new window.Image();
       image.src = src;
       await image.decode();
+      if (!canAddElements(1)) return;
       const ratio = Math.min(
         1,
         (deck.width * 0.65) / image.naturalWidth,
@@ -1605,11 +1650,14 @@ export default function App() {
     savingPptx.current = true;
     setMenu(null);
     finish();
+    const snapshot = history.present;
     setBusy("PowerPoint 파일을 만들고 있습니다");
     try {
       const bytes = await exportPptx(deck);
-      if (await saveBytes(`${deck.name}.pptx`, bytes))
+      if (await saveBytes(`${deck.name}.pptx`, bytes)) {
+        setFileSnapshot(snapshot);
         notify("PPTX 파일을 저장했습니다.");
+      }
     } catch (error) {
       notify(
         `PPTX 저장 실패: ${error instanceof Error ? error.message : String(error)}`,
@@ -1668,7 +1716,11 @@ export default function App() {
       setBusy("");
     }
   };
+  const canReplaceDocument = () => !hasFileChanges || window.confirm(
+    "PPTX 파일에 저장하지 않은 변경 사항이 있습니다. 저장하지 않고 계속하시겠습니까?\n\n내용을 보관하려면 취소를 누른 뒤 PPTX로 저장해 주세요.",
+  );
   const readFile = async (name: string, data: ArrayBuffer | Uint8Array) => {
+    if (!canReplaceDocument()) return;
     setBusy("프레젠테이션을 열고 있습니다");
     try {
       await saveAutosave(deck);
@@ -1706,6 +1758,7 @@ export default function App() {
     setMenu(null);
   };
   const createDocument = async (isSample = false) => {
+    if (!canReplaceDocument()) return;
     try {
       await saveAutosave(deck);
       const next = isSample ? sampleDeck() : blankDeck();
@@ -2235,8 +2288,7 @@ export default function App() {
         copySelection();
       } else if (cmd && e.key.toLowerCase() === "x") {
         e.preventDefault();
-        copySelection();
-        if (selected.length) removeSelected();
+        cutSelection();
       } else if (cmd && e.key.toLowerCase() === "m") {
         e.preventDefault();
         addSlide();
@@ -2337,8 +2389,8 @@ export default function App() {
       )
         return;
       event.preventDefault();
-      copySelection(event.clipboardData);
-      if (event.type === "cut" && selected.length) removeSelected();
+      if (event.type === "cut") cutSelection(event.clipboardData);
+      else copySelection(event.clipboardData);
     };
     window.addEventListener("copy", copyCells);
     window.addEventListener("cut", copyCells);
@@ -3098,7 +3150,9 @@ export default function App() {
               className={`save-indicator ${saveStatus}`}
               title={
                 saveStatus === "saved"
-                  ? "이 기기에 자동 저장되었습니다"
+                  ? hasFileChanges
+                    ? "현재 창의 복구용 임시 저장입니다. 내용을 보관하려면 PPTX로 저장해 주세요."
+                    : "현재 창의 내용이 저장되었습니다"
                   : saveStatus === "saving"
                     ? "변경 사항을 저장하고 있습니다"
                     : "자동 저장 실패. 파일로 저장해 주세요."
@@ -3133,8 +3187,10 @@ export default function App() {
               className="icon-button"
               aria-label="실행 취소"
               title={`실행 취소 ${shortcut("Z")}`}
-              disabled={!history.past.length}
-              onClick={undo}
+              disabled={!history.past.length && !inlineUndoAvailable && !pendingPreview}
+              data-text-selection-control
+              onPointerDown={(event) => { if (editing) event.preventDefault(); }}
+              onClick={() => runToolbarHistory("undo")}
             >
               <Undo2 size={17} />
             </button>
@@ -3142,8 +3198,10 @@ export default function App() {
               className="icon-button"
               aria-label="다시 실행"
               title={`다시 실행 ${isMac ? "⇧⌘Z" : "Ctrl+Y"}`}
-              disabled={!history.future.length}
-              onClick={redo}
+              disabled={!inlineRedoAvailable && (!history.future.length || inlineUndoAvailable || pendingPreview)}
+              data-text-selection-control
+              onPointerDown={(event) => { if (editing) event.preventDefault(); }}
+              onClick={() => runToolbarHistory("redo")}
             >
               <Redo2 size={17} />
             </button>
@@ -3447,11 +3505,8 @@ export default function App() {
                   </Tool>
                   <div className="tools-stack">
                     <button
-                      onClick={() => {
-                        copySelection();
-                        removeSelected();
-                      }}
-                      disabled={!selected.length}
+                      onClick={() => cutSelection()}
+                      disabled={!selected.length && selectedSlideIds.length === deck.slides.length}
                     >
                       <Scissors size={14} />
                       잘라내기
@@ -5203,7 +5258,9 @@ export default function App() {
           initial={footerInitial}
           onCancel={() => setModal(null)}
           onApply={(options, all) => {
-            commit((d) => applyFooters(d, slide.id, options, all));
+            const next = applyFooters(deckRef.current, slide.id, options, all);
+            if (!withinCapacity({}, next)) return;
+            commit(() => next);
             setModal(null);
           }}
         />
@@ -5213,6 +5270,7 @@ export default function App() {
           deck={deck}
           onCancel={() => setModal(null)}
           onInsert={(slides) => {
+            if (!withinCapacity({ slides })) return;
             const next = [...deck.slides];
             next.splice(activeIndex + 1, 0, ...slides);
             const valid = parseDeckJson(
@@ -5511,22 +5569,9 @@ export default function App() {
                 className="primary"
                 autoFocus
                 onClick={() => {
-                  if (
-                    deck.slides.some(
-                      (s) =>
-                        s.elements.length + (pendingInk[s.id]?.length ?? 0) >
-                        1000,
-                    ) ||
-                    deck.slides.reduce((n, s) => n + s.elements.length, 0) +
-                      Object.values(pendingInk).reduce(
-                        (n, s) => n + s.length,
-                        0,
-                      ) >
-                      10000
-                  ) {
-                    notify("보관할 판서가 개체 수 한도를 초과했습니다.");
-                    return;
-                  }
+                  if (!withinCapacity({
+                    elements: Object.fromEntries(Object.entries(pendingInk).map(([id, strokes]) => [id, strokes.length])),
+                  })) return;
                   commit((d) => ({
                     ...d,
                     slides: d.slides.map((s) => {

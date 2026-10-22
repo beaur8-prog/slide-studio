@@ -7,6 +7,14 @@ const path = require('node:path');
 module.exports = async function verifyRemaining(page, output, { app } = {}) {
   await expect(page.locator('.save-indicator')).toHaveText('저장됨');
   await fs.mkdir(output, { recursive: true });
+  if (app) await app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('#presenter='));
+    // On macOS the viewport is resized before the Space animation completes.
+    // Keep exercising rapid restart, but send drag input after its enter event.
+    win.__qaFullscreenEntered = win.isFullScreen();
+    win.on('enter-full-screen', () => { win.__qaFullscreenEntered = true; });
+    win.on('leave-full-screen', () => { win.__qaFullscreenEntered = false; });
+  });
   const base = { rotation: 0, opacity: 1, fontFamily: 'Arial', fontSize: 30,
     color: '#233D35', fill: 'transparent', stroke: 'transparent', strokeWidth: 0,
     bold: false, italic: false, underline: false, align: 'left', verticalAlign: 'top', lineHeight: 1.2 };
@@ -93,13 +101,14 @@ module.exports = async function verifyRemaining(page, output, { app } = {}) {
     const fullscreenGeometry = () => app.evaluate(({ BrowserWindow, screen }) => {
       const win = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('#presenter='));
       const display = screen.getDisplayMatching(win.getBounds());
-      return { fullscreen: win.isFullScreen(), window: win.getBounds(), content: win.getContentBounds(),
+      return { fullscreen: win.isFullScreen(), transitionComplete: win.__qaFullscreenEntered === true,
+        window: win.getBounds(), content: win.getContentBounds(),
         minimum: win.getMinimumSize(), display: display.bounds, scaleFactor: display.scaleFactor, platform: process.platform };
     });
     try {
       await expect.poll(async () => {
         const state = await fullscreenGeometry();
-        return state.fullscreen && state.content.width === state.display.width && state.content.height === state.display.height;
+        return state.fullscreen && state.transitionComplete && state.content.width === state.display.width && state.content.height === state.display.height;
       }).toBe(true);
     } finally {
       await fs.writeFile(path.join(output, 'fullscreen-geometry.json'), JSON.stringify(await fullscreenGeometry(), null, 2) + '\n');

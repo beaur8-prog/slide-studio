@@ -1,0 +1,260 @@
+{
+  "version": "1.6.8",
+  "platform": "darwin",
+  "passed": true,
+  "executablePath": "/var/folders/mb/t3ql4k3n78jg88_k5sl46dp40000gn/T/slide-studio-build-zIZwxi/Slide Studio.app/Contents/MacOS/Slide Studio",
+  "isolatedProfile": true,
+  "controlledNativeChoosers": true,
+  "fixtureDiscardConfirmations": 2,
+  "asarSHA256": "e0cddc7d0ed31a1470ae6a786c14b3a19dd1c19953a3ca8e6074a5c6242df406",
+  "checks": {
+    "save-startup": {
+      "version": "1.6.8",
+      "platform": "darwin",
+      "freshTitleDocument": true,
+      "pptxOnlySave": true,
+      "legacyDocumentMigration": true,
+      "legacyOriginalUnchanged": true,
+      "currentFolderOnOpen": true,
+      "currentFolderOnSave": true,
+      "pdfUsesDocumentFolder": true,
+      "pdfPreservesDocumentFolder": true,
+      "folderPreferencePersisted": true,
+      "autosaveRestored": true,
+      "nativeMenu": [
+        "New Presentation",
+        "Open…",
+        "",
+        "Save PowerPoint…",
+        "Export PDF…",
+        "Print…",
+        "",
+        "Close Window"
+      ]
+    },
+    "current-release": {
+      "version": "1.6.8",
+      "inheritedPictureBackground": true,
+      "backgroundCropOpacity": true,
+      "nativeBackgroundPptxRoundTrip": true,
+      "zeroSizeShapeImportAndRoundTrip": true,
+      "homeShapeFormatting": true,
+      "compactInspector": true,
+      "closeInspectorKeepsSelection": true,
+      "repeatedOpenDeduplicated": true,
+      "deletedFilePruned": true,
+      "all22ShapeDefaults": true,
+      "verticalBlockArrowsPptxRoundTrip": true,
+      "homeShapeFormattingBetweenFontAndParagraph": true,
+      "newDocumentTitleLayout": true
+    },
+    "editing-regressions": {
+      "partialItalic": true,
+      "selectionPreserved": true,
+      "nativeTextUndoRedo": true,
+      "sevenSlides": true,
+      "numericTypes": [
+        "text",
+        "shape",
+        "image"
+      ],
+      "width": 200,
+      "height": 200,
+      "rotation": -15,
+      "fontSize": 24,
+      "draftsPreserved": true,
+      "reloadPersistence": true,
+      "firstSlideUntouched": true
+    },
+    "bullet-regressions": {
+      "enterContinues": true,
+      "wholeBoxOffOn": true,
+      "markersAfterReload": 3,
+      "reloadPersistence": true
+    },
+    "remaining-regressions": {
+      "shapeTextPaste": true,
+      "pasteDoesNotDuplicateObjects": true,
+      "groupSelectionAndDuplicateUndo": true,
+      "nativeMergedTable": true,
+      "inlineKoreanCells": true,
+      "mergedCellTab": true,
+      "presenterControls": true,
+      "privateNotes": true,
+      "highlighter": true,
+      "retainedInk": true,
+      "undoRedoAndReload": true
+    },
+    "fullscreen-geometry": {
+      "fullscreen": true,
+      "transitionComplete": true,
+      "window": {
+        "x": 0,
+        "y": 0,
+        "width": 2560,
+        "height": 1440
+      },
+      "content": {
+        "x": 0,
+        "y": 0,
+        "width": 2560,
+        "height": 1440
+      },
+      "minimum": [
+        1080,
+        720
+      ],
+      "display": {
+        "x": 0,
+        "y": 0,
+        "width": 2560,
+        "height": 1440
+      },
+      "scaleFactor": 1,
+      "platform": "darwin"
+    },
+    "shape-insertion": {
+      "version": "1.6.8",
+      "all22ShapeDefaults": true,
+      "topThreeRowsNoFillBlack3": true,
+      "remainingShapesBlue": true,
+      "homeShapeFormattingBetweenFontAndParagraph": true,
+      "newDocumentTitleLayout": true,
+      "verticalBlockArrowsPptxRoundTrip": true,
+      "shapes": [
+        {
+          "name": "사각형",
+          "fill": "transparent",
+          "stroke": "#000000",
+          "strokeWidth": 3
+        },
+        {
+          "name": "둥근 사각형",
+          "fill": "transparent",
+          "stroke": "#000000",
+          "strokeWidth": 3
+        },
+        {
+          "name": "타원",
+          "fill": "transparent",
+          "stroke": "#000000",
+          "strokeWidth": 3
+        },
+        {
+          "name": "삼각형",
+          "fill": "transparent",
+          "stroke": "#000000",
+          "strokeWidth": 3
+        },
+        {
+          "name": "선",
+          "fill": "transparent",
+          "stroke": "#000000",
+          "strokeWidth": 3
+        },
+        {
+          "name": "화살표",
+          "fill": "transparent",
+          "stroke": "#000000",
+          "strokeWidth": 3
+        },
+        {
+          "name": "마름모",
+          "fill": "transparent",
+          "stroke": "#000000",
+          "strokeWidth": 3
+        },
+        {
+          "name": "오각형",
+          "fill": "transparent",
+          "stroke": "#000000",
+          "strokeWidth": 3
+        },
+        {
+          "name": "육각형",
+          "fill": "transparent",
+          "stroke": "#000000",
+          "strokeWidth": 3
+        },
+        {
+          "name": "별",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "하트",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "갈매기형",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "오른쪽 블록 화살표",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "왼쪽 블록 화살표",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "위쪽 블록 화살표",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "아래쪽 블록 화살표",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "양방향 화살표",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "평행사변형",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "사다리꼴",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "십자형",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "말풍선",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        },
+        {
+          "name": "구름",
+          "fill": "#4472C4",
+          "stroke": "transparent",
+          "strokeWidth": 0
+        }
+      ]
+    }
+  }
+}

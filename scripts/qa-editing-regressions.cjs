@@ -111,6 +111,12 @@ module.exports = async function verifyEditing(page, output) {
         fontSize: 32, fontFamily: 'Arial', color: '#233D35', align: 'left', verticalAlign: 'top' },
     ] }],
   }));
+  // This fixture intentionally replaces edits already asserted above.
+  if (!page.listenerCount('dialog')) page.once('dialog', async dialog => {
+    expect(dialog.type()).toBe('confirm');
+    expect(dialog.message()).toContain('PPTX 파일에 저장하지 않은 변경 사항');
+    await dialog.accept();
+  });
   await page.locator('input[accept=".slide,.json,.pptx"]').setInputFiles(bulletFixture);
   const list = page.locator('[data-element-id="list"]');
   const bulletButton = page.getByRole('button', { name: '• 글머리 기호', exact: true });

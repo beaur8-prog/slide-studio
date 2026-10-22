@@ -1,0 +1,9 @@
+{
+  "platform": "darwin",
+  "isolatedProfile": true,
+  "controlledChoosers": true,
+  "nativeClose": true,
+  "cancelClosePreservesDocument": true,
+  "diskPptxContainsLatestNotes": true,
+  "savedAndReopenedDocumentClosesWithoutWarning": true
+}

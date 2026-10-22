@@ -28,3 +28,26 @@ Mac ARM64 ZIP, Windows x64 Setup/ZIP, Ubuntu 22.04/24.04 amd64 DEB를 만든다.
 Windows는 호스팅된 Windows Server, Ubuntu는 X11 환경이다. Windows/Linux 실제 키보드 IME 직접 타이핑·Wayland·종이 출력은 미검증이다. Mac은 Apple 미공증이고 Windows는 배포용 코드 미서명이다.
 
 리토스 공유 URL과 고정 GitHub 다운로드 주소를 유지하며 Windows 설치 경고·Windows 우선 배치를 유지한다. 설치 파일 검증값과 실제 실행 결과는 최종 배포 확인 후 아래에 기록한다.
+
+## 실제 패키지 검사 결과
+
+| 환경 | 결과 |
+| --- | --- |
+| Mac ARM64 번들 | 편집·PPTX/PDF·발표 재시작·판서·클립보드·미디어·삼각형·노트·표와 별도 미저장 닫기 취소·저장·재열기·정상 종료 통과 |
+| Windows x64 설치판 | 설치·바로가기·전체 파일 해시·편집·PPTX/PDF·발표·미디어·표·미저장 보호와 실행 중 업데이트 차단·재설치·제거·사용자 자료 보존 통과 |
+| Ubuntu 22.04/24.04 amd64 X11 | 두 환경 모두 설치·실행·편집·저장·발표·미디어·표·미저장 보호·재설치·제거·사용자 자료 보존과 Chromium 샌드박스 유지 통과 |
+
+[Windows 실행 기록](https://github.com/beaur8-prog/slide-studio/actions/runs/39873577238) · [Ubuntu 실행 기록](https://github.com/beaur8-prog/slide-studio/actions/runs/39873586906)
+
+Windows 수정 전 기록에서는 최초 진입 시 상태 갱신 전에 같은 요청이 239회 재진입했다. 수정 후 실제 Windows 설치 앱에서는 최초 진입 요청 1회, 전체 연속 검수에서 진입/종료 각 6회, 마지막 전체 화면 상태 false를 확인했다. 원인 재현과 후속 전환 회귀 7개도 통과했다.
+
+런타임 태그 `v1.6.9`: `5c69c076fea63e92e5e365b0e918168966a0240b`. 네 파일 공통 실행 코드 SHA-256: `3ddf768838bee8ba80df0792ee2068dbb38427751b35c33779a7ffb447e108d8`. 패키지 파일 55개가 현재 빌드 소스와 일치한다.
+
+| 파일 | 바이트 | SHA-256 |
+| --- | ---: | --- |
+| Slide-Studio-mac-arm64.zip | 129818481 | `49500cbaf473a10e3c211e2b949089ba98728b9c55a4307d8b3a11d0ea5b0065` |
+| Slide-Studio-win-x64.zip | 156991519 | `2ccb846b8b74645af6bdbed14031289622b398e9e594b217c5550036b1edeb03` |
+| Slide-Studio-Setup-x64.exe | 109593638 | `b170258c9afb85fb76e583eb2c1bc8d2459990a959f3948866f855c27dda01cc` |
+| Slide-Studio-linux-amd64.deb | 132491186 | `63f877d47d7d68d549082727660146a74b67b3c5def3da30100be15ec6dcc2ea` |
+
+Mac ZIP 재추출 후 서명·아이콘을 검사했다. Apple 공증을 의미하지 않는다. 로컬 앱도 최종 실행 코드로 교체하고 기본 제목 슬라이드 시작을 확인했다. 상세 증거는 `qa/results/release-1.6.9/`에 보관한다.

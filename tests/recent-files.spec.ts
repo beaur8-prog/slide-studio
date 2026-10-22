@@ -52,7 +52,7 @@ test("library opens the actual file and removes a missing file instead of openin
   await expect(page.getByRole("textbox", { name: "발표자 노트", exact: true })).toHaveValue("디스크에서 바뀐 내용");
 });
 
-test("a reopened editor window starts blank and old snapshots never populate the recent file list", async ({ page }) => {
+test("a reopened editor window starts with a fresh title slide and old snapshots never populate the recent file list", async ({ page }) => {
   await openEditor(page);
   await page.evaluate(async () => {
     const { blankDeck } = await import("/src/model.ts");
@@ -66,7 +66,10 @@ test("a reopened editor window starts blank and old snapshots never populate the
   await page.evaluate(() => localStorage.setItem("test-window", "window-2"));
   await page.reload();
   await expect(page.locator(".thumbnail-button")).toHaveCount(1);
-  await expect(page.locator(".editable-slide [data-element-id]")).toHaveCount(0);
+  await expect(page.locator(".editable-slide [data-element-id]")).toHaveCount(3);
+  await expect(page.locator('.editable-slide [data-type="text"]')).toHaveText([
+    "프레젠테이션 제목", "이야기의 시작을 적어보세요",
+  ]);
   await expect(page.getByRole("textbox", { name: "발표자 노트", exact: true })).toHaveValue("");
   await page.getByTitle("내 프레젠테이션", { exact: true }).click();
   await expect(page.locator(".library-file")).toHaveCount(1);

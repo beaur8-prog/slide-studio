@@ -11,7 +11,10 @@ module.exports = async function verifySaveStartup(page, output, { app }) {
   await fs.mkdir(output, { recursive: true });
   await expect(page.locator('.save-indicator')).toHaveText('저장됨');
   await expect(page.locator('.thumbnail-button')).toHaveCount(1);
-  await expect(page.locator('.editable-slide [data-element-id]')).toHaveCount(0);
+  await expect(page.locator('.editable-slide [data-element-id]')).toHaveCount(3);
+  await expect(page.locator('.editable-slide [data-type="text"]')).toHaveText([
+    '프레젠테이션 제목', '이야기의 시작을 적어보세요',
+  ]);
   await expect(page.getByRole('textbox', { name: '프레젠테이션 이름', exact: true })).toHaveValue('제목 없는 프레젠테이션');
   await expect(page.getByRole('textbox', { name: '발표자 노트', exact: true })).toHaveValue('');
   await page.screenshot({ path: path.join(output, 'first-launch.png') });
@@ -90,7 +93,7 @@ module.exports = async function verifySaveStartup(page, output, { app }) {
     expect(nativeMenu).not.toContain('Export PowerPoint…');
     const result = {
       version: await app.evaluate(({ app }) => app.getVersion()), platform: process.platform,
-      freshBlankDocument: true, pptxOnlySave: true, legacyDocumentMigration: true,
+      freshTitleDocument: true, pptxOnlySave: true, legacyDocumentMigration: true,
       legacyOriginalUnchanged: true, currentFolderOnOpen: true, currentFolderOnSave: true,
       pdfUsesDocumentFolder: true, pdfPreservesDocumentFolder: true,
       folderPreferencePersisted: true, autosaveRestored: true, nativeMenu,

@@ -3,7 +3,7 @@
 const { expect } = require('@playwright/test');
 
 // Multi-slide interaction checks must choose their fixture explicitly; a fresh
-// installation starts with an empty document.
+// installation starts with a single title slide.
 module.exports = async function openSample(page) {
   await expect(page.locator('.save-indicator')).toHaveText('저장됨');
   await page.getByRole('button', { name: '파일', exact: true }).click();

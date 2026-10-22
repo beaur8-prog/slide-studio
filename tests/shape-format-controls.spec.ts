@@ -72,19 +72,19 @@ test("Home shape colors and width stay in sync with the inspector, undo and PPTX
   await panel.getByRole('spinbutton', { name: '선 두께', exact: true }).press('Enter');
   await expect(width).toHaveValue('9');
   await page.getByRole('button', { name: '실행 취소', exact: true }).click();
-  await page.locator('.editable-slide [data-type="shape"]').click();
+  await page.locator('.editable-slide [data-type="shape"]').last().click();
   await expect(width).toHaveValue('6.5');
   await page.getByLabel('도형 채우기 없음', { exact: true }).check();
   await expect(panel.getByLabel('채우기 없음', { exact: true })).toBeChecked();
   await page.getByRole('button', { name: '실행 취소', exact: true }).click();
-  await page.locator('.editable-slide [data-type="shape"]').click();
+  await page.locator('.editable-slide [data-type="shape"]').last().click();
   await expect(fill).toHaveValue('#1255aa');
   await expect(page.locator('.save-indicator')).toHaveText('저장됨');
   const saved = await page.evaluate(async () => {
     const { loadAutosave } = await import('/src/storage.ts');
     const { exportPptx, importPptx } = await import('/src/io.ts');
     const result = await importPptx(await exportPptx((await loadAutosave())!));
-    const shape = result.deck.slides[0].elements[0];
+    const shape = result.deck.slides[0].elements.at(-1)!;
     return { fill: shape.fill, stroke: shape.stroke, strokeWidth: shape.strokeWidth };
   });
   expect(saved.fill?.toLowerCase()).toBe('#1255aa');

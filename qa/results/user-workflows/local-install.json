@@ -1,0 +1,25 @@
+{
+  "version": "1.6.8",
+  "path": "/Applications/Slide Studio.app",
+  "source": "/var/folders/mb/t3ql4k3n78jg88_k5sl46dp40000gn/T/slide-studio-build-zIZwxi/Slide Studio.app",
+  "backup": "/Applications/.Slide Studio.previous-74ff33450c.app",
+  "asarSHA256": "e0cddc7d0ed31a1470ae6a786c14b3a19dd1c19953a3ca8e6074a5c6242df406",
+  "signatureVerified": true,
+  "previousDocument": "Untitled default title slide, notes empty, saved status, undo/redo disabled; no dialogs",
+  "previousAppQuitNormally": true,
+  "gitCommit": "9d5fce8f187455e03a2a20d076f6bbdab85731cf",
+  "purpose": "Local user-workflow QA fixes; public release unchanged",
+  "manualUiChecks": {
+    "nativeNewDocumentWarningVisible": true,
+    "cancelPreservesKoreanNotes": true,
+    "editorInteractiveAfterCancel": true,
+    "fullscreenPresentationAfterCancel": true,
+    "escapeReturnsToEditor": true,
+    "toolbarUndoRestoresEmptyNotes": true,
+    "cleanQuitWithoutWarning": true,
+    "method": "CUA native controls; no Playwright interception of confirmation"
+  },
+  "backupRemovedAfterVerifiedLaunch": true,
+  "relaunchVerified": true,
+  "finalWindow": "Untitled default title slide; empty notes; undo and redo disabled; no dialogs"
+}

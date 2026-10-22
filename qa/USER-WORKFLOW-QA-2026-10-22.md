@@ -30,6 +30,7 @@
 
 - `results/user-workflows/regression-summary.json`: 최종 전체 회귀 결과.
 - `results/user-workflows/local-build.json`: 소스와 패키지 내용 비교, 앱 ASAR SHA256.
+- `results/user-workflows/local-install.json`: 로컬 앱 교체, 실제 확인창 취소·내용 보존·발표·실행 취소·정상 종료 확인.
 - `results/user-workflows/native-protection.json`: 실제 Mac 닫기 보호와 파일 저장·재열기.
 - `results/user-workflows/native-summary.json`: 격리된 설치형 앱의 편집·저장·PDF·발표 확인.
 - `results/user-workflows/native-fullscreen.json`: 빠른 발표 종료·재시작의 수정 전후 네이티브 이벤트 비교.
@@ -51,6 +52,10 @@ node scripts/qa-unsaved-document.cjs .cache/qa-native-protection '/path/Slide St
 ```
 
 대용량 문서 생성과 반복 열기 명령은 별도 대용량 보고서에 있다.
+
+## Git 반영과 로컬 앱
+
+수정 소스와 자동 검수 기록은 `9d5fce8`로 `origin/main`에 반영했다. 검증한 앱을 `/Applications/Slide Studio.app`에 설치하고 서명·ASAR 일치를 확인했다. 이후 실제 macOS UI에서 노트 입력 → 새 문서 만들기 → 미저장 경고의 Cancel → 노트 유지 → 전체 화면 발표 → Escape → 상단 Undo로 원래 빈 노트 복원을 확인했다. 정상 종료 후 다시 실행하여 기본 제목 슬라이드 1장, 빈 노트, 비활성 Undo/Redo 상태로 남겼다. 이 수동 검사에서는 Playwright의 확인창 가로채기를 사용하지 않았다. 공개 릴리스 버전은 이 검수 작업에서 갱신하지 않았다.
 
 ## 범위와 남은 한계
 

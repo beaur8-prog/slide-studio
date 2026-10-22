@@ -43,3 +43,13 @@ Ubuntu 최초 검사는 PPTX 재구성 후의 경로 `M25`와 `M 25`를 다른 �
 | Slide-Studio-win-x64.zip | 156991811 | `1627dfc191ff7d7ee32381dc4248e2a60896b7c8baa3b87b0c959b83180c52d3` |
 | Slide-Studio-Setup-x64.exe | 109629924 | `1e0fcc8edbe3a46168abcf3aa35821b9e01b53521337ddb4f44a117af5ab858f` |
 | Slide-Studio-linux-amd64.deb | 132488338 | `54cb3319e80d025b87093afef3689dc36dd18761a70b860ab2ba7c24b636413e` |
+
+## 공개 배포 확인
+
+[GitHub v1.6.8](https://github.com/beaur8-prog/slide-studio/releases/tag/v1.6.8)을 공개하고 [기존 리토스 다운로드 문서](https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6)를 같은 URL·토큰·생성일로 갱신했다. 공유 서버와 터널을 재시작하지 않았다. 제목 슬라이드 시작·도형 기본값·위/아래 블록 화살표 안내와 최신 설치 앱 화면을 반영했으며 Windows 다운로드·설치 경고와 Windows 우선 배치를 유지했다.
+
+공개 문서 본문과 이미지 24개가 검토본과 일치한다. PC·모바일에서 모든 그림이 로드되고 가로 넘침·브라우저 오류가 없음을 확인했다. 고정 `latest/download` 주소 5개에서 파일을 끝까지 다시 내려받아 바이트 수·SHA-256·GitHub digest와 v1.6.8 연결을 확인했다. 증거는 `qa/results/release-1.6.8/`의 `publication-verification.json`, `browser-verification.json`, `live-update.json`에 있다.
+
+현재 버전만 남기는 정리 방침에 따라 이전 1.6.7의 GitHub 첨부 파일 5개와 이전 publication/리토스 이미지 폴더를 삭제했다. 이전 태그·릴리스 설명과 현재 1.6.8 파일은 보존했다.
+
+사용 중인 Mac 앱의 화면 상태 확인은 연결 시간 초과로 실패했다. 기존 문서를 보호하기 위해 실행 중인 앱을 종료하거나 덮어쓰지 않았으며, 검증된 1.6.8 로컬 교체본을 준비해 두었다. 이 로컬 교체 보류는 세 운영체제의 공개 설치 파일 배포와 별개다. 경로와 해시는 `app-replacement-pending.json`에 기록했다.

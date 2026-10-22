@@ -36,6 +36,16 @@ export const EXTRA_SHAPES = [
     d: "M100 25 L40 25 L40 0 L0 50 L40 100 L40 75 L100 75 Z",
   },
   {
+    id: "up-arrow",
+    name: "위쪽 블록 화살표",
+    d: "M25 100 L25 40 L0 40 L50 0 L100 40 L75 40 L75 100 Z",
+  },
+  {
+    id: "down-arrow",
+    name: "아래쪽 블록 화살표",
+    d: "M25 0 L75 0 L75 60 L100 60 L50 100 L0 60 L25 60 Z",
+  },
+  {
     id: "two-way",
     name: "양방향 화살표",
     d: "M0 50 L25 0 L25 30 L75 30 L75 0 L100 50 L75 100 L75 70 L25 70 L25 100 Z",

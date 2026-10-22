@@ -139,7 +139,7 @@ test("inserted custom shapes remain editable DrawingML and unsafe links are reje
     };
   });
   expect(result.rejected).toBe(true);
-  expect(result.count).toBe(14);
+  expect(result.count).toBe(16);
   expect(result.custom).toBe(true);
   expect(result.warnings).toEqual([]);
 });

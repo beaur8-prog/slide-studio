@@ -27,7 +27,7 @@ unpacked="$(mktemp -d "$RUNNER_TEMP/slide-linux-payload.XXXXXX")"
 dpkg-deb --extract "$deb" "$unpacked"
 diff -qr "$unpacked/opt/slide-studio" /opt/slide-studio
 # Openbox supplies real fullscreen behavior on the Xvfb display.
-xvfb-run -a -s '-screen 0 1920x1080x24' dbus-run-session -- bash -c 'openbox > "$RUNNER_TEMP/slide-openbox.log" 2>&1 & node scripts/qa-installed-linux.cjs'
+xvfb-run -a -s '-screen 0 1920x1080x24' dbus-run-session -- bash -c 'openbox > "$RUNNER_TEMP/slide-openbox.log" 2>&1 & node scripts/qa-installed-linux.cjs && node scripts/qa-unsaved-document.cjs qa/results/linux-native/unsaved-protection /opt/slide-studio/slide-studio'
 # Reinstall the same package and verify the complete payload again.
 sudo dpkg -i "$deb"
 diff -qr "$unpacked/opt/slide-studio" /opt/slide-studio

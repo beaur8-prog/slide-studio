@@ -16,6 +16,7 @@ const JSZip = require('jszip');
   if (!executablePath) env.SLIDE_STUDIO_DEV = '1';
   else delete env.SLIDE_STUDIO_DEV;
   const app = await electron.launch({ ...(executablePath ? { executablePath } : {}),
+    ...(process.platform === 'linux' ? { chromiumSandbox: true } : {}),
     args: [...(executablePath ? [] : [process.cwd()]), '--user-data-dir=' + profile], env, timeout: 45000 });
   const result = { platform: process.platform, isolatedProfile: true, controlledChoosers: true, nativeClose: true };
   let finished = false;
@@ -51,10 +52,12 @@ const JSZip = require('jszip');
     await expect(page.locator('.busy-backdrop')).toHaveCount(0);
     await expect(notes).toHaveValue('PPTX로 보존할 검수 내용 — 한글 123');
     await expect(page.locator('.save-indicator')).toHaveText('저장됨');
+    expect(await app.evaluate(() => global.__qaClose.calls.length)).toBe(1);
     const closed = page.waitForEvent('close');
     await app.evaluate(({ BrowserWindow }) => { setTimeout(() => BrowserWindow.getAllWindows()[0].close(), 0); });
     await closed;
-    expect(await app.evaluate(() => global.__qaClose.calls.length)).toBe(1);
+    // Windows/Linux quit with their final window. Closing with the warning
+    // response still set to Cancel proves that no new warning blocked closing.
     result.savedAndReopenedDocumentClosesWithoutWarning = true;
     finished = true;
     await fs.writeFile(path.join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n');

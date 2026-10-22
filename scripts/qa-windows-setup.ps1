@@ -69,6 +69,8 @@ Set-Content -Path $note -Value 'keep files not owned by the installer' -Encoding
 $env:SETUP_PATH = $Setup
 $env:EXPECTED_APP_VERSION = $Version
 node scripts/qa-installed-windows.cjs
+if ($LASTEXITCODE -ne 0) { throw "Installed app verification failed" }
+node scripts/qa-unsaved-document.cjs (Join-Path $report "unsaved-protection") (Join-Path $install "Slide Studio.exe")
 if ($LASTEXITCODE -ne 0) { throw 'Installed application smoke check failed' }
 Run-Setup
 Assert-Installed

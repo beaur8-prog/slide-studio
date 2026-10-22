@@ -16,6 +16,7 @@ const output = path.resolve('qa/results/linux-native');
   let failed = false;
   try {
     const page = await app.firstWindow();
+    const fixtureDialogs = await require('./qa-generated-documents.cjs')(page, app);
     page.setDefaultTimeout(20000);
     await expect(page.locator('.save-indicator')).toHaveText('저장됨', { timeout: 30000 });
     expect(await app.evaluate(({ app }) => app.getVersion())).toBe(process.env.EXPECTED_APP_VERSION);
@@ -161,6 +162,7 @@ const output = path.resolve('qa/results/linux-native');
       await require('./qa-notes-resize.cjs')(page, output, { app });
     if (process.env.EXPECTED_APP_VERSION.localeCompare('1.6.5', undefined, { numeric: true }) >= 0)
       await require('./qa-table-row-height.cjs')(page, output, { app });
+    await fs.writeFile(path.join(output, 'fixture-dialogs.json'), JSON.stringify(fixtureDialogs(), null, 2) + '\n');
     await fs.writeFile(path.join(output, 'native-app.json'), JSON.stringify({
       version: process.env.EXPECTED_APP_VERSION, protection, installedApp: true, pptxImport: true,
       koreanText: true, systemKoreanFallback: true, objectContext: true, selectedTextColorAndSelection: true,
@@ -173,7 +175,7 @@ const output = path.resolve('qa/results/linux-native');
     await app.windows()[0]?.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {});
     throw error;
   } finally {
-    if (failed) app.process().kill();
+    if (failed) app.process().kill('SIGKILL');
     await app.close().catch(() => {});
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

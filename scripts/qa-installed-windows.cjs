@@ -17,6 +17,7 @@ const { execFile } = require('node:child_process');
   let failed = false;
   try {
     const page = await app.firstWindow();
+    const fixtureDialogs = await require('./qa-generated-documents.cjs')(page, app);
     page.setDefaultTimeout(20000);
     page.setDefaultNavigationTimeout(30000);
     console.log("Native app: window opened");
@@ -255,6 +256,7 @@ const { execFile } = require('node:child_process');
     expect(busyExit).toBe(2);
     await expect(page.locator('.save-indicator')).toHaveText('저장됨');
     await page.screenshot({ path: path.join(output, 'installed-app.png') });
+    await fs.writeFile(path.join(output, 'fixture-dialogs.json'), JSON.stringify(fixtureDialogs(), null, 2) + '\n');
     await fs.writeFile(path.join(output, 'native-app.json'), JSON.stringify({
       version, objectContext, ...(textFormatting ? { textContextSelection: true, nativeTextClipboard: true, partialTextColor: true, nativeTextColorUndo: true, sourceFontImportPersistenceRemoval: true } : {}),
       ...(longTextFeatures ? { nativeLongTextAutoHeight: true, nativeHeightSettingsAndPersistence: true, chartDataNotice: true } : {}), installedApplicationLaunched: true, editorRendered: true,
@@ -270,7 +272,7 @@ const { execFile } = require('node:child_process');
   } finally {
     // This script is guarded to run only on a disposable CI desktop. A failed
     // assertion can leave unsaved state and trigger the app's unload dialog.
-    if (failed) app.process().kill();
+    if (failed) app.process().kill('SIGKILL');
     await app.close().catch(() => {});
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

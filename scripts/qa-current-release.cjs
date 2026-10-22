@@ -88,7 +88,71 @@ module.exports = async function verifyCurrentRelease(page, output, { app }) {
     await expect(page.locator('.library-file')).toHaveCount(1);
     await page.screenshot({ path: path.join(output, 'recent-files.png') });
     await page.keyboard.press('Escape');
-    const result = { version: await app.evaluate(({ app }) => app.getVersion()), inheritedPictureBackground: true, backgroundCropOpacity: true, nativeBackgroundPptxRoundTrip: true, zeroSizeShapeImportAndRoundTrip: true, homeShapeFormatting: true, compactInspector: true, closeInspectorKeepsSelection: true, repeatedOpenDeduplicated: true, deletedFilePruned: true };
+    await page.getByRole('button', { name: '파일', exact: true }).click();
+    await page.getByRole('button', { name: '새 프레젠테이션', exact: true }).click();
+    await page.getByRole('button', { name: '제목 슬라이드', exact: true }).click();
+    await page.getByRole('button', { name: '만들기', exact: true }).click();
+    await idle();
+    await expect(page.locator('.editable-slide [data-type="text"]')).toHaveText(['프레젠테이션 제목', '이야기의 시작을 적어보세요']);
+    await page.getByRole('button', { name: '도형', exact: true }).click();
+    const names = await page.locator('.shape-options button').allTextContents();
+    expect(names).toHaveLength(22);
+    expect(names.slice(0, 9)).toEqual(['사각형', '둥근 사각형', '타원', '삼각형', '선', '화살표', '마름모', '오각형', '육각형']);
+    expect(names).toEqual(expect.arrayContaining(['위쪽 블록 화살표', '아래쪽 블록 화살표']));
+    await page.screenshot({ path: path.join(output, 'shape-menu.png') });
+    await page.keyboard.press('Escape');
+    const shapeDefaults = [];
+    for (let i = 0; i < names.length; i++) {
+      await page.getByRole('button', { name: '도형', exact: true }).click();
+      await page.locator('.shape-options').getByRole('button', { name: names[i], exact: true }).click();
+      const selected = page.locator('.editable-slide [data-type="shape"].selected');
+      await expect(selected).toHaveCount(1);
+      const id = await selected.getAttribute('data-element-id');
+      await expect.poll(async () => (await readDeck()).slides[0].elements.at(-1)?.id).toBe(id);
+      const item = (await readDeck()).slides[0].elements.at(-1);
+      const expected = i < 9 ? { fill: 'transparent', stroke: '#000000', strokeWidth: 3 } : { fill: '#4472C4', stroke: 'transparent', strokeWidth: 0 };
+      expect(item).toMatchObject(expected);
+      await expect(page.getByLabel('도형 채우기 없음', { exact: true })).toBeChecked({ checked: i < 9 });
+      await expect(page.getByRole('spinbutton', { name: '도형 선 두께', exact: true })).toHaveValue(String(expected.strokeWidth));
+      const ribbon = await page.locator('.ribbon').evaluate(el => {
+        const groups = [...el.children], font = groups.findIndex(g => g.classList.contains('font-group'));
+        const shape = groups.findIndex(g => g.classList.contains('shape-format-group'));
+        return { betweenFontAndParagraph: shape === font + 1 && groups[shape + 1].querySelector('.group-label')?.textContent === '단락',
+          sameRow: groups[font].getBoundingClientRect().top === groups[shape].getBoundingClientRect().top,
+          noOverflow: el.scrollWidth <= el.clientWidth + 1 };
+      });
+      expect(ribbon).toEqual({ betweenFontAndParagraph: true, sameRow: true, noOverflow: true });
+      if (i === 9) await page.screenshot({ path: path.join(output, 'blue-shape.png') });
+      shapeDefaults.push({ name: names[i], ...expected });
+      await page.getByRole('button', { name: '실행 취소', exact: true }).click();
+      await expect(page.locator('.editable-slide [data-element-id]')).toHaveCount(3);
+    }
+    for (const name of ['위쪽 블록 화살표', '아래쪽 블록 화살표']) {
+      await page.getByRole('button', { name: '도형', exact: true }).click();
+      await page.locator('.shape-options').getByRole('button', { name, exact: true }).click();
+    }
+    await idle();
+    const arrows = (await readDeck()).slides[0].elements.slice(-2);
+    expect(arrows.every(item => item.paths?.length === 1 && item.paths[0].d.endsWith('Z'))).toBe(true);
+    const arrowFile = path.join(work, '블록 화살표.pptx');
+    await app.evaluate(({ dialog }, file) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: file }); }, arrowFile);
+    await page.getByRole('button', { name: 'PPTX 저장', exact: true }).click();
+    await expect.poll(() => fs.stat(arrowFile).then(() => true, () => false)).toBe(true); await idle();
+    await app.evaluate(({ dialog, Menu }, file) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] });
+      Menu.getApplicationMenu().items.find(x => x.label === 'File').submenu.items.find(x => x.label === 'Open…').click();
+    }, arrowFile);
+    await expect(page.locator('.editable-slide [data-element-id]')).toHaveCount(5); await idle();
+    const restoredArrows = (await readDeck()).slides[0].elements.slice(-2);
+    for (let i = 0; i < 2; i++) {
+      expect(restoredArrows[i].paths).toEqual(arrows[i].paths);
+      expect(restoredArrows[i].fill.toUpperCase()).toBe('#4472C4');
+    }
+    const version = await app.evaluate(({ app }) => app.getVersion());
+    await fs.writeFile(path.join(output, 'shape-insertion.json'), JSON.stringify({ version, all22ShapeDefaults: true,
+      topThreeRowsNoFillBlack3: true, remainingShapesBlue: true, homeShapeFormattingBetweenFontAndParagraph: true,
+      newDocumentTitleLayout: true, verticalBlockArrowsPptxRoundTrip: true, shapes: shapeDefaults }, null, 2) + '\n');
+    const result = { version, inheritedPictureBackground: true, backgroundCropOpacity: true, nativeBackgroundPptxRoundTrip: true, zeroSizeShapeImportAndRoundTrip: true, homeShapeFormatting: true, compactInspector: true, closeInspectorKeepsSelection: true, repeatedOpenDeduplicated: true, deletedFilePruned: true, all22ShapeDefaults: true, verticalBlockArrowsPptxRoundTrip: true, homeShapeFormattingBetweenFontAndParagraph: true, newDocumentTitleLayout: true };
     await fs.writeFile(path.join(output, 'current-release.json'), JSON.stringify(result, null, 2) + '\n');
     console.log('Current release: picture background, zero-size shape, Home formatting, inspector and recent files verified.');
   } finally {

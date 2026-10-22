@@ -39,7 +39,7 @@ Windows는 호스팅된 Windows Server, Ubuntu는 X11 환경이다. Windows/Linu
 
 [Windows 실행 기록](https://github.com/beaur8-prog/slide-studio/actions/runs/39873577238) · [Ubuntu 실행 기록](https://github.com/beaur8-prog/slide-studio/actions/runs/39873586906)
 
-Windows 수정 전 기록에서는 최초 진입 시 상태 갱신 전에 같은 요청이 239회 재진입했다. 수정 후 실제 Windows 설치 앱에서는 최초 진입 요청 1회, 전체 연속 검수에서 진입/종료 각 6회, 마지막 전체 화면 상태 false를 확인했다. 원인 재현과 후속 전환 회귀 7개도 통과했다.
+Windows 출시 후보의 수정 전 기록에서는 최초 진입 시 상태 갱신 전에 같은 요청이 239회 재진입했다. 수정 후 실제 Windows 설치 앱에서는 최초 진입 요청 1회, 전체 연속 검수에서 진입/종료 각 6회, 마지막 전체 화면 상태 false를 확인했다. 원인 재현과 후속 전환 회귀 7개도 통과했다.
 
 런타임 태그 `v1.6.9`: `5c69c076fea63e92e5e365b0e918168966a0240b`. 네 파일 공통 실행 코드 SHA-256: `3ddf768838bee8ba80df0792ee2068dbb38427751b35c33779a7ffb447e108d8`. 패키지 파일 55개가 현재 빌드 소스와 일치한다.
 
@@ -51,3 +51,13 @@ Windows 수정 전 기록에서는 최초 진입 시 상태 갱신 전에 같은
 | Slide-Studio-linux-amd64.deb | 132491186 | `63f877d47d7d68d549082727660146a74b67b3c5def3da30100be15ec6dcc2ea` |
 
 Mac ZIP 재추출 후 서명·아이콘을 검사했다. Apple 공증을 의미하지 않는다. 로컬 앱도 최종 실행 코드로 교체하고 기본 제목 슬라이드 시작을 확인했다. 상세 증거는 `qa/results/release-1.6.9/`에 보관한다.
+
+## 공개 배포 확인
+
+[GitHub v1.6.9](https://github.com/beaur8-prog/slide-studio/releases/tag/v1.6.9)을 공개하고 [기존 리토스 다운로드·사용 안내](https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6)를 동일한 URL·토큰·생성일·만료 설정으로 갱신했다. 서버 PID·포트와 터널 PID·주소를 유지했고 서버를 재시작하지 않았다. Windows 우선 배치와 다운로드 경고·‘추가 정보 → 실행’ 안내를 문서 맨 위에 유지했다.
+
+검토한 1.6.9 본문과 삽입 그림 24개의 바이트를 공개 응답과 비교했다. PC·모바일에서 모든 그림이 로드되고 가로 넘침·브라우저 오류가 없음을 확인했다. 고정 latest/download 주소 5개에서 파일을 끝까지 다시 내려받아 바이트 수·SHA-256·GitHub digest와 v1.6.9 연결을 확인했다.
+
+현재 버전만 남기는 정리 방침에 따라 이전 1.6.8의 GitHub 첨부 파일 5개와 이전 publication/리토스 그림 폴더를 삭제했다. 이전 태그·릴리스 설명과 현재 1.6.9 파일은 보존했다. 로컬 Mac 앱도 최종 실행 코드로 교체해 기본 제목 슬라이드 상태로 실행했다.
+
+[간추린 검증 결과](results/release-1.6.9/summary.json)에 실행 링크와 검증값을 기록했다.

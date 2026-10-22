@@ -1,0 +1,82 @@
+{
+  "version": "1.6.9",
+  "runtimeSourceCommit": "5c69c076fea63e92e5e365b0e918168966a0240b",
+  "asarSHA256": "3ddf768838bee8ba80df0792ee2068dbb38427751b35c33779a7ffb447e108d8",
+  "sourceFilesCompared": 55,
+  "sourceRegressionPassed": 339,
+  "environmentSkips": 2,
+  "nativeTransitionCasesPassed": 7,
+  "nativeRuns": {
+    "windows": {
+      "url": "https://github.com/beaur8-prog/slide-studio/actions/runs/39873577238",
+      "conclusion": "success"
+    },
+    "linux": {
+      "url": "https://github.com/beaur8-prog/slide-studio/actions/runs/39873586906",
+      "conclusion": "success"
+    }
+  },
+  "nativeMacBundlePassed": true,
+  "unsavedProtectionVerifiedOnAllPlatforms": true,
+  "windowsFullscreenEntryRequestsBefore": 239,
+  "windowsFullscreenEntryRequestsAfter": 1,
+  "publicReleaseURL": "https://github.com/beaur8-prog/slide-studio/releases/tag/v1.6.9",
+  "shareURL": "https://pink-photos-barrel-activation.trycloudflare.com/s/209727b046a226e48d2c00d344cf6facbd4bdb99d62595a6",
+  "shareURLUnchanged": true,
+  "serverAndTunnelNotRestarted": true,
+  "publicDocumentMatchesReviewed": true,
+  "guideImagesVerified": 24,
+  "desktopAndMobileRenderingPassed": true,
+  "downloads": [
+    {
+      "name": "Slide-Studio-mac-arm64.zip",
+      "url": "https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-mac-arm64.zip",
+      "bytes": 129818481,
+      "sha256": "49500cbaf473a10e3c211e2b949089ba98728b9c55a4307d8b3a11d0ea5b0065",
+      "fullDownloadVerified": true,
+      "redirectedToVersion": "1.6.9"
+    },
+    {
+      "name": "Slide-Studio-win-x64.zip",
+      "url": "https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-win-x64.zip",
+      "bytes": 156991519,
+      "sha256": "2ccb846b8b74645af6bdbed14031289622b398e9e594b217c5550036b1edeb03",
+      "fullDownloadVerified": true,
+      "redirectedToVersion": "1.6.9"
+    },
+    {
+      "name": "Slide-Studio-Setup-x64.exe",
+      "url": "https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-Setup-x64.exe",
+      "bytes": 109593638,
+      "sha256": "b170258c9afb85fb76e583eb2c1bc8d2459990a959f3948866f855c27dda01cc",
+      "fullDownloadVerified": true,
+      "redirectedToVersion": "1.6.9"
+    },
+    {
+      "name": "Slide-Studio-linux-amd64.deb",
+      "url": "https://github.com/beaur8-prog/slide-studio/releases/latest/download/Slide-Studio-linux-amd64.deb",
+      "bytes": 132491186,
+      "sha256": "63f877d47d7d68d549082727660146a74b67b3c5def3da30100be15ec6dcc2ea",
+      "fullDownloadVerified": true,
+      "redirectedToVersion": "1.6.9"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "url": "https://github.com/beaur8-prog/slide-studio/releases/latest/download/SHA256SUMS.txt",
+      "bytes": 372,
+      "sha256": "38c22ee838405ba3a9b981975a14c5f2fba1b2f9fd989e2dd9621e3876a49be3",
+      "fullDownloadVerified": true,
+      "redirectedToVersion": "1.6.9"
+    }
+  ],
+  "previousVersionAssetsRemoved": {
+    "version": "1.6.8",
+    "files": 5
+  },
+  "localMacInstalledAndLaunched": true,
+  "limitations": [
+    "Mac not Apple notarized; Windows distribution unsigned",
+    "Windows hosted Server and Ubuntu X11 verified; real Windows/Linux IME and paper printing not verified",
+    "Large PPTX save still has up to about 3.17 seconds of main-thread work"
+  ]
+}

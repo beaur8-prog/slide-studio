@@ -78,8 +78,9 @@ const OUTLINED_INSERT_SHAPES = new Set([
   "rect", "roundRect", "ellipse", "triangle", "line", "arrow",
   "diamond", "pentagon", "hexagon",
 ]);
+export const DEFAULT_SHAPE_FILL = "#4472C4";
 export function shapeInsertionStyle(shape: string) {
   return OUTLINED_INSERT_SHAPES.has(shape)
     ? { fill: "transparent", stroke: "#000000", strokeWidth: 3 }
-    : { fill: "#000000", stroke: "transparent", strokeWidth: 0 };
+    : { fill: DEFAULT_SHAPE_FILL, stroke: "transparent", strokeWidth: 0 };
 }

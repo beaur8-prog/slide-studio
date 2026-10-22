@@ -164,7 +164,7 @@ import {
 import { applyFooters, resolveDeckFields } from "./insert-fields";
 import ScreenshotDialog from "./ScreenshotDialog";
 import PresentationInk, { type PresentationInkHandle } from "./PresentationInk";
-import { EXTRA_SHAPES, shapeInsertionStyle } from "./shape-presets";
+import { DEFAULT_SHAPE_FILL, EXTRA_SHAPES, shapeInsertionStyle } from "./shape-presets";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const shortcut = (key: string) => (isMac ? `⌘${key}` : `Ctrl+${key}`);
@@ -3515,7 +3515,7 @@ export default function App() {
                     <input type="checkbox" aria-label="도형 채우기 없음"
                       checked={shapeStyleTarget?.fill === "transparent"}
                       disabled={shapeStylesDisabled}
-                      onChange={(event) => setShapeFill(event.target.checked ? "transparent" : "#000000")} />
+                      onChange={(event) => setShapeFill(event.target.checked ? "transparent" : DEFAULT_SHAPE_FILL)} />
                     채우기 없음
                   </label>
                   <label>
@@ -4701,7 +4701,7 @@ export default function App() {
                         <input
                           type="checkbox"
                           checked={selectedElement.fill === "transparent"}
-                          onChange={(e) => setShapeFill(e.target.checked ? "transparent" : "#000000")}
+                          onChange={(e) => setShapeFill(e.target.checked ? "transparent" : DEFAULT_SHAPE_FILL)}
                         />
                         채우기 없음
                       </label>

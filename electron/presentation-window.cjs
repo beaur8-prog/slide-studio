@@ -33,13 +33,15 @@ function createPresentationWindowController(window, { onEntered = () => {}, onEn
       return;
     }
     if (active) onEntered();
-    reconcile();
+    // Windows can emit this event before isFullScreen() reflects the new state.
+    // Re-entering setFullScreen in that callback can leave a phantom transition.
+    setImmediate(reconcile);
   };
   const left = () => {
     if (transition === false) {
       transition = null;
       // An old requested exit must not end a show restarted during its animation.
-      reconcile();
+      setImmediate(reconcile);
       return;
     }
     // A native fullscreen shortcut overrides the current presentation intent.

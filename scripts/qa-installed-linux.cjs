@@ -16,7 +16,7 @@ const output = path.resolve('qa/results/linux-native');
   let failed = false;
   try {
     const page = await app.firstWindow();
-    const fixtureDialogs = await require('./qa-generated-documents.cjs')(page, app);
+    const fixtureDialogs = await require('./qa-generated-documents.cjs')(page, app, output);
     page.setDefaultTimeout(20000);
     await expect(page.locator('.save-indicator')).toHaveText('저장됨', { timeout: 30000 });
     expect(await app.evaluate(({ app }) => app.getVersion())).toBe(process.env.EXPECTED_APP_VERSION);

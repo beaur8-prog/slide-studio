@@ -2,8 +2,23 @@
 
 // Only for disposable QA profiles. Exercise real dialogs in protection tests;
 // fixture replacement must not leave Electron disabled through CDP dialog.accept.
-module.exports = async function allowGeneratedDocuments(page, app) {
+module.exports = async function allowGeneratedDocuments(page, app, output) {
   await app.evaluate(({ dialog }) => { dialog.showMessageBoxSync = () => 1; });
+  if (output) await app.evaluate(({ BrowserWindow }, directory) => {
+    const fs = process.getBuiltinModule('fs');
+    const path = process.getBuiltinModule('path');
+    const win = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('#presenter='));
+    const events = [];
+    fs.mkdirSync(directory, { recursive: true });
+    const record = (event, requested) => {
+      events.push({ at: Date.now(), event, requested, fullscreen: win.isFullScreen(), enabled: win.isEnabled() });
+      fs.writeFileSync(path.join(directory, 'native-fullscreen-events.json'), JSON.stringify(events, null, 2));
+    };
+    const original = win.setFullScreen.bind(win);
+    win.setFullScreen = enabled => { record('setFullScreen', enabled); original(enabled); record('setFullScreen-return', enabled); };
+    for (const event of ['enter-full-screen', 'leave-full-screen']) win.on(event, () => record(event));
+    record('initial');
+  }, output);
   let fixtureDiscardConfirmations = 0;
   const unexpectedDialogs = [];
   await page.exposeFunction('__qaDiscardGeneratedDocument', () => { fixtureDiscardConfirmations++; });

@@ -17,7 +17,7 @@ const { execFile } = require('node:child_process');
   let failed = false;
   try {
     const page = await app.firstWindow();
-    const fixtureDialogs = await require('./qa-generated-documents.cjs')(page, app);
+    const fixtureDialogs = await require('./qa-generated-documents.cjs')(page, app, output);
     page.setDefaultTimeout(20000);
     page.setDefaultNavigationTimeout(30000);
     console.log("Native app: window opened");

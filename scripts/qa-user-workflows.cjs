@@ -24,7 +24,7 @@ const os = require('node:os');
     await app.evaluate(({ dialog }) => { dialog.showMessageBoxSync = () => 1; });
     const page = await app.firstWindow();
     page.setDefaultTimeout(20000);
-    const fixtureDialogs = await require('./qa-generated-documents.cjs')(page, app);
+    const fixtureDialogs = await require('./qa-generated-documents.cjs')(page, app, output);
     for (const script of ['qa-save-startup', 'qa-current-release', 'qa-editing-regressions', 'qa-remaining-regressions'])
       await require('./' + script + '.cjs')(page, output, { app });
     const { fixtureDiscardConfirmations } = fixtureDialogs();

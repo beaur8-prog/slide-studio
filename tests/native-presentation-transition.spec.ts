@@ -44,6 +44,13 @@ class WindowDouble extends EventEmitter {
     this.pending = null;
     this.emit(value ? "enter-full-screen" : "leave-full-screen");
   }
+  finishBeforeState() {
+    const value = this.pending;
+    if (value === null) throw new Error("No pending fullscreen transition");
+    this.pending = null;
+    this.emit(value ? "enter-full-screen" : "leave-full-screen");
+    this.fullscreen = value;
+  }
 }
 function setup() {
   const window = new WindowDouble();
@@ -56,14 +63,16 @@ function setup() {
   return { window, controller, ended: () => ended, entered: () => entered };
 }
 
-test("stopping before initial fullscreen entry waits for entry before requesting exit", () => {
+test("stopping before initial fullscreen entry waits for entry before requesting exit", async () => {
   const { window, controller, ended, entered } = setup();
   controller.set(true);
   controller.set(false);
   expect(window.requests).toEqual([true]);
   window.finish();
+  await new Promise<void>(resolve => setImmediate(resolve));
   expect(window.requests).toEqual([true, false]);
   window.finish();
+  await new Promise<void>(resolve => setImmediate(resolve));
   expect(window.fullscreen).toBe(false);
   expect(controller.isPresenting).toBe(false);
   expect(ended()).toBe(0);
@@ -72,42 +81,48 @@ test("stopping before initial fullscreen entry waits for entry before requesting
   expect(window.throttled).toBe(true);
 });
 
-test("restart during an exit ignores its stale leave event and preserves the new show", () => {
+test("restart during an exit ignores its stale leave event and preserves the new show", async () => {
   const { window, controller, ended } = setup();
   controller.set(true);
   window.finish();
+  await new Promise<void>(resolve => setImmediate(resolve));
   controller.set(false);
   window.resizeBeforeEvent(); // Cocoa's geometry has settled but leave event is still pending.
   controller.set(true);
   expect(window.requests).toEqual([true, false]);
   window.finish();
+  await new Promise<void>(resolve => setImmediate(resolve));
   expect(controller.isPresenting).toBe(true);
   expect(ended()).toBe(0);
   expect(window.requests).toEqual([true, false, true]);
   window.finish();
+  await new Promise<void>(resolve => setImmediate(resolve));
   expect(window.fullscreen).toBe(true);
   controller.set(false);
   window.finish();
+  await new Promise<void>(resolve => setImmediate(resolve));
   expect(window.fullscreen).toBe(false);
   expect(window.menu).toBe(true);
 });
 
-test("stop and restart before initial entry keeps only the latest presentation intent", () => {
+test("stop and restart before initial entry keeps only the latest presentation intent", async () => {
   const { window, controller, ended, entered } = setup();
   controller.set(true);
   controller.set(false);
   controller.set(true);
   window.finish();
+  await new Promise<void>(resolve => setImmediate(resolve));
   expect(window.requests).toEqual([true]);
   expect(controller.isPresenting).toBe(true);
   expect(entered()).toBe(1);
   expect(ended()).toBe(0);
   controller.set(false);
   window.finish();
+  await new Promise<void>(resolve => setImmediate(resolve));
   expect(window.fullscreen).toBe(false);
 });
 
-test("an editor already in fullscreen stays fullscreen after normal presentation stop", () => {
+test("an editor already in fullscreen stays fullscreen after normal presentation stop", async () => {
   const { window, controller, ended } = setup();
   window.fullscreen = true;
   controller.set(true);
@@ -120,10 +135,11 @@ test("an editor already in fullscreen stays fullscreen after normal presentation
   expect(ended()).toBe(0);
 });
 
-test("an actual native exit ends the current show and restores editor chrome once", () => {
+test("an actual native exit ends the current show and restores editor chrome once", async () => {
   const { window, controller, ended } = setup();
   controller.set(true);
   window.finish();
+  await new Promise<void>(resolve => setImmediate(resolve));
   window.fullscreen = false;
   window.emit("leave-full-screen");
   expect(controller.isPresenting).toBe(false);
@@ -134,4 +150,35 @@ test("an actual native exit ends the current show and restores editor chrome onc
   controller.set(false);
   window.emit("leave-full-screen");
   expect(ended()).toBe(1);
+});
+
+test("native entry reported before isFullScreen updates does not leave a phantom transition", async () => {
+  const { window, controller } = setup();
+  controller.set(true);
+  window.finishBeforeState();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  expect(window.requests).toEqual([true]);
+  controller.set(false);
+  expect(window.requests).toEqual([true, false]);
+  window.finishBeforeState();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  expect(window.fullscreen).toBe(false);
+  expect(controller.isPresenting).toBe(false);
+});
+
+test("restart waits for native exit state even when its event arrives first", async () => {
+  const { window, controller, ended } = setup();
+  controller.set(true);
+  window.finish();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  controller.set(false);
+  controller.set(true);
+  window.finishBeforeState();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  expect(window.requests).toEqual([true, false, true]);
+  window.finishBeforeState();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  expect(window.fullscreen).toBe(true);
+  expect(controller.isPresenting).toBe(true);
+  expect(ended()).toBe(0);
 });

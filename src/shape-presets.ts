@@ -62,3 +62,14 @@ export const EXTRA_SHAPES = [
     d: "M20 85 C-5 85 -5 50 12 43 C3 16 32 6 45 20 C58 -2 91 8 88 33 C108 38 106 68 88 73 C83 98 55 100 43 86 C37 98 23 97 20 85 Z",
   },
 ] as const;
+
+// The first three rows in the three-column shape menu use outlined defaults.
+const OUTLINED_INSERT_SHAPES = new Set([
+  "rect", "roundRect", "ellipse", "triangle", "line", "arrow",
+  "diamond", "pentagon", "hexagon",
+]);
+export function shapeInsertionStyle(shape: string) {
+  return OUTLINED_INSERT_SHAPES.has(shape)
+    ? { fill: "transparent", stroke: "#000000", strokeWidth: 3 }
+    : { fill: "#000000", stroke: "transparent", strokeWidth: 0 };
+}

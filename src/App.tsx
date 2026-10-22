@@ -164,7 +164,7 @@ import {
 import { applyFooters, resolveDeckFields } from "./insert-fields";
 import ScreenshotDialog from "./ScreenshotDialog";
 import PresentationInk, { type PresentationInkHandle } from "./PresentationInk";
-import { EXTRA_SHAPES } from "./shape-presets";
+import { EXTRA_SHAPES, shapeInsertionStyle } from "./shape-presets";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const shortcut = (key: string) => (isMac ? `⌘${key}` : `Ctrl+${key}`);
@@ -1173,10 +1173,10 @@ export default function App() {
       ...(type === "text"
         ? { color: theme.text, wrap: true, autoHeight: true }
         : {}),
-      ...(shape
+      ...(type === "shape"
         ? {
-            shape,
-            fill: theme.accent,
+            shape: shape ?? "rect",
+            ...shapeInsertionStyle(shape ?? "rect"),
             width: shape === "line" || shape === "arrow" ? 360 : 260,
             height: shape === "line" || shape === "arrow" ? 24 : 180,
           }
@@ -2867,8 +2867,6 @@ export default function App() {
           <button
             key={preset.id}
             onClick={() => {
-              const theme =
-                THEMES.find((t) => t.id === deck.theme) || THEMES[0];
               insertElements([
                 element("shape", {
                   shape: "custom",
@@ -2885,7 +2883,7 @@ export default function App() {
                   y: deck.height * 0.3,
                   width: 220,
                   height: 180,
-                  fill: theme.accent,
+                  ...shapeInsertionStyle(preset.id),
                 }),
               ]);
             }}
@@ -2896,7 +2894,10 @@ export default function App() {
               viewBox="-4 -4 108 108"
               aria-hidden="true"
             >
-              <path d={preset.d} fill="currentColor" />
+              <path d={preset.d}
+                fill={shapeInsertionStyle(preset.id).fill === "transparent" ? "none" : "currentColor"}
+                stroke={shapeInsertionStyle(preset.id).strokeWidth ? "currentColor" : "none"}
+                strokeWidth={6} />
             </svg>
             <span>{preset.name}</span>
           </button>
@@ -3514,7 +3515,7 @@ export default function App() {
                     <input type="checkbox" aria-label="도형 채우기 없음"
                       checked={shapeStyleTarget?.fill === "transparent"}
                       disabled={shapeStylesDisabled}
-                      onChange={(event) => setShapeFill(event.target.checked ? "transparent" : (THEMES.find(theme => theme.id === deck.theme)?.accent ?? "#D4613F"))} />
+                      onChange={(event) => setShapeFill(event.target.checked ? "transparent" : "#000000")} />
                     채우기 없음
                   </label>
                   <label>
@@ -4700,7 +4701,7 @@ export default function App() {
                         <input
                           type="checkbox"
                           checked={selectedElement.fill === "transparent"}
-                          onChange={(e) => setShapeFill(e.target.checked ? "transparent" : "#D4613F")}
+                          onChange={(e) => setShapeFill(e.target.checked ? "transparent" : "#000000")}
                         />
                         채우기 없음
                       </label>

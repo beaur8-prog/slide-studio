@@ -79,6 +79,7 @@ for (const platform of ['win32', 'darwin']) {
           webContents = contents;
           constructor(config: unknown) { options = config; }
           isDestroyed() { return destroyed; }
+          isFullScreen() { return false; }
           on() {} once() {}
           async loadFile() {}
           setMenuBarVisibility(visible: boolean) { menuVisibility.push(visible); }
@@ -102,6 +103,8 @@ for (const platform of ['win32', 'darwin']) {
     const saveItem = installedMenu.find(item => item.label === 'File')?.submenu
       .find((item: any) => item.accelerator === 'CmdOrCtrl+S');
     expect(saveItem).toBeTruthy();
+    const updateMenu = installedMenu.find(item => item.label === '도움말')?.submenu;
+    expect(updateMenu?.find((item: any) => item.label === '업데이트 확인…')).toBeTruthy();
     saveItem.click();
     expect(sentActions).toEqual([['slide-studio:menu', 'save']]);
     expect(options.webPreferences).toMatchObject({ contextIsolation: true, nodeIntegration: false, sandbox: true });

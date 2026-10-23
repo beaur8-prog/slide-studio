@@ -27,6 +27,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm run test:updates
       - name: Download and verify the exact public installer
         shell: pwsh
         env:

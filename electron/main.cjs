@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, session, shell } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, session, shell, Notification } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
@@ -8,6 +8,7 @@ const { fileURLToPath } = require('node:url');
 const { readOfficeArialNovaLight, readOfficeCalibriFonts } = require('./office-fonts.cjs');
 const { RecentFiles } = require('./recent-files.cjs');
 const { createPresentationWindowController } = require('./presentation-window.cjs');
+const { createStudioUpdater } = require('./studio-updater.cjs');
 
 const PRODUCT_NAME = 'Slide Studio';
 const APP_ICON = path.join(__dirname, 'assets', 'SlideStudio.png');
@@ -53,6 +54,8 @@ async function withCaptureOperation(event, task) {
 app.setName(PRODUCT_NAME);
 const customUserData=app.commandLine?.getSwitchValue?.('user-data-dir')||'';
 app.setPath('userData',customUserData&&path.isAbsolute(customUserData)?path.resolve(customUserData):path.join(app.getPath('appData'), PRODUCT_NAME));
+const updates = createStudioUpdater({ app, dialog, shell, Notification, id: 'slide', getWindow: () => mainWindow });
+updates.onChange(installMenu);
 if (process.platform === 'win32') app.setAppUserModelId('local.slidestudio.app');
 
 function isTrustedURL(value) {
@@ -222,6 +225,7 @@ function installMenu() {
     ] },
     { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' },
       ...(process.platform === 'darwin' ? [{ role: 'front' }] : [])] },
+    { label: '도움말', submenu: updates.menuTemplate() },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -565,6 +569,7 @@ async function createWindow() {
       noLink: true,
     });
     if (response === 1) event.preventDefault();
+    else void updates.cancelInstall();
   });
   mainWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
     if (mainFrame && !inPlace) { clearCaptureSources(); setPresentationMode(false); }
@@ -609,6 +614,7 @@ if (!app.requestSingleInstanceLock()) {
     installIPC();
     installMenu();
     await createWindow();
+    await updates.start();
     app.on('activate', () => { if (!mainWindow) void createWindow(); });
   });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

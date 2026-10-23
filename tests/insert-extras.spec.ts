@@ -262,7 +262,7 @@ test("footers apply to all slides, fixed dates survive reordering, and slide num
   await page
     .locator(".thumbnail-row")
     .nth(2)
-    .dragTo(page.locator(".thumbnail-row").nth(0));
+    .dragTo(page.locator(".slide-insertion-gap").first());
   await expect(page.locator(".thumbnail-button").nth(0)).toHaveAttribute(
     "aria-label",
     /Original 3/,

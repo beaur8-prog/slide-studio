@@ -145,7 +145,7 @@ test("dropping a slide at the before marker inserts it before the indicated slid
   await page
     .locator(".thumbnail-row")
     .nth(0)
-    .dragTo(page.locator(".thumbnail-row").nth(2));
+    .dragTo(page.locator(".slide-insertion-gap").nth(2));
   await expect(page.locator(".save-indicator")).toHaveText("저장됨");
   const ids = () =>
     page.evaluate(async () =>
@@ -157,7 +157,7 @@ test("dropping a slide at the before marker inserts it before the indicated slid
   await page
     .locator(".thumbnail-row")
     .nth(2)
-    .dragTo(page.locator(".thumbnail-row").nth(0));
+    .dragTo(page.locator(".slide-insertion-gap").first());
   await expect(page.locator(".save-indicator")).toHaveText("저장됨");
   expect(await ids()).toEqual(["slide-2", "slide-1", "slide-0"]);
 });

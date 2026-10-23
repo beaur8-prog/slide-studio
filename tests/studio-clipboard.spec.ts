@@ -47,7 +47,7 @@ test('rich tables take precedence over an accompanying clipboard preview image',
  await expect(tables.last()).toContainText('보고서');
 });
 
-for (const change of ['slide','document','focus','modal'] as const) {
+for (const change of ['slide','document','focus','modal','gap'] as const) {
  test(`a delayed Home paste is cancelled after a ${change} change`,async({page})=>{
   await page.goto('http://127.0.0.1:5190');await expect(page.locator('.save-indicator')).toHaveText('저장됨');
   // Fresh documents now contain one title slide; explicitly create the target.
@@ -65,6 +65,7 @@ for (const change of ['slide','document','focus','modal'] as const) {
   if(change==='slide') await page.getByRole('button',{name:/^슬라이드 2:/}).click();
   if(change==='document') await page.getByRole('button',{name:'새 슬라이드',exact:true}).click();
   if(change==='focus') await page.getByRole('textbox',{name:'프레젠테이션 이름',exact:true}).focus();
+  if(change==='gap') await page.getByRole('button',{name:'첫 슬라이드 앞에 삽입',exact:true}).click();
   if(change==='modal') {
    await page.getByRole('button',{name:'삽입',exact:true}).click();
    await page.getByRole('button',{name:'표',exact:true}).click();

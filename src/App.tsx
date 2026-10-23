@@ -11,6 +11,7 @@ import type { InkStroke } from "./presentation-ink";
 import { fitTableRows } from "./table-layout";
 import { arrangeElements } from "./object-arrange";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -401,7 +402,13 @@ export default function App() {
     ? slideSelection.filter((id) => deck.slides.some((s) => s.id === id))
     : [activeId];
   const slideAnchor = useRef<string | null>(null);
-  const [slideMenu, setSlideMenu] = useState<{ x: number; y: number } | null>(
+  // undefined follows the active slide; null is the gap after the final slide.
+  const [slideInsertBefore, setSlideInsertBefore] = useState<string | null>();
+  const insertIndex = slideInsertBefore === undefined ? activeIndex + 1
+    : slideInsertBefore === null ? deck.slides.length
+      : deck.slides.findIndex((s) => s.id === slideInsertBefore);
+  const slideInsertIndex = insertIndex < 0 ? activeIndex + 1 : insertIndex;
+  const [slideMenu, setSlideMenu] = useState<{ x: number; y: number; insertion?: boolean } | null>(
     null,
   );
   const dragSlideIds = useRef<string[]>([]);
@@ -669,7 +676,7 @@ export default function App() {
   useLayoutEffect(() => {
     clipboardContext.current++;
   }, [history.present, activeId, selected, slideSelection, tableSelection,
-    editing, modal, presenting, sorter, ready, busy]);
+    editing, modal, presenting, sorter, ready, busy, slideInsertBefore]);
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -767,6 +774,7 @@ export default function App() {
     [finish],
   );
   const undo = useCallback(() => {
+    setSlideInsertBefore(undefined);
     setEditing(null);
     transaction.current = null;
     setSelected([]);
@@ -781,6 +789,7 @@ export default function App() {
     );
   }, []);
   const redo = useCallback(() => {
+    setSlideInsertBefore(undefined);
     setEditing(null);
     transaction.current = null;
     setSelected([]);
@@ -856,6 +865,7 @@ export default function App() {
     id: string,
     modifiers?: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean },
   ) => {
+    setSlideInsertBefore(undefined);
     if (modifiers?.shiftKey) {
       const anchor = deck.slides.findIndex(
           (s) => s.id === (slideAnchor.current ?? activeId),
@@ -899,6 +909,7 @@ export default function App() {
     setFileSnapshot(next);
     transaction.current = null;
     setActiveId(next.slides[0].id);
+    setSlideInsertBefore(undefined);
     setSelected([]);
     setEditing(null);
     setModal(null);
@@ -1056,6 +1067,14 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, [hasFileChanges, saveStatus]);
   useEffect(() => {
+    if (slideInsertBefore !== undefined && slideInsertBefore !== null &&
+        !deck.slides.some((s) => s.id === slideInsertBefore))
+      setSlideInsertBefore(undefined);
+  }, [deck.slides, slideInsertBefore]);
+  useEffect(() => {
+    if (selected.length || editing) setSlideInsertBefore(undefined);
+  }, [selected, editing]);
+  useEffect(() => {
     if (!deck.slides.some((s) => s.id === activeId)) {
       setActiveId(
         deck.slides[Math.min(activeIndex, deck.slides.length - 1)].id,
@@ -1111,7 +1130,7 @@ export default function App() {
     if (!withinCapacity({ slides: [next] })) return;
     commit((d) => {
       const slides = [...d.slides];
-      slides.splice(activeIndex + 1, 0, next);
+      slides.splice(slideInsertIndex, 0, next);
       return { ...d, slides };
     });
     selectSlide(next.id);
@@ -1168,6 +1187,7 @@ export default function App() {
     setMenu(null);
   };
   const slideContext = (id: string, x: number, y: number) => {
+    setSlideInsertBefore(undefined);
     if (!selectedSlideIds.includes(id)) selectSlide(id);
     finish();
     setEditing(null);
@@ -1176,11 +1196,22 @@ export default function App() {
     setTextMenu(null);
     setSlideMenu({ x, y });
   };
+  const selectSlideInsertion = (before: string | null) => {
+    finish();
+    setEditing(null);
+    setSelected([]);
+    setTableSelection(null);
+    setObjectMenu(null);
+    setTextMenu(null);
+    setSlideMenu(null);
+    setSlideInsertBefore(before);
+  };
   const startSlideDrag = (
     id: string,
     index: number,
     event: React.DragEvent,
   ) => {
+    setSlideInsertBefore(undefined);
     dragSlideIds.current = selectedSlideIds.includes(id)
       ? selectedSlideIds
       : [id];
@@ -1190,6 +1221,7 @@ export default function App() {
   };
   const dropSlides = (id: string | null) => {
     const ids = [...dragSlideIds.current];
+    if (!ids.length) return;
     commit((d) => ({
       ...d,
       slides: moveSlides(d.slides, ids, id),
@@ -1197,6 +1229,40 @@ export default function App() {
     setDragSlide(null);
     setDropSlide(null);
     dragSlideIds.current = [];
+  };
+  const slideDropIndex = (event: React.DragEvent, index: number) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return index + (event.clientY >= bounds.top + bounds.height / 2 ? 1 : 0);
+  };
+  const insertionGap = (index: number) => {
+    const before = deck.slides[index]?.id ?? null;
+    const label = index === 0 ? "첫 슬라이드 앞에 삽입" : `슬라이드 ${index} 뒤에 삽입`;
+    return (
+      <button
+        type="button"
+        className={`slide-insertion-gap ${dropSlide === index ? "drop-target" : ""}`}
+        aria-label={label}
+        title={`${label} · 붙여넣기 또는 새 슬라이드`}
+        aria-pressed={slideInsertBefore === before}
+        onFocus={() => selectSlideInsertion(before)}
+        onClick={() => selectSlideInsertion(before)}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          selectSlideInsertion(before);
+          setSlideMenu({ x: event.clientX, y: event.clientY, insertion: true });
+        }}
+        onDragOver={(event) => {
+          if (!dragSlideIds.current.length) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          setDropSlide(index);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          dropSlides(before);
+        }}
+      />
+    );
   };
   const addElement = (type: SlideElement["type"], shape?: ShapeKind) => {
     if (!canAddElements(1)) return;
@@ -1525,7 +1591,7 @@ export default function App() {
       const next = copies[0];
       commit((d) => {
         const slides = [...d.slides];
-        slides.splice(activeIndex + 1, 0, ...copies);
+        slides.splice(slideInsertIndex, 0, ...copies);
         return { ...d, slides };
       });
       selectSlide(next.id);
@@ -2148,6 +2214,7 @@ export default function App() {
         return;
       }
       if (e.key === "Escape") {
+        setSlideInsertBefore(undefined);
         if (activeTableSelection && !modal) {
           e.preventDefault();
           setTableSelection(null);
@@ -2160,6 +2227,11 @@ export default function App() {
         return;
       }
       if (editingTarget(e.target) || modal) return;
+      if (e.target instanceof Element && e.target.closest(".slide-insertion-gap") &&
+          ["Delete", "Backspace"].includes(e.key)) {
+        e.preventDefault();
+        return;
+      }
       if (activeTableSelection && selectedElement?.table) {
         const table = selectedElement.table;
         if (e.key === "Tab" && !cmd && !e.altKey) {
@@ -4141,58 +4213,70 @@ export default function App() {
                 <Grid2X2 size={15} />
               </button>
             </div>
-            <div className="thumbnail-list" ref={thumbnailList}>
+            <div className="thumbnail-list" ref={thumbnailList}
+              onDragLeave={(event) => {
+                if (!(event.relatedTarget instanceof Node) ||
+                    !event.currentTarget.contains(event.relatedTarget))
+                  setDropSlide(null);
+              }}
+            >
               {deck.slides.map((s, i) => (
-                <div
-                  key={s.id}
-                  className={`thumbnail-row ${selectedSlideIds.includes(s.id) ? "active" : ""} ${s.hidden ? "hidden-slide" : ""} ${dropSlide === i ? "drop-before" : ""}`}
-                  draggable
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    slideContext(s.id, e.clientX, e.clientY);
-                  }}
-                  onDragStart={(e) => startSlideDrag(s.id, i, e)}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDropSlide(i);
-                  }}
-                  onDragEnd={() => {
-                    setDragSlide(null);
-                    setDropSlide(null);
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    dropSlides(s.id);
-                  }}
-                >
-                  <span
-                    className="slide-number"
-                    title={s.hidden ? "발표에서 숨김" : undefined}
+                <Fragment key={s.id}>
+                  {insertionGap(i)}
+                  <div
+                    className={`thumbnail-row ${selectedSlideIds.includes(s.id) ? "active" : ""} ${s.hidden ? "hidden-slide" : ""}`}
+                    draggable
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      slideContext(s.id, e.clientX, e.clientY);
+                    }}
+                    onDragStart={(e) => startSlideDrag(s.id, i, e)}
+                    onDragOver={(e) => {
+                      if (!dragSlideIds.current.length) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setDropSlide(slideDropIndex(e, i));
+                    }}
+                    onDragEnd={() => {
+                      setDragSlide(null);
+                      setDropSlide(null);
+                      dragSlideIds.current = [];
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      dropSlides(deck.slides[slideDropIndex(e, i)]?.id ?? null);
+                    }}
                   >
-                    {i + 1}
-                  </span>
-                  <button
-                    className="thumbnail-button"
-                    aria-label={`슬라이드 ${i + 1}: ${slideTitle(s)}${s.hidden ? " (숨김)" : ""}`}
-                    aria-current={s.id === slide.id ? "true" : undefined}
-                    aria-pressed={selectedSlideIds.includes(s.id)}
-                    onClick={(e) => selectSlide(s.id, e)}
-                  >
-                    <div
-                      className="thumbnail-preview"
-                      style={{ height: (176 * deck.height) / deck.width }}
+                    <span
+                      className="slide-number"
+                      title={s.hidden ? "발표에서 숨김" : undefined}
                     >
-                      <SlideVisual
-                        slide={s}
-                        width={deck.width}
-                        height={deck.height}
-                        scale={176 / deck.width}
-                      />
-                    </div>
-                  </button>
-                  <span className="thumbnail-caption">{slideTitle(s)}</span>
-                </div>
+                      {i + 1}
+                    </span>
+                    <button
+                      className="thumbnail-button"
+                      aria-label={`슬라이드 ${i + 1}: ${slideTitle(s)}${s.hidden ? " (숨김)" : ""}`}
+                      aria-current={s.id === slide.id ? "true" : undefined}
+                      aria-pressed={selectedSlideIds.includes(s.id)}
+                      onClick={(e) => selectSlide(s.id, e)}
+                    >
+                      <div
+                        className="thumbnail-preview"
+                        style={{ height: (176 * deck.height) / deck.width }}
+                      >
+                        <SlideVisual
+                          slide={s}
+                          width={deck.width}
+                          height={deck.height}
+                          scale={176 / deck.width}
+                        />
+                      </div>
+                    </button>
+                    <span className="thumbnail-caption">{slideTitle(s)}</span>
+                  </div>
+                </Fragment>
               ))}
+              {insertionGap(deck.slides.length)}
             </div>
             <button className="add-slide-button" onClick={() => addSlide()}>
               <Plus size={16} />
@@ -4274,6 +4358,7 @@ export default function App() {
                   className="canvas-area"
                   ref={canvasArea}
                   onPointerDown={(e) => {
+                    setSlideInsertBefore(undefined);
                     if (e.target === e.currentTarget) setSelected([]);
                   }}
                   onDragOver={(e) => {
@@ -5506,7 +5591,19 @@ export default function App() {
           y={slideMenu.y}
           label="슬라이드 편집"
           onClose={() => setSlideMenu(null)}
-          actions={[
+          actions={slideMenu.insertion ? [
+            {
+              icon: <Plus size={16} />,
+              label: "새 슬라이드",
+              run: () => { addSlide(); setSlideMenu(null); },
+            },
+            {
+              icon: <ClipboardPaste size={16} />,
+              label: "슬라이드 붙여넣기",
+              disabled: !clipboard.current.slides?.length && !clipboard.current.slide,
+              run: () => { pasteSelection(); setSlideMenu(null); },
+            },
+          ] : [
             {
               icon: <Copy size={16} />,
               label: `슬라이드 복제 (${selectedSlideIds.length})`,

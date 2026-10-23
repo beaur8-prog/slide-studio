@@ -5504,6 +5504,7 @@ export default function App() {
         <ObjectContextMenu
           x={slideMenu.x}
           y={slideMenu.y}
+          label="슬라이드 편집"
           onClose={() => setSlideMenu(null)}
           actions={[
             {
@@ -5519,6 +5520,15 @@ export default function App() {
               label: "슬라이드 복사",
               run: () => {
                 copySelection();
+                setSlideMenu(null);
+              },
+            },
+            {
+              icon: <ClipboardPaste size={16} />,
+              label: "슬라이드 붙여넣기",
+              disabled: !clipboard.current.slides?.length && !clipboard.current.slide,
+              run: () => {
+                pasteSelection();
                 setSlideMenu(null);
               },
             },

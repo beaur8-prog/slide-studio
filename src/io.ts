@@ -36,6 +36,7 @@ import { drawingPaths } from "./drawing-path";
 import { readTextBody } from "./pptx-text";
 import { restoreLayoutXml } from "./pptx-export-layout";
 import { inheritTableCellStyle } from "./pptx-table-style";
+import { measureTableText } from "./table-layout";
 import { MAX_SLIDES, MAX_SLIDE_ELEMENTS, MAX_ELEMENTS } from "./document-limits";
 import { writeBackgroundImage } from "./pptx-background";
 import { writeGroups } from "./object-groups";
@@ -2543,7 +2544,7 @@ export async function importPptx(
       });
     };
 
-    const parseTable = (node: Element, parent: Transform) => {
+    const parseTable = async (node: Element, parent: Transform) => {
       const table = first(node, "tbl"),
         geometry = transformGeometry(child(node, "xfrm"), parent);
       if (!table || !geometry) {
@@ -2557,16 +2558,20 @@ export async function importPptx(
         heights = rows.map((n) => attrNumber(n, "h"));
       if (
         !columns.length ||
+        !rows.length ||
         columns.length > 100 ||
         rows.length > 1000 ||
         columns.some((n) => n <= 0) ||
-        heights.some((n) => n <= 0)
+        heights.some((n) => n < 0)
       ) {
         warn("표의 행·열 크기를 읽을 수 없습니다.");
         return;
       }
       const rowHeights = heights.map(
         (n) => (n / EMU_PER_PX) * Math.abs(parent.sy),
+      );
+      const automaticRows = heights.flatMap((height, row) =>
+        height === 0 ? [row] : [],
       );
       const baseHeight = rowHeights.reduce((a, b) => a + b, 0);
       // The saved frame can be shorter than its explicit DrawingML rows.
@@ -2576,7 +2581,13 @@ export async function importPptx(
       // geometry always come from DrawingML. Modified/complex cell formatting
       // falls back to the existing fidelity-preserving per-cell importer.
       const marker = node.getElementsByTagNameNS(TABLE_NS, "table")[0];
-      if (marker && (marker.textContent?.length ?? 0) <= 256 * 1024) {
+      // Automatic rows need the actual per-cell width/style measurement below;
+      // do not normalize zero DrawingML heights into metadata proportions.
+      if (
+        marker &&
+        !automaticRows.length &&
+        (marker.textContent?.length ?? 0) <= 256 * 1024
+      ) {
         try {
           const metadata = JSON.parse(marker.textContent ?? "");
           if (metadata.version !== 1) throw new Error("Unknown table version");
@@ -2863,46 +2874,79 @@ export async function importPptx(
         });
         y += rowHeights[r];
       });
-      // Saved row heights can be smaller than the frame: PowerPoint grows rows
-      // to fit text. Give that extra height to the rows that need it first.
-      let spare = Math.max(0, geometry.height - baseHeight);
-      const needed = rowHeights.map(() => 0);
-      for (const { el, row, span } of pendingCells) {
-        if (span !== 1) continue;
-        const textHeight =
-          (el.paragraphs ?? []).reduce(
-            (sum, p) =>
-              sum +
-              (p.spaceBefore ?? 0) +
-              (p.spaceAfter ?? 0) +
-              paragraphLines(p).reduce(
-                (height, line) =>
-                  height +
-                  (p.lineSpacing ??
-                    Math.max(
-                      ...line.map((r) => r.fontSize ?? el.fontSize ?? 32),
-                    ) * (p.lineHeight ?? 1.2)),
-                0,
-              ),
-            0,
-          ) +
-          (el.textInsets?.[0] ?? 0) +
-          (el.textInsets?.[2] ?? 0);
-        needed[row] = Math.max(needed[row], textHeight - rowHeights[row]);
-      }
-      const totalNeeded = needed.reduce((a, b) => a + b, 0);
-      const allocated = Math.min(spare, totalNeeded);
-      rowHeights.forEach((_, r) => {
-        rowHeights[r] += totalNeeded
-          ? (allocated * needed[r]) / totalNeeded
-          : 0;
-      });
-      spare -= allocated;
-      if (spare > 0)
-        rowHeights.forEach((_, r) => {
-          rowHeights[r] +=
-            (spare * heights[r]) / heights.reduce((a, b) => a + b, 0);
+      if (automaticRows.length) {
+        const cells = pendingCells.filter(({ row, span }) =>
+          automaticRows.some((r) => r >= row && r < row + span),
+        );
+        const textHeights = await measureTableText(cells.map(({ el }) => el));
+        for (const r of automaticRows) rowHeights[r] = 1;
+        // Resolve individual cells before merged cells. A merged cell may grow
+        // only its automatic rows; keep every explicit positive row unchanged.
+        cells.forEach(({ row, span }, i) => {
+          if (span === 1)
+            rowHeights[row] = Math.max(rowHeights[row], textHeights[i]);
         });
+        cells.forEach(({ row, span }, i) => {
+          if (span === 1) return;
+          const current = rowHeights
+            .slice(row, row + span)
+            .reduce((a, b) => a + b, 0);
+          const targets = automaticRows.filter(
+            (r) => r >= row && r < row + span,
+          );
+          const extra = Math.max(0, textHeights[i] - current) / targets.length;
+          for (const r of targets) rowHeights[r] += extra;
+        });
+        const total = rowHeights.reduce((a, b) => a + b, 0);
+        const extra =
+          Math.max(0, geometry.height - total) / automaticRows.length;
+        for (const r of automaticRows) rowHeights[r] += extra;
+        geometry.height = Math.max(
+          geometry.height,
+          rowHeights.reduce((a, b) => a + b, 0),
+        );
+      } else {
+        // Saved row heights can be smaller than the frame: PowerPoint grows rows
+        // to fit text. Give that extra height to the rows that need it first.
+        let spare = Math.max(0, geometry.height - baseHeight);
+        const needed = rowHeights.map(() => 0);
+        for (const { el, row, span } of pendingCells) {
+          if (span !== 1) continue;
+          const textHeight =
+            (el.paragraphs ?? []).reduce(
+              (sum, p) =>
+                sum +
+                (p.spaceBefore ?? 0) +
+                (p.spaceAfter ?? 0) +
+                paragraphLines(p).reduce(
+                  (height, line) =>
+                    height +
+                    (p.lineSpacing ??
+                      Math.max(
+                        ...line.map((r) => r.fontSize ?? el.fontSize ?? 32),
+                      ) * (p.lineHeight ?? 1.2)),
+                  0,
+                ),
+              0,
+            ) +
+            (el.textInsets?.[0] ?? 0) +
+            (el.textInsets?.[2] ?? 0);
+          needed[row] = Math.max(needed[row], textHeight - rowHeights[row]);
+        }
+        const totalNeeded = needed.reduce((a, b) => a + b, 0);
+        const allocated = Math.min(spare, totalNeeded);
+        rowHeights.forEach((_, r) => {
+          rowHeights[r] += totalNeeded
+            ? (allocated * needed[r]) / totalNeeded
+            : 0;
+        });
+        spare -= allocated;
+        if (spare > 0)
+          rowHeights.forEach((_, r) => {
+            rowHeights[r] +=
+              (spare * heights[r]) / heights.reduce((a, b) => a + b, 0);
+          });
+      }
       // Standard PowerPoint tables need no private extension to stay tables.
       // The cells retain their paragraphs, asymmetric edges, padding and merges.
       if (
@@ -3107,7 +3151,7 @@ export async function importPptx(
               );
           }
         } else if (node.localName === "graphicFrame") {
-          if (first(node, "tbl")) parseTable(node, parent);
+          if (first(node, "tbl")) await parseTable(node, parent);
           else if (first(node, "chart"))
             warn("차트는 이 버전에서 가져오지 않습니다.");
           else if (first(node, "relIds")) {

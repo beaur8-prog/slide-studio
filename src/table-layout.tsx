@@ -8,6 +8,58 @@ import {
   tableMerge,
 } from "./table";
 import type { SlideElement } from "./types";
+
+/** Intrinsic cell heights at the imported widths, including wraps and insets. */
+export async function measureTableText(
+  elements: SlideElement[],
+): Promise<number[]> {
+  const measure = document.createElement("div");
+  Object.assign(measure.style, {
+    position: "absolute",
+    left: "-200000px",
+    top: "0",
+    visibility: "hidden",
+    pointerEvents: "none",
+  });
+  document.body.append(measure);
+  const heights = () =>
+    elements.map((element) => {
+      const model = {
+        ...element,
+        autoHeight: true,
+        verticalAlign: "top" as const,
+      };
+      measure.innerHTML = renderToStaticMarkup(
+        <div
+          style={{
+            ...textStyle(model),
+            display: "flex",
+            flexDirection: "column",
+            boxSizing: "border-box",
+            width: Math.max(1, element.width),
+            height: "auto",
+            lineHeight: 1.2,
+          }}
+        >
+          <TextContent element={model} />
+        </div>,
+      );
+      return Math.max(1, Math.ceil(measure.getBoundingClientRect().height));
+    });
+  try {
+    let result = heights();
+    // Laying out the cells requests their bundled/local font faces. Recheck
+    // after loading, so a temporary fallback cannot give wrapped text short rows.
+    if (document.fonts.status === "loading") {
+      await document.fonts.ready;
+      result = heights();
+    }
+    return result;
+  } finally {
+    measure.remove();
+  }
+}
+
 /** Grow rows in slide pixels using the actual browser/font layout, in the same undo transaction as the text edit. */
 export function fitTableRows(
   element: SlideElement,

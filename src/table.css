@@ -86,11 +86,13 @@
 .inserted-table [data-row] {
   position: relative;
 }
-.table-cell-border-override {
+.table-border-overlay {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  box-sizing: border-box;
+  overflow: hidden;
 }
 .editable-slide .inserted-table {
   cursor: cell;

@@ -7,6 +7,7 @@ import type {
 import type { SlideElement, TableCellFormat, TableData } from "./types";
 import { fontStack } from "./text-layout";
 import { TextContent } from "./TextContent";
+import { tableBorderSegments } from "./table-borders";
 import NumberInput from "./NumberInput";
 import EditableText from "./EditableText";
 import type { TextFormatRange } from "./text-formatting";
@@ -54,6 +55,7 @@ export function TableVisual({
   if (!table) return null;
   const widths = tableSizes(table.columnWidths, table.cells[0].length, 100);
   const heights = tableSizes(table.rowHeights, table.cells.length, 100);
+  const borders = tableBorderSegments(element);
   return (
     <div
       className="inserted-table"
@@ -62,6 +64,7 @@ export function TableVisual({
       aria-rowcount={table.cells.length}
       aria-colcount={table.cells[0].length}
       style={{
+        position: "relative",
         display: "grid",
         width: "100%",
         height: "100%",
@@ -84,6 +87,19 @@ export function TableVisual({
               overrides &&
               (overrides.borderColor !== undefined ||
                 overrides.borderWidth !== undefined);
+            // Retain the text's existing content box when borders move to the
+            // separate overlay. Only base CSS borders previously consumed space.
+            const border =
+              borderOverride || style.borders ? 0 : style.borderWidth;
+            const padding =
+              style.padding +
+              (borderOverride && !style.borders ? style.borderWidth : 0);
+            const insets = style.textInsets ?? [
+              padding,
+              padding,
+              padding,
+              padding,
+            ];
             const selected =
               selection &&
               r >= selection.startRow &&
@@ -115,12 +131,14 @@ export function TableVisual({
                       : style.verticalAlign === "bottom"
                         ? "flex-end"
                         : "flex-start",
-                  padding: style.textInsets
-                    ? style.textInsets.map((n) => `${n}px`).join(" ")
-                    : style.padding +
-                      (borderOverride && !style.borders
-                        ? style.borderWidth
-                        : 0),
+                  padding: [
+                    insets[0] + (r === 0 ? border : 0),
+                    insets[1] + border,
+                    insets[2] + border,
+                    insets[3] + (c === 0 ? border : 0),
+                  ]
+                    .map((n) => `${n}px`)
+                    .join(" "),
                   fontSize: style.fontSize,
                   fontFamily: fontStack(style.fontFamily),
                   background: alphaColor(style.fill, style.fillOpacity),
@@ -129,55 +147,9 @@ export function TableVisual({
                   fontStyle: style.italic ? "italic" : "normal",
                   textDecoration: style.underline ? "underline" : undefined,
                   textAlign: style.align,
-                  borderColor: alphaColor(
-                    style.borderColor,
-                    style.strokeOpacity,
-                  ),
-                  borderStyle: "solid",
-                  borderWidth:
-                    borderOverride || style.borders
-                      ? 0
-                      : `${r === 0 ? style.borderWidth : 0}px ${style.borderWidth}px ${style.borderWidth}px ${c === 0 ? style.borderWidth : 0}px`,
+                  border: 0,
                 }}
               >
-                {borderOverride && !style.borders && (
-                  <span
-                    aria-hidden="true"
-                    className="table-cell-border-override"
-                    style={{
-                      border: `${style.borderWidth}px solid ${style.borderColor}`,
-                    }}
-                  />
-                )}
-                {style.borders && (
-                  <svg
-                    aria-hidden="true"
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      width: "100%",
-                      height: "100%",
-                      pointerEvents: "none",
-                      overflow: "visible",
-                    }}
-                    viewBox="0 0 100 100"
-                    preserveAspectRatio="none"
-                  >
-                    {style.borders.map((b, i) => (
-                      <line
-                        key={i}
-                        x1={[0, 100, 0, 0][i]}
-                        y1={[0, 0, 100, 0][i]}
-                        x2={[100, 100, 100, 0][i]}
-                        y2={[0, 100, 100, 100][i]}
-                        stroke={b.color}
-                        strokeOpacity={b.opacity ?? style.strokeOpacity}
-                        strokeWidth={b.width}
-                        vectorEffect="non-scaling-stroke"
-                      />
-                    ))}
-                  </svg>
-                )}
                 <div
                   className="table-cell-text"
                   style={{
@@ -237,6 +209,25 @@ export function TableVisual({
           })}
         </div>
       ))}
+      {!!borders.length && (
+        <svg
+          className="table-border-overlay"
+          aria-hidden="true"
+          focusable="false"
+          viewBox={`0 0 ${element.width} ${element.height}`}
+          preserveAspectRatio="none"
+        >
+          {borders.map(({ key, color, opacity, width, ...line }) => (
+            <line
+              key={key}
+              {...line}
+              stroke={color}
+              strokeOpacity={opacity}
+              strokeWidth={width}
+            />
+          ))}
+        </svg>
+      )}
     </div>
   );
 }

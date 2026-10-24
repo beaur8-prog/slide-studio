@@ -436,13 +436,10 @@ test("range formatting leaves other cells unchanged and round-trips through proj
   await expect(rendered).toHaveCSS("color", "rgb(255, 238, 68)");
   await expect(rendered).toHaveCSS("font-size", "18px");
   await expect(rendered).toHaveCSS("text-align", "right");
-  const border = rendered.locator(".table-cell-border-override");
-  await expect(border).toHaveCount(1);
-  for (const side of ["top", "right", "bottom", "left"]) {
-    await expect(border).toHaveCSS(`border-${side}-width`, "4px");
-    await expect(border).toHaveCSS(`border-${side}-style`, "solid");
-    await expect(border).toHaveCSS(`border-${side}-color`, "rgb(204, 34, 0)");
-  }
+  const borders = tableOnSlide(page).locator('.table-border-overlay line[stroke="#CC2200"]');
+  await expect(borders).toHaveCount(12);
+  for (const border of await borders.all())
+    await expect(border).toHaveAttribute("stroke-width", "4");
   await tableOnSlide(page).screenshot({
     path: testInfo.outputPath("table-cell-borders.png"),
   });

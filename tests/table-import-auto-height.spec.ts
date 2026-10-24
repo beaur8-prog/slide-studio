@@ -79,6 +79,59 @@ const cases = [
     frame: 96,
     invalid: true,
   },
+  {
+    name: "positive rows grow for wrapped Korean text",
+    rows: [32, 32, 32],
+    frame: 96,
+    long: true,
+    narrow: true,
+    grow: true,
+  },
+  {
+    name: "positive rows with Studio metadata wrap at the cell width",
+    rows: [32, 32, 32],
+    frame: 96,
+    long: true,
+    narrow: true,
+    grow: true,
+    metadata: true,
+    shortcut: true,
+  },
+  {
+    name: "positive rows use spare frame height before expanding",
+    rows: [32, 32, 32],
+    frame: 600,
+    long: true,
+    narrow: true,
+    grow: true,
+    keepFrame: true,
+  },
+  {
+    name: "positive rows account for larger font and padding",
+    rows: [32, 32, 32],
+    frame: 96,
+    long: true,
+    widthPt: 144,
+    fontPt: 24,
+    paddingPt: 12,
+    grow: true,
+  },
+  {
+    name: "positive rows account for a tall styled cell in another column",
+    rows: [32, 32, 32],
+    frame: 96,
+    styled: true,
+    grow: true,
+  },
+  {
+    name: "merged cell can grow positive rows",
+    rows: [32, 32, 32],
+    frame: 96,
+    long: true,
+    narrow: true,
+    merged: true,
+    grow: true,
+  },
 ];
 
 for (const scenario of cases) {
@@ -117,8 +170,8 @@ for (const scenario of cases) {
         striped: false,
         autoRows: false,
         borderWidth: 0,
-        fontSize: 18 / 0.75,
-        padding: 3.6 / 0.75,
+        fontSize: (scenario.fontPt ?? 18) / 0.75,
+        padding: (scenario.paddingPt ?? 3.6) / 0.75,
         verticalAlign: "top",
         cells: texts.map((text) => [text]),
         rowHeights: scenario.rows.map(() => 1),
@@ -142,7 +195,7 @@ for (const scenario of cases) {
           ...createTableElement(data),
           x: 48,
           y: 48,
-          width: (scenario.narrow ? 72 : 288) / 0.75,
+          width: (scenario.widthPt ?? (scenario.narrow ? 72 : 288)) / 0.75,
           height: 120 / 0.75,
           opacity: scenario.metadata ? 0.65 : 1,
         },
@@ -203,6 +256,7 @@ for (const scenario of cases) {
             el.opacity *
             (style.paragraphs?.[0]?.runs[0]?.opacity ?? style.textOpacity ?? 1),
           merges: el.table!.merges ?? [],
+          cellStyleOverrides: !!el.table!.cellStyles,
         };
       };
       const host = document.createElement("div");
@@ -272,10 +326,16 @@ for (const scenario of cases) {
         expect(height).toBeGreaterThan(0);
         if (scenario.expected)
           expect(height).toBeCloseTo(scenario.expected[r], 2);
-        else if (scenario.rows[r])
-          expect(height).toBeCloseTo(scenario.rows[r] * (scenario.scaleY ?? 1));
+        else if (scenario.rows[r]) {
+          const saved = scenario.rows[r] * (scenario.scaleY ?? 1);
+          if (scenario.grow) expect(height).toBeGreaterThanOrEqual(saved);
+          else expect(height).toBeCloseTo(saved);
+        }
       });
-      if (scenario.long) expect(value.heightPt).toBeGreaterThan(scenario.frame);
+      if (scenario.keepFrame)
+        expect(value.heightPt).toBeCloseTo(scenario.frame, 2);
+      else if (scenario.long)
+        expect(value.heightPt).toBeGreaterThan(scenario.frame);
       if (scenario.merged)
         expect(value.merges).toEqual([
           { row: 0, column: 0, rowSpan: 2, columnSpan: 1 },
@@ -285,6 +345,8 @@ for (const scenario of cases) {
       result.imported!.heightPt,
       2,
     );
+    if (scenario.shortcut)
+      expect(result.imported!.cellStyleOverrides).toBe(false);
     result.overflow!.forEach((value) => expect(value).toBeLessThanOrEqual(1));
     expect(result.warnings).toEqual([]);
     await page.screenshot({

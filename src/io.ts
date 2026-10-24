@@ -31,12 +31,12 @@ import type {
   TextParagraph,
   TextRun,
 } from "./types";
-import { paragraphLines, paragraphText } from "./text-layout";
+import { paragraphText } from "./text-layout";
 import { drawingPaths } from "./drawing-path";
 import { readTextBody } from "./pptx-text";
 import { restoreLayoutXml } from "./pptx-export-layout";
 import { inheritTableCellStyle } from "./pptx-table-style";
-import { measureTableText } from "./table-layout";
+import { resolveTableRowHeights } from "./table-layout";
 import { MAX_SLIDES, MAX_SLIDE_ELEMENTS, MAX_ELEMENTS } from "./document-limits";
 import { writeBackgroundImage } from "./pptx-background";
 import { writeGroups } from "./object-groups";
@@ -56,6 +56,7 @@ import {
   MAX_TABLE_COLUMNS,
   tableCellStyle,
   tableSizes,
+  tableTextElements,
   validateTable,
 } from "./table";
 import { resolveDeckFields, validateElementLink } from "./insert-fields";
@@ -2567,7 +2568,7 @@ export async function importPptx(
         warn("표의 행·열 크기를 읽을 수 없습니다.");
         return;
       }
-      const rowHeights = heights.map(
+      let rowHeights = heights.map(
         (n) => (n / EMU_PER_PX) * Math.abs(parent.sy),
       );
       const automaticRows = heights.flatMap((height, row) =>
@@ -2674,12 +2675,60 @@ export async function importPptx(
             }),
           );
           if (compatible) {
-            addElement({
+            const element: SlideElement = {
               id: uid(),
               type: "table",
               ...geometry,
               opacity,
               table: data,
+            };
+            const cells = tableTextElements(element).map((el, i) => {
+              const row = Math.floor(i / columns.length),
+                column = i % columns.length;
+              const style = tableCellStyle(data, row, column);
+              const override = data.cellStyles?.[row]?.[column];
+              const borderOverride =
+                override &&
+                (override.borderWidth !== undefined ||
+                  override.borderColor !== undefined);
+              const border =
+                style.borders || borderOverride ? 0 : style.borderWidth;
+              const padding =
+                style.padding +
+                (borderOverride && !style.borders ? style.borderWidth : 0);
+              const insets = style.textInsets ?? [
+                padding,
+                padding,
+                padding,
+                padding,
+              ];
+              return {
+                row,
+                span: 1,
+                el: {
+                  ...el,
+                  width: Math.max(
+                    1,
+                    el.width - border * (column === 0 ? 2 : 1),
+                  ),
+                  textInsets: [
+                    insets[0] + (row === 0 ? border : 0),
+                    insets[1],
+                    insets[2] + border,
+                    insets[3],
+                  ] as SlideElement["textInsets"],
+                },
+              };
+            });
+            const fitted = await resolveTableRowHeights(
+              rowHeights,
+              geometry.height,
+              cells,
+            );
+            addElement({
+              ...element,
+              height: fitted.height,
+              table: { ...data, rowHeights: fitted.rowHeights },
             });
             return;
           }
@@ -2874,79 +2923,13 @@ export async function importPptx(
         });
         y += rowHeights[r];
       });
-      if (automaticRows.length) {
-        const cells = pendingCells.filter(({ row, span }) =>
-          automaticRows.some((r) => r >= row && r < row + span),
-        );
-        const textHeights = await measureTableText(cells.map(({ el }) => el));
-        for (const r of automaticRows) rowHeights[r] = 1;
-        // Resolve individual cells before merged cells. A merged cell may grow
-        // only its automatic rows; keep every explicit positive row unchanged.
-        cells.forEach(({ row, span }, i) => {
-          if (span === 1)
-            rowHeights[row] = Math.max(rowHeights[row], textHeights[i]);
-        });
-        cells.forEach(({ row, span }, i) => {
-          if (span === 1) return;
-          const current = rowHeights
-            .slice(row, row + span)
-            .reduce((a, b) => a + b, 0);
-          const targets = automaticRows.filter(
-            (r) => r >= row && r < row + span,
-          );
-          const extra = Math.max(0, textHeights[i] - current) / targets.length;
-          for (const r of targets) rowHeights[r] += extra;
-        });
-        const total = rowHeights.reduce((a, b) => a + b, 0);
-        const extra =
-          Math.max(0, geometry.height - total) / automaticRows.length;
-        for (const r of automaticRows) rowHeights[r] += extra;
-        geometry.height = Math.max(
-          geometry.height,
-          rowHeights.reduce((a, b) => a + b, 0),
-        );
-      } else {
-        // Saved row heights can be smaller than the frame: PowerPoint grows rows
-        // to fit text. Give that extra height to the rows that need it first.
-        let spare = Math.max(0, geometry.height - baseHeight);
-        const needed = rowHeights.map(() => 0);
-        for (const { el, row, span } of pendingCells) {
-          if (span !== 1) continue;
-          const textHeight =
-            (el.paragraphs ?? []).reduce(
-              (sum, p) =>
-                sum +
-                (p.spaceBefore ?? 0) +
-                (p.spaceAfter ?? 0) +
-                paragraphLines(p).reduce(
-                  (height, line) =>
-                    height +
-                    (p.lineSpacing ??
-                      Math.max(
-                        ...line.map((r) => r.fontSize ?? el.fontSize ?? 32),
-                      ) * (p.lineHeight ?? 1.2)),
-                  0,
-                ),
-              0,
-            ) +
-            (el.textInsets?.[0] ?? 0) +
-            (el.textInsets?.[2] ?? 0);
-          needed[row] = Math.max(needed[row], textHeight - rowHeights[row]);
-        }
-        const totalNeeded = needed.reduce((a, b) => a + b, 0);
-        const allocated = Math.min(spare, totalNeeded);
-        rowHeights.forEach((_, r) => {
-          rowHeights[r] += totalNeeded
-            ? (allocated * needed[r]) / totalNeeded
-            : 0;
-        });
-        spare -= allocated;
-        if (spare > 0)
-          rowHeights.forEach((_, r) => {
-            rowHeights[r] +=
-              (spare * heights[r]) / heights.reduce((a, b) => a + b, 0);
-          });
-      }
+      const fitted = await resolveTableRowHeights(
+        rowHeights,
+        geometry.height,
+        pendingCells,
+      );
+      rowHeights = fitted.rowHeights;
+      geometry.height = fitted.height;
       // Standard PowerPoint tables need no private extension to stay tables.
       // The cells retain their paragraphs, asymmetric edges, padding and merges.
       if (

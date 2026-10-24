@@ -27,6 +27,7 @@ export async function measureTableText(
       const model = {
         ...element,
         autoHeight: true,
+        wrap: true,
         verticalAlign: "top" as const,
       };
       measure.innerHTML = renderToStaticMarkup(
@@ -44,7 +45,7 @@ export async function measureTableText(
           <TextContent element={model} />
         </div>,
       );
-      return Math.max(1, Math.ceil(measure.getBoundingClientRect().height));
+      return Math.max(1, measure.getBoundingClientRect().height);
     });
   try {
     let result = heights();
@@ -58,6 +59,51 @@ export async function measureTableText(
   } finally {
     measure.remove();
   }
+}
+
+/** Saved row sizes are minima; fit every cell before distributing frame space. */
+export async function resolveTableRowHeights(
+  saved: number[],
+  frameHeight: number,
+  cells: { el: SlideElement; row: number; span: number }[],
+): Promise<{ rowHeights: number[]; height: number }> {
+  const automatic = saved.flatMap((height, row) => (height === 0 ? [row] : []));
+  const rowHeights = saved.map((height) => Math.max(1, height));
+  const textHeights = await measureTableText(cells.map(({ el }) => el));
+  cells.forEach(({ row, span }, i) => {
+    if (span === 1) rowHeights[row] = Math.max(rowHeights[row], textHeights[i]);
+  });
+  cells.forEach(({ row, span }, i) => {
+    if (span === 1) return;
+    const current = rowHeights
+      .slice(row, row + span)
+      .reduce((a, b) => a + b, 0);
+    const automaticTargets = automatic.filter(
+      (r) => r >= row && r < row + span,
+    );
+    const targets = automaticTargets.length
+      ? automaticTargets
+      : Array.from({ length: span }, (_, i) => row + i);
+    const extra = Math.max(0, textHeights[i] - current) / targets.length;
+    for (const r of targets) rowHeights[r] += extra;
+  });
+  const minimum = rowHeights.reduce((a, b) => a + b, 0);
+  const spare = Math.max(0, frameHeight - minimum);
+  if (automatic.length) {
+    for (const r of automatic) rowHeights[r] += spare / automatic.length;
+  } else {
+    const total = saved.reduce((a, b) => a + b, 0);
+    rowHeights.forEach((_, r) => {
+      rowHeights[r] += (spare * saved[r]) / total;
+    });
+  }
+  return {
+    rowHeights,
+    height: Math.max(
+      frameHeight,
+      rowHeights.reduce((a, b) => a + b, 0),
+    ),
+  };
 }
 
 /** Grow rows in slide pixels using the actual browser/font layout, in the same undo transaction as the text edit. */

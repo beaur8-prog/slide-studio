@@ -167,7 +167,20 @@ A repeated video part is decoded/read once per import. The generated PPTX media
 and timing XML is round-trip tested; playback in Microsoft PowerPoint itself
 has not been verified on this Mac.
 
-Native chart data, SmartArt without saved drawing geometry, object animations, embedded OLE/ActiveX/macros,
+Imported classic DrawingML charts retain their original chart XML, cached data,
+embedded XLSX workbooks, and supported chart styles/color parts. The editor
+previews line, column/bar, area, pie/doughnut, scatter and simple combinations
+as vector graphics. Move, resize, rotate, duplicate, group, print/PDF and native
+PPTX save/reopen preserve the chart; chart data editing is done in PowerPoint.
+Part names/relationships are remapped per exported object so copied charts do
+not share or overwrite their workbooks. External references are never fetched.
+Preview differences remain for advanced labels/layouts, 3D effects and secondary
+axes. Unsupported preview types show a notice while preserving native data.
+Each chart package is limited to 128 parts / 16 MiB; previews to 64 series,
+10,000 points per series and 100,000 points total. Charts count toward the
+100 MiB embedded-asset budget.
+
+SmartArt without saved drawing geometry, object animations, embedded OLE/ActiveX/macros,
 and audio/external video are not imported. SVG/EMF/WMF images are excluded. Unsupported
 objects and alternative content without a usable fallback produce warnings.
 The JSON project is the format for lossless continuation in Slide Studio; PPTX

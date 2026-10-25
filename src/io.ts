@@ -60,6 +60,8 @@ import {
   validateTable,
 } from "./table";
 import { resolveDeckFields, validateElementLink } from "./insert-fields";
+import { validateChart, chartBytes, readChartModel } from "./chart";
+import { readChartPackage, writeCharts } from "./pptx-chart";
 
 // The editor uses CSS pixels. OOXML uses English Metric Units and PptxGenJS
 // uses inches/points; keeping these conversions in one place avoids drift.
@@ -236,7 +238,7 @@ export function parseDeckJson(text: string): Deck {
             id: stringValue(source.id, `${elLabel} ID`, 160, false),
             type: enumValue(
               source.type,
-              ["text", "shape", "image", "table", "video"],
+              ["text", "shape", "image", "table", "video", "chart"],
               `${elLabel} 종류`,
             ),
             x: numberValue(source.x, `${elLabel} X`, -100000, 100000),
@@ -306,6 +308,11 @@ export function parseDeckJson(text: string): Deck {
             elementCount += el.table.cells.length * el.table.cells[0].length;
             if (elementCount > MAX_ELEMENTS)
               fail("표 셀을 포함한 프로젝트 개체 수가 10,000개를 초과합니다.");
+          }
+          if (el.type === "chart") {
+            el.chart = validateChart(source.chart);
+            imageBytes += chartBytes(el.chart);
+            if (imageBytes > MAX_EXPANDED / 2) fail("내장 차트·이미지·동영상 합계가 100 MB를 초과합니다.");
           }
           if (source.textFrame !== undefined) {
             if (
@@ -1060,6 +1067,7 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
     );
     const relationshipNs =
       "http://schemas.openxmlformats.org/package/2006/relationships";
+    await writeCharts(zip, doc, relationshipDoc, slide.elements);
     let linkIndex = 0;
     const linkIds = new Map<string, string>();
     for (const props of all(doc, "rPr")) {
@@ -1497,7 +1505,7 @@ function transformGroupedElement(
     x: cx + dx * Math.cos(angle) - dy * Math.sin(angle) - element.width / 2,
     y: cy + dx * Math.sin(angle) + dy * Math.cos(angle) - element.height / 2,
     rotation: orientation,
-    ...(["image", "video"].includes(element.type) ||
+    ...(["image", "video", "chart"].includes(element.type) ||
     (element.type === "shape" && !line)
       ? {
           flipH: Boolean(element.flipH) !== flipH,
@@ -3135,8 +3143,26 @@ export async function importPptx(
           }
         } else if (node.localName === "graphicFrame") {
           if (first(node, "tbl")) await parseTable(node, parent);
-          else if (first(node, "chart"))
-            warn("차트는 이 버전에서 가져오지 않습니다.");
+          else if (first(node, "chart")) {
+            const reference = first(node, "chart"), frame = transformGeometry(child(node, "xfrm"), parent);
+            const relationship = sourceRelationships.find(r => r.id === relId(reference) && r.type.endsWith("/chart") && !r.external);
+            if (!frame || !relationship?.path) { warn("내장 데이터나 위치 정보가 없는 차트를 제외했습니다."); continue; }
+            try {
+              const colors = { ...theme.colors };
+              for (const [key, value] of Object.entries(theme.map)) if (theme.colors[value]) colors[key] = theme.colors[value];
+              const chart = await readChartPackage(relationship.path, colors, theme.minorFont ?? "Arial", readBytes, relationships);
+              embeddedAssetBytes += chartBytes(chart);
+              if (embeddedAssetBytes > MAX_EXPANDED / 2) fail("내장 차트·이미지·동영상 합계가 100 MB를 초과합니다.");
+              let approximate = false;
+              try { approximate = readChartModel(chart).approximate; }
+              catch { approximate = true; }
+              if (approximate) warn("일부 차트 유형·입체 효과·보조 축은 미리보기가 제한됩니다. PPTX 저장 시 원본 차트와 데이터는 유지됩니다.");
+              const xfrm = child(node, "xfrm");
+              addElement({ id: uid(), type: "chart", ...frame, opacity: 1, chart, alt: "PowerPoint 차트", flipH: xfrm?.getAttribute("flipH") === "1", flipV: xfrm?.getAttribute("flipV") === "1" });
+            } catch (error) {
+              warn(`차트를 읽지 못했습니다: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          }
           else if (first(node, "relIds")) {
             const dataRel = sourceRelationships.find(
               (r) =>

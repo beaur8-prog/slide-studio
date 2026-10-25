@@ -68,7 +68,7 @@ export function writeObjectState(doc: Document, elements: SlideElement[]) {
         const name =
           el.type === "image" || el.type === "video"
             ? "picLocks"
-            : el.type === "table"
+            : el.type === "table" || el.type === "chart"
               ? "graphicFrameLocks"
               : el.shape === "line" || el.shape === "arrow"
                 ? "cxnSpLocks"

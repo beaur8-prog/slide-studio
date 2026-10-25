@@ -4737,6 +4737,7 @@ export default function App() {
                             ? "텍스트"
                             : selectedElement.type === "image"
                               ? "이미지"
+                              : selectedElement.type === "chart" ? "차트"
                               : selectedElement.type === "video" ? "동영상" : "도형"}
                       </span>
                     </h4>
@@ -4772,15 +4773,19 @@ export default function App() {
                         max={360}
                         onChange={(rotation) => updateSelected({ rotation })}
                       />
-                      <NumberField
+                      {!slide.elements.some(e => selected.includes(e.id) && e.type === "chart") && <NumberField
                         label="불투명도"
                         value={selectedElement.opacity * 100}
                         min={0}
                         max={100}
                         onChange={(n) => updateSelected({ opacity: n / 100 })}
-                      />
+                      />}
                     </div>
                   </div>
+                  {selectedElement.type === "chart" && <div className="inspector-section">
+                    <h4>PowerPoint 차트</h4>
+                    <p className="section-note">차트의 위치와 크기를 조절할 수 있습니다. 저장하면 원본 차트와 데이터가 유지됩니다. 데이터 편집은 PowerPoint에서 할 수 있습니다.</p>
+                  </div>}
                   {selectedElement.type === "video" && <div className="inspector-section">
                     <h4>동영상 재생</h4>
                     {([["autoPlay", "슬라이드 쇼에서 자동 시작"], ["loop", "반복 재생"], ["muted", "음소거"]] as const).map(([key, label]) =>
@@ -5135,6 +5140,7 @@ export default function App() {
                     >
                       {e.type === "text" ? (
                         <Type size={13} />
+                      ) : e.type === "chart" ? (<BarChart3 size={13} />
                       ) : e.type === "video" ? (<Play size={13} />) : e.type === "image" ? (
                         <ImageIcon size={13} />
                       ) : (
@@ -5145,6 +5151,7 @@ export default function App() {
                           ? (e.text || "텍스트").split("\n")[0]
                           : e.type === "image"
                             ? e.alt || "이미지"
+                            : e.type === "chart" ? "PowerPoint 차트"
                             : e.type === "video" ? e.alt || "동영상" : "도형"}
                       </span>
                       {e.locked && <LockKeyhole size={11} />}

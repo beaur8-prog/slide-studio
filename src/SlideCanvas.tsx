@@ -2,6 +2,7 @@ import { GradientDefs, gradientCss } from "./gradient";
 import { CustomShape } from "./CustomShape";
 import { VideoVisual } from "./VideoVisual";
 import { ImageVisual } from "./ImageVisual";
+import { ChartVisual } from "./ChartVisual";
 import { SlideBackground } from "./SlideBackground";
 import { SlideLinks } from "./slide-links";
 import { alphaColor } from "./colors";
@@ -143,6 +144,7 @@ export function ElementVisual({
     return <VideoVisual element={element} playing={playMedia} />;
   if (element.type === "image")
     return <ImageVisual element={element} playing={playMedia} />;
+  if (element.type === "chart") return <ChartVisual element={element} />;
   if (element.type !== "shape")
     return <ArtworkVisual element={element} onTextHeight={onTextHeight} />;
   return (
@@ -1287,6 +1289,7 @@ export default function SlideCanvas({
                       ? "텍스트"
                       : e.type === "image"
                         ? "이미지"
+                        : e.type === "chart" ? "차트"
                         : e.type === "video"
                           ? "동영상"
                           : e.type === "table"

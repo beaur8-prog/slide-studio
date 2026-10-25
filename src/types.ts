@@ -125,12 +125,25 @@ export interface ObjectShadow {
   dx: number;
   dy: number;
 }
+export interface ChartPart {
+  path: string;
+  contentType: string;
+  data: string;
+  relationships: { id: string; type: string; target: string; external?: boolean }[];
+}
+export interface ChartData {
+  root: string;
+  parts: ChartPart[];
+  colors: Record<string, string>;
+  fontFamily: string;
+}
 export interface SlideElement {
   id: string;
   // Outer group first. Coordinates remain in slide space for fast editing.
   groups?: string[];
-  type: "text" | "shape" | "image" | "table" | "video";
+  type: "text" | "shape" | "image" | "table" | "video" | "chart";
   table?: TableData;
+  chart?: ChartData;
   hyperlink?: ElementLink;
   field?: "slideNumber" | "date" | "fixedDate" | "footer";
   x: number;

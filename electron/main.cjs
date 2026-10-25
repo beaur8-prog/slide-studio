@@ -9,6 +9,7 @@ const { readOfficeArialNovaLight, readOfficeCalibriFonts } = require('./office-f
 const { RecentFiles } = require('./recent-files.cjs');
 const { createPresentationWindowController } = require('./presentation-window.cjs');
 const { createStudioUpdater } = require('./studio-updater.cjs');
+const { FileOpenRequests } = require('./file-open-requests.cjs');
 
 const PRODUCT_NAME = 'Slide Studio';
 const APP_ICON = path.join(__dirname, 'assets', 'SlideStudio.png');
@@ -24,6 +25,7 @@ const CHROME_THEMES = {
 };
 
 let mainWindow = null;
+const fileOpenRequests = new FileOpenRequests();
 const presenterWindows = new Set();
 let nativeOperationPending = false;
 let documentDirectory;
@@ -48,7 +50,7 @@ async function withCaptureOperation(event, task) {
   if (captureOperationPending || nativeOperationPending) throw new Error('다른 캡처 또는 파일 작업이 끝난 후 다시 시도하세요.');
   captureOperationPending = true;
   try { return await task(); }
-  finally { captureOperationPending = false; }
+  finally { captureOperationPending = false; notifyFileOpenRequests(); }
 }
 
 app.setName(PRODUCT_NAME);
@@ -122,6 +124,7 @@ async function withNativeDialog(event, task) {
     return await task();
   } finally {
     nativeOperationPending = false;
+    notifyFileOpenRequests();
   }
 }
 
@@ -173,6 +176,20 @@ function sendMenuAction(action) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('slide-studio:menu', action);
   }
+}
+
+function notifyFileOpenRequests() {
+  if (fileOpenRequests.size && mainWindow && !mainWindow.isDestroyed())
+    mainWindow.webContents.send('slide-studio:open-requested');
+}
+
+function showEditorForFileOpen() {
+  if (!app.isReady()) return;
+  if (!mainWindow) { void createWindow(); return; }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  notifyFileOpenRequests();
 }
 
 function setPresentationMode(enabled) {
@@ -249,6 +266,13 @@ async function readPresentationFile(filename) {
 }
 
 function installIPC() {
+  ipcMain.handle('slide-studio:take-requested-file', (event, ...args) => {
+    requireTrustedSender(event);
+    if (args.length) throw new TypeError('파일 열기 요청에는 경로나 인수가 필요하지 않습니다.');
+    // Another native chooser/capture will notify the editor again when done.
+    if (!fileOpenRequests.size || nativeOperationPending || captureOperationPending) return null;
+    return withNativeDialog(event, () => readPresentationFile(fileOpenRequests.take()));
+  });
   ipcMain.handle('slide-studio:recent-files', (event, ...args) => {
     requireTrustedSender(event);
     if (args.length) throw new TypeError('최근 파일 요청에는 인수가 필요하지 않습니다.');
@@ -592,14 +616,16 @@ async function createWindow() {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    } else {
-      void app.whenReady().then(() => { if (!mainWindow) void createWindow(); });
-    }
+  // Finder can deliver this before ready, well before the renderer subscribes.
+  app.on('open-file', (event, filename) => {
+    event.preventDefault();
+    fileOpenRequests.add(filename);
+    showEditorForFileOpen();
+  });
+  fileOpenRequests.addArguments(process.argv, process.cwd());
+  app.on('second-instance', (_event, argv, workingDirectory) => {
+    fileOpenRequests.addArguments(argv, workingDirectory);
+    showEditorForFileOpen();
   });
   app.whenReady().then(async () => {
     // A direct Electron/QA launch does not inherit the packaged app's ICNS.

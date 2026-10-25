@@ -560,6 +560,10 @@ export default function App() {
   const [busy, setBusy] = useState("");
   const printing = useRef(false);
   const savingPptx = useRef(false);
+  const [openRequestVersion, setOpenRequestVersion] = useState(0);
+  const [requestedFile, setRequestedFile] = useState<{ name: string; data: Uint8Array } | null>(null);
+  const takingRequestedFile = useRef(false);
+  const openingRequestedFile = useRef(false);
   const [modal, setModal] = useState<Modal>(null);
   const modalRef = useRef<Modal>(modal);
   modalRef.current = modal;
@@ -1819,6 +1823,29 @@ export default function App() {
       );
     }
   };
+  useEffect(() => window.desktop?.onOpenRequested?.(() => {
+    setOpenRequestVersion(version => version + 1);
+  }), []);
+  useEffect(() => {
+    if (!ready || busy || modal || presenting || requestedFile || takingRequestedFile.current ||
+        !window.desktop?.takeRequestedFile) return;
+    takingRequestedFile.current = true;
+    void window.desktop.takeRequestedFile().then(setRequestedFile).catch(error => {
+      notify(`파일 열기 실패: ${error instanceof Error ? error.message : String(error)}`);
+      setOpenRequestVersion(version => version + 1);
+    }).finally(() => { takingRequestedFile.current = false; });
+  }, [ready, busy, modal, presenting, requestedFile, openRequestVersion]);
+  useEffect(() => {
+    if (!requestedFile || !ready || busy || modal || presenting || openingRequestedFile.current) return;
+    openingRequestedFile.current = true;
+    // Use the normal import path and its unsaved-document confirmation. Waiting
+    // for a render here also checks edits made while the file bytes were read.
+    void readFile(requestedFile.name, requestedFile.data).finally(() => {
+      openingRequestedFile.current = false;
+      setRequestedFile(null);
+      setOpenRequestVersion(version => version + 1);
+    });
+  }, [requestedFile, ready, busy, modal, presenting]);
   const showLibrary = () => {
     setModal("library");
     setMenu(null);

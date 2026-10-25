@@ -21,6 +21,13 @@ contextBridge.exposeInMainWorld('desktop', Object.freeze({
   },
   saveFile: payload => ipcRenderer.invoke('slide-studio:save-file', payload),
   openFile: () => ipcRenderer.invoke('slide-studio:open-file'),
+  takeRequestedFile: () => ipcRenderer.invoke('slide-studio:take-requested-file'),
+  onOpenRequested: callback => {
+    if (typeof callback !== 'function') throw new TypeError('A file-open callback is required.');
+    const listener = () => callback();
+    ipcRenderer.on('slide-studio:open-requested', listener);
+    return () => ipcRenderer.removeListener('slide-studio:open-requested', listener);
+  },
   recentFiles: () => ipcRenderer.invoke('slide-studio:recent-files'),
   openRecentFile: id => ipcRenderer.invoke('slide-studio:open-recent-file', id),
   exportPDF: name => ipcRenderer.invoke('slide-studio:export-pdf', name),

@@ -29,6 +29,8 @@ declare global {
         extensions: ["pptx"];
       }): Promise<string | null>;
       openFile(): Promise<{ name: string; data: Uint8Array } | null>;
+      takeRequestedFile?(): Promise<{ name: string; data: Uint8Array } | null>;
+      onOpenRequested?(callback: () => void): () => void;
       recentFiles?(): Promise<RecentPresentationFile[]>;
       openRecentFile?(id: string): Promise<{ name: string; data: Uint8Array }>;
       exportPDF(name: string): Promise<string | null>;

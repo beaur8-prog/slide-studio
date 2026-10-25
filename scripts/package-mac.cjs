@@ -79,6 +79,18 @@ async function packageMac() {
       LSApplicationCategoryType: 'public.app-category.productivity',
       NSHumanReadableCopyright: 'An independent presentation editor. Not affiliated with Microsoft.',
     })) plistSet(plist, key, value);
+    // Finder needs a document declaration as well as the runtime open-file
+    // handler. Alternate makes the app available without taking over defaults.
+    const metadata = JSON.parse(execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', plist], { encoding: 'utf8' }));
+    metadata.CFBundleDocumentTypes = [{
+      CFBundleTypeName: 'PowerPoint Presentation',
+      CFBundleTypeExtensions: ['pptx'],
+      CFBundleTypeRole: 'Editor',
+      LSHandlerRank: 'Alternate',
+      LSItemContentTypes: ['org.openxmlformats.presentationml.presentation'],
+    }];
+    await fs.writeFile(plist, JSON.stringify(metadata));
+    run('/usr/bin/plutil', ['-convert', 'xml1', plist]);
     // The stock integrity record refers to default_app.asar, which is removed.
     try { execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Delete :ElectronAsarIntegrity', plist], { stdio: 'ignore' }); } catch {}
 

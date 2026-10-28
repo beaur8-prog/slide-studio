@@ -9,6 +9,7 @@ import { duplicateSlides, moveSlides } from "./slide-operations";
 import { documentCapacityError, type DocumentAddition } from "./document-limits";
 import type { InkStroke } from "./presentation-ink";
 import { fitTableRows } from "./table-layout";
+import { sameDocument, sameValue } from "./document-changes";
 import { arrangeElements } from "./object-arrange";
 import {
   Fragment,
@@ -390,6 +391,10 @@ export default function App() {
   );
   const deckRef = useRef(deck);
   deckRef.current = deck;
+  // Generated date/slide-number fields belong to the view. Transactions must
+  // begin with the authored document, not that lazily resolved view.
+  const documentRef = useRef(history.present);
+  documentRef.current = history.present;
   const [activeId, setActiveId] = useState(deck.slides[0].id);
   const activeIndex = Math.max(
     0,
@@ -548,7 +553,10 @@ export default function App() {
   // The window's recovery buffer is not a saved PPTX. Keep the last file
   // snapshot so autosave cannot silently authorize discarding a user's work.
   const [fileSnapshot, setFileSnapshot] = useState<Deck | null>(history.present);
-  const hasFileChanges = history.present !== fileSnapshot;
+  const hasFileChanges = useMemo(
+    () => !sameDocument(history.present, fileSnapshot),
+    [history.present, fileSnapshot],
+  );
   const restoredFileChanges = useRef((() => {
     try { return restoreWindowBuffer && sessionStorage.getItem("slide-studio-file-dirty") === "true"; }
     catch { return false; }
@@ -704,7 +712,7 @@ export default function App() {
   const commit = useCallback((update: (d: Deck) => Deck) => {
     setHistory((h) => {
       const next = update(h.present);
-      if (next === h.present) return h;
+      if (sameDocument(next, h.present)) return h;
       return {
         past: [...h.past, h.present].slice(-LIMIT),
         present: next,
@@ -715,10 +723,13 @@ export default function App() {
   const begin = useCallback(() => {
     // All document updates are immutable. Reuse the snapshot, including large
     // embedded images, instead of cloning the entire deck on each edit.
-    if (!transaction.current) transaction.current = deckRef.current;
+    if (!transaction.current) transaction.current = documentRef.current;
   }, []);
   const preview = useCallback((update: (d: Deck) => Deck) => {
-    setHistory((h) => ({ ...h, present: update(h.present) }));
+    setHistory((h) => {
+      const next = update(h.present);
+      return sameValue(next, h.present) ? h : { ...h, present: next };
+    });
   }, []);
   const previewText = useCallback(
     (
@@ -730,9 +741,10 @@ export default function App() {
     ) => {
       // Native Save can finish a transaction without blurring the text editor.
       // Further typing must start a new transaction for document-level undo.
-      if (!transaction.current) transaction.current = deckRef.current;
+      if (!transaction.current) transaction.current = documentRef.current;
       setHistory((h) => {
         const next = update(h.present);
+        if (sameValue(next, h.present)) return h;
         return {
           ...h,
           present: next,
@@ -755,7 +767,7 @@ export default function App() {
     transaction.current = null;
     if (before)
       setHistory((h) =>
-        before === h.present || (h.textUndo?.cursor === 0 && !h.textUndo.atomic)
+        sameDocument(before, h.present) || (h.textUndo?.cursor === 0 && !h.textUndo.atomic)
           ? { ...h, textUndo: undefined }
           : {
               past: [
@@ -766,6 +778,12 @@ export default function App() {
               future: [],
             },
       );
+  }, []);
+  const cancel = useCallback(() => {
+    const before = transaction.current;
+    transaction.current = null;
+    if (before)
+      setHistory((h) => ({ ...h, present: before, textUndo: undefined }));
   }, []);
   const closeTextMenu = useCallback(
     (endEditing = false) => {
@@ -811,7 +829,7 @@ export default function App() {
   const inlineRedoAvailable = !!editing && !!history.textUndo &&
     history.textUndo.cursor < history.textUndo.entries.length - 1;
   const pendingPreview = !editing && !!transaction.current &&
-    transaction.current !== history.present;
+    !sameDocument(transaction.current, history.present);
   const runToolbarHistory = (direction: "undo" | "redo") => {
     const host = document.querySelector<HTMLElement>(".editing-text");
     const inlineAvailable = direction === "undo" ? inlineUndoAvailable : inlineRedoAvailable;
@@ -1062,14 +1080,17 @@ export default function App() {
   }, [ready, hasFileChanges]);
   useEffect(() => {
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasFileChanges || saveStatus !== "saved") {
+      // Recovery writes also run after view-only font/layout measurements.
+      // Only authored changes need file-save protection; every real edit stays
+      // dirty even if its recovery write is pending or fails.
+      if (hasFileChanges) {
         e.preventDefault();
         e.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", beforeUnload);
     return () => window.removeEventListener("beforeunload", beforeUnload);
-  }, [hasFileChanges, saveStatus]);
+  }, [hasFileChanges]);
   useEffect(() => {
     if (slideInsertBefore !== undefined && slideInsertBefore !== null &&
         !deck.slides.some((s) => s.id === slideInsertBefore))
@@ -4434,6 +4455,7 @@ export default function App() {
                       }}
                       deck={deck}
                       slide={slide}
+                      sourceElements={history.present.slides[activeIndex].elements}
                       scale={Math.max(0.1, scale)}
                       selected={selected}
                       tableSelection={activeTableSelection}
@@ -4508,6 +4530,7 @@ export default function App() {
                       }
                       begin={begin}
                       finish={finish}
+                      cancel={cancel}
                       resizeText={(id, height) =>
                         preview((d) => {
                           const target = d.slides.find(

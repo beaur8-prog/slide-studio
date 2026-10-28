@@ -345,6 +345,7 @@ export const SlideVisual = memo(function SlideVisual({
 });
 type Drag = {
   pointer: number;
+  host: HTMLElement;
   startX: number;
   startY: number;
   elements: SlideElement[];
@@ -392,6 +393,7 @@ function cellAtPoint(host: HTMLElement, x: number, y: number) {
 interface Props {
   deck: Deck;
   slide: Slide;
+  sourceElements: SlideElement[];
   contextMenu: (
     id: string,
     x: number,
@@ -412,6 +414,7 @@ interface Props {
   begin: () => void;
   preview: (elements: SlideElement[]) => void;
   finish: () => void;
+  cancel: () => void;
   changeText: (
     id: string,
     text: string,
@@ -434,6 +437,7 @@ export default function SlideCanvas({
   contextMenu,
   deck,
   slide,
+  sourceElements,
   scale,
   selected,
   tableSelection,
@@ -448,6 +452,7 @@ export default function SlideCanvas({
   begin,
   preview,
   finish,
+  cancel,
   changeText,
   changeCell,
   resizeText,
@@ -536,6 +541,18 @@ export default function SlideCanvas({
   selectCellsRef.current = selectTableCells;
   const finishRef = useRef(finish);
   finishRef.current = finish;
+  const cancelRef = useRef(cancel);
+  cancelRef.current = cancel;
+  const stopObjectDrag = (commit = false) => {
+    const current = drag.current;
+    drag.current = null;
+    if (!current) return;
+    if (commit) finishRef.current();
+    else cancelRef.current();
+    if (current.host.hasPointerCapture(current.pointer))
+      current.host.releasePointerCapture(current.pointer);
+    setSnapLines([]);
+  };
   const stopCellDrag = () => {
     const current = cellDrag.current;
     cellDrag.current = null;
@@ -586,31 +603,48 @@ export default function SlideCanvas({
   useEffect(() => {
     const pointerEnded = (event: PointerEvent) => {
       if (cellDrag.current?.pointer === event.pointerId) stopCellDrag();
+      if (drag.current?.pointer === event.pointerId)
+        stopObjectDrag(event.type === "pointerup");
     };
     const blur = () => {
       marqueeRef.current = null;
       setMarquee(null);
       setSnapLines([]);
       stopCellDrag();
-      if (drag.current) {
-        drag.current = null;
-        finishRef.current();
-      }
+      stopObjectDrag();
+    };
+    const key = (event: KeyboardEvent) => {
+      if (!drag.current) return;
+      // Keep other document commands out of an in-progress gesture. Escape
+      // restores the original geometry and leaves the redo branch untouched.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.key === "Escape") stopObjectDrag();
+    };
+    const wheel = (event: WheelEvent) => {
+      if (!drag.current) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
     };
     window.addEventListener("pointerup", pointerEnded);
     window.addEventListener("pointercancel", pointerEnded);
     window.addEventListener("blur", blur);
+    window.addEventListener("keydown", key, true);
+    window.addEventListener("wheel", wheel, { capture: true, passive: false });
     document.addEventListener("scroll", updateCellDrag, true);
     return () => {
       stopCellDrag();
       window.removeEventListener("pointerup", pointerEnded);
       window.removeEventListener("pointercancel", pointerEnded);
       window.removeEventListener("blur", blur);
+      window.removeEventListener("keydown", key, true);
+      window.removeEventListener("wheel", wheel, true);
       document.removeEventListener("scroll", updateCellDrag, true);
     };
   }, []);
   useEffect(() => {
     stopCellDrag();
+    stopObjectDrag();
   }, [slide.id]);
   useEffect(() => {
     if (
@@ -714,9 +748,11 @@ export default function SlideCanvas({
     ev.currentTarget.setPointerCapture(ev.pointerId);
     drag.current = {
       pointer: ev.pointerId,
+      host: ev.currentTarget as HTMLElement,
       startX: ev.clientX,
       startY: ev.clientY,
-      elements: structuredClone(slide.elements),
+      // Geometry helpers are immutable, so retain shared media and chart data.
+      elements: sourceElements,
       ids,
       handle,
       moved: false,
@@ -774,6 +810,11 @@ export default function SlideCanvas({
       dy = (ev.clientY - d.startY) / scale;
     if (Math.abs(dx) + Math.abs(dy) < 2 && !d.moved) return;
     d.moved = true;
+    if (!dx && !dy) {
+      setSnapLines([]);
+      preview(d.elements);
+      return;
+    }
     if (d.handle?.startsWith("triangle-point-")) {
       const index = Number(d.handle.slice("triangle-point-".length));
       preview(
@@ -856,9 +897,16 @@ export default function SlideCanvas({
     }
     if (cellDrag.current?.pointer === ev.pointerId) stopCellDrag();
     if (drag.current?.pointer === ev.pointerId) {
-      finish();
-      drag.current = null;
+      stopObjectDrag(true);
     }
+  };
+  const cancelPointer = (ev: ReactPointerEvent) => {
+    if (marqueeRef.current?.pointer === ev.pointerId) {
+      marqueeRef.current = null;
+      setMarquee(null);
+    }
+    if (cellDrag.current?.pointer === ev.pointerId) stopCellDrag();
+    if (drag.current?.pointer === ev.pointerId) stopObjectDrag();
   };
   return (
     <div
@@ -903,8 +951,8 @@ export default function SlideCanvas({
         }}
         onPointerMove={move}
         onPointerUp={up}
-        onPointerCancel={up}
-        onLostPointerCapture={up}
+        onPointerCancel={cancelPointer}
+        onLostPointerCapture={cancelPointer}
         onWheelCapture={(event) => {
           if (cellDrag.current) event.stopPropagation();
         }}
@@ -1266,7 +1314,7 @@ export default function SlideCanvas({
                       const step = event.shiftKey ? 10 : 1;
                       begin();
                       preview(
-                        slide.elements.map((item) =>
+                        sourceElements.map((item) =>
                           item.id === e.id
                             ? moveTrianglePoint(
                                 item,

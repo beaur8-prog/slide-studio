@@ -1,6 +1,11 @@
 name: Verify file type registration
 on:
   workflow_dispatch:
+    inputs:
+      installer_ref:
+        description: Optional full commit SHA of an older installer for before/after regression checks
+        required: false
+        type: string
 permissions:
   contents: read
 jobs:
@@ -18,6 +23,18 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Select older installer for regression comparison
+        if: runner.os == 'Windows' && inputs.installer_ref != ''
+        shell: pwsh
+        env:
+          INSTALLER_REF: ${{ inputs.installer_ref }}
+        run: |
+          if ($env:INSTALLER_REF -notmatch '^[a-f0-9]{40}$') { throw 'A full commit SHA is required' }
+          git fetch --depth=1 origin $env:INSTALLER_REF
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch installer revision' }
+          $source = git show "$($env:INSTALLER_REF):scripts/windows-installer.nsi"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read installer source' }
+          Set-Content scripts/windows-installer.nsi -Value $source -Encoding utf8NoBOM
       - name: Install Windows compiler
         if: runner.os == 'Windows'
         run: choco install nsis --no-progress -y

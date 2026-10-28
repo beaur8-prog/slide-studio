@@ -66,10 +66,14 @@ $foreign = @(
   @{ when = 'after'; key = 'HKCU:\Software\SlideStudio'; name = ''; kind = 'String'; value = '' }
 )
 function Add-Foreign([string]$When) {
-  foreach ($entry in $foreign | Where-Object when -eq $When) {
-    New-Item $entry.key -Force | Out-Null
-    (Get-Item $entry.key).SetValue($entry.name, $entry.value, [Microsoft.Win32.RegistryValueKind]$entry.kind)
-  }
+  $hive = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::CurrentUser, [Microsoft.Win32.RegistryView]::Registry64)
+  try {
+    foreach ($entry in $foreign | Where-Object when -eq $When) {
+      $key = $hive.CreateSubKey($entry.key.Substring('HKCU:\'.Length))
+      try { $key.SetValue($entry.name, $entry.value, [Microsoft.Win32.RegistryValueKind]$entry.kind) }
+      finally { $key.Dispose() }
+    }
+  } finally { $hive.Dispose() }
 }
 function Assert-ForeignPreserved {
   $failures = @()

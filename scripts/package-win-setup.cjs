@@ -117,6 +117,7 @@ async function packageSetup() {
       excludedPortableFiles: ['시작하기.txt'],
       installDirectory: '%LOCALAPPDATA%\\Programs\\Slide Studio',
       shortcuts: ['Start menu', 'Desktop (optional)'], uninstallRegistry: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SlideStudio',
+      fileAssociations: { extensions: ['pptx', 'slide'], scope: 'current user', defaultAppUnchanged: true },
       checks: { portableChecksum: true, portableCRC32: true, installerArchiveIntegrity: true,
         extractedPayloadSHA256: true, versionAndIcon: true, perUserManifest: true,
         uninstallerExcludesUserProfile: true, nativeWindowsInstall: false },

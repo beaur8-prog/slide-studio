@@ -15,6 +15,7 @@
     "desktop": "node scripts/launch-desktop.cjs --dev",
     "test": "playwright test",
     "test:updates": "node --test tests/updates/studio-updater.cjs",
+    "test:registration": "node scripts/qa-file-registration.cjs",
     "package": "npm run build && node scripts/package-mac.cjs",
     "package:mac": "npm run build && node scripts/package-mac.cjs",
     "package:win": "npm run build && node scripts/package-win.cjs && node scripts/package-win-setup.cjs",

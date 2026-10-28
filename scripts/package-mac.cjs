@@ -88,6 +88,21 @@ async function packageMac() {
       CFBundleTypeRole: 'Editor',
       LSHandlerRank: 'Alternate',
       LSItemContentTypes: ['org.openxmlformats.presentationml.presentation'],
+    }, {
+      CFBundleTypeName: 'Slide Studio Presentation (Legacy)',
+      CFBundleTypeExtensions: ['slide'],
+      CFBundleTypeRole: 'Editor',
+      LSHandlerRank: 'Alternate',
+      LSItemContentTypes: ['local.slidestudio.presentation'],
+    }];
+    metadata.UTExportedTypeDeclarations = [{
+      UTTypeIdentifier: 'local.slidestudio.presentation',
+      UTTypeDescription: 'Slide Studio Presentation (Legacy)',
+      UTTypeConformsTo: ['public.json'],
+      UTTypeTagSpecification: {
+        'public.filename-extension': ['slide'],
+        'public.mime-type': 'application/x-slide-studio',
+      },
     }];
     await fs.writeFile(plist, JSON.stringify(metadata));
     run('/usr/bin/plutil', ['-convert', 'xml1', plist]);

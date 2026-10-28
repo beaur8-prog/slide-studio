@@ -13,6 +13,8 @@ ManifestDPIAware true
 
 !define PRODUCT "Slide Studio"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\SlideStudio"
+!define CAPABILITIES_KEY "Software\SlideStudio\Capabilities"
+!define APPLICATION_KEY "Software\Classes\Applications\Slide Studio.exe"
 Name "${PRODUCT} ${APP_VERSION}"
 OutFile "${OUTPUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\Slide Studio"
@@ -137,6 +139,62 @@ Function un.onInit
   valid:
 FunctionEnd
 
+; Register candidates for Open With / Settings. Never write an extension's
+; default value or Explorer's UserChoice, which belong to the user.
+!macro RegisterPresentationType EXTENSION PROGID DESCRIPTION
+  WriteRegStr HKCU "Software\Classes\${PROGID}" "" "${DESCRIPTION}"
+  WriteRegStr HKCU "Software\Classes\${PROGID}" "FriendlyTypeName" "${DESCRIPTION}"
+  WriteRegStr HKCU "Software\Classes\${PROGID}\DefaultIcon" "" '$\"$INSTDIR\Slide Studio.exe$\",0'
+  WriteRegStr HKCU "Software\Classes\${PROGID}\shell\open\command" "" '$\"$INSTDIR\Slide Studio.exe$\" $\"%1$\"'
+  WriteRegStr HKCU "Software\Classes\.${EXTENSION}\OpenWithProgids" "${PROGID}" ""
+  WriteRegStr HKCU "${APPLICATION_KEY}\SupportedTypes" ".${EXTENSION}" ""
+  WriteRegStr HKCU "${CAPABILITIES_KEY}\FileAssociations" ".${EXTENSION}" "${PROGID}"
+!macroend
+
+Function RegisterFileAssociations
+  ClearErrors
+  WriteRegStr HKCU "${APPLICATION_KEY}" "FriendlyAppName" "${PRODUCT}"
+  WriteRegStr HKCU "${APPLICATION_KEY}\DefaultIcon" "" '$\"$INSTDIR\Slide Studio.exe$\",0'
+  WriteRegStr HKCU "${APPLICATION_KEY}\shell\open\command" "" '$\"$INSTDIR\Slide Studio.exe$\" $\"%1$\"'
+  WriteRegStr HKCU "${CAPABILITIES_KEY}" "ApplicationName" "${PRODUCT}"
+  WriteRegStr HKCU "${CAPABILITIES_KEY}" "ApplicationDescription" "Edit PowerPoint presentations and open legacy Slide Studio files."
+  WriteRegStr HKCU "${CAPABILITIES_KEY}" "ApplicationIcon" '$\"$INSTDIR\Slide Studio.exe$\",0'
+  !insertmacro RegisterPresentationType "pptx" "SlideStudio.Presentation" "PowerPoint Presentation"
+  !insertmacro RegisterPresentationType "slide" "SlideStudio.LegacyPresentation" "Slide Studio Presentation (Legacy)"
+  WriteRegStr HKCU "Software\RegisteredApplications" "${PRODUCT}" "${CAPABILITIES_KEY}"
+  IfErrors done
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
+  done:
+FunctionEnd
+
+!macro UnregisterPresentationType EXTENSION PROGID
+  ReadRegStr $0 HKCU "Software\Classes\${PROGID}\shell\open\command" ""
+  ${If} $0 == '$\"$INSTDIR\Slide Studio.exe$\" $\"%1$\"'
+    DeleteRegValue HKCU "Software\Classes\.${EXTENSION}\OpenWithProgids" "${PROGID}"
+    DeleteRegKey /ifempty HKCU "Software\Classes\.${EXTENSION}\OpenWithProgids"
+    DeleteRegKey HKCU "Software\Classes\${PROGID}"
+  ${EndIf}
+!macroend
+
+Function un.UnregisterFileAssociations
+  !insertmacro UnregisterPresentationType "pptx" "SlideStudio.Presentation"
+  !insertmacro UnregisterPresentationType "slide" "SlideStudio.LegacyPresentation"
+  ReadRegStr $0 HKCU "${APPLICATION_KEY}\shell\open\command" ""
+  ${If} $0 == '$\"$INSTDIR\Slide Studio.exe$\" $\"%1$\"'
+    DeleteRegKey HKCU "${APPLICATION_KEY}"
+  ${EndIf}
+  ReadRegStr $0 HKCU "${CAPABILITIES_KEY}" "ApplicationIcon"
+  ${If} $0 == '$\"$INSTDIR\Slide Studio.exe$\",0'
+    ReadRegStr $0 HKCU "Software\RegisteredApplications" "${PRODUCT}"
+    ${If} $0 == "${CAPABILITIES_KEY}"
+      DeleteRegValue HKCU "Software\RegisteredApplications" "${PRODUCT}"
+    ${EndIf}
+    DeleteRegKey HKCU "${CAPABILITIES_KEY}"
+    DeleteRegKey /ifempty HKCU "Software\SlideStudio"
+  ${EndIf}
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
+FunctionEnd
+
 Section "$(CoreText)" CoreSection
   SectionIn RO
   Call CheckAppClosed
@@ -160,6 +218,8 @@ Section "$(CoreText)" CoreSection
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
   IfErrors registration_failed
+  Call RegisterFileAssociations
+  IfErrors registration_failed
   CreateDirectory "$SMPROGRAMS\Slide Studio"
   CreateShortCut "$SMPROGRAMS\Slide Studio\Slide Studio.lnk" "$INSTDIR\Slide Studio.exe" "" "$INSTDIR\Slide Studio.exe" 0
   CreateShortCut "$SMPROGRAMS\Slide Studio\Uninstall Slide Studio.lnk" "$INSTDIR\Uninstall.exe"
@@ -178,6 +238,7 @@ SectionEnd
 
 Section "Uninstall"
   Call un.CheckAppClosed
+  Call un.UnregisterFileAssociations
   !include "${REMOVE_FILES}"
   Delete "$INSTDIR\.slide-studio-install"
   Delete "$INSTDIR\Uninstall.exe"

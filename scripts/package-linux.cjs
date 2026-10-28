@@ -12,6 +12,7 @@ const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const JSZip = require('jszip');
 const asar = require('@electron/asar');
+const { writeLinuxFileAssociations } = require('./linux-file-associations.cjs');
 const root = path.resolve(__dirname, '..');
 async function hashFile(file) {
   const hash = createHash('sha256');
@@ -79,12 +80,7 @@ async function packageLinux() {
     await fs.mkdir(path.join(payload, 'usr/bin'), { recursive: true });
     await fs.symlink('/opt/slide-studio/slide-studio', path.join(payload, 'usr/bin/slide-studio'));
     await fs.copyFile(path.join(root, 'electron/assets/SlideStudio.png'), path.join(icons, 'slide-studio.png'));
-    await fs.writeFile(path.join(desktop, 'slide-studio.desktop'), [
-      '[Desktop Entry]', 'Type=Application', 'Name=Slide Studio', 'Comment=Presentation editor',
-      'Comment[ko]=프레젠테이션 편집기', 'Exec=/opt/slide-studio/slide-studio %U',
-      'TryExec=/opt/slide-studio/slide-studio', 'Icon=slide-studio', 'Terminal=false',
-      'Categories=Office;Presentation;', 'StartupWMClass=slide-studio', '',
-    ].join('\n'));
+    await writeLinuxFileAssociations(payload);
     for (const name of ['slide-studio', 'chrome-sandbox', 'chrome_crashpad_handler', 'resources/app.asar', 'locales/ko.pak', 'icudtl.dat', 'LICENSE', 'LICENSES.chromium.html']) {
       if (!(await fs.stat(path.join(app, name))).size) throw new Error('Missing required file: ' + name);
     }
@@ -100,6 +96,7 @@ async function packageLinux() {
       archiveBytes: (await fs.stat(archive)).size, archiveSHA256: await hashFile(archive),
       appAsarSHA256: await hashFile(appAsar), executableSHA256: await hashFile(path.join(app, 'slide-studio')),
       electronVersion: version, electronSource: url, electronSHA256: expected,
+      fileAssociations: { extensions: ['pptx', 'slide'], mimeCacheRefresh: 'postinst/postrm', defaultAppUnchanged: true },
       checks: { runtimeChecksum: true, runtimeCRC32: true, elf64X64: true, productionAsar: true,
         rootOwnedPayload: true, sandboxHelper4755: true, debReadback: true, nativeLinuxInstall: false }, ...built,
     };

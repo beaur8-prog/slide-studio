@@ -49,6 +49,43 @@ $registered = 'HKCU:\Software\RegisteredApplications'
 New-Item $registered -Force | Out-Null
 New-ItemProperty $registered -Name 'QA Existing app' -Value 'Software\QA\Capabilities' -Force | Out-Null
 
+# Test both shared keys and foreign additions inside our own containers, before
+# and after installation. Empty default values must count as real values too.
+$foreign = @(
+  @{ when = 'before'; key = "$classes\.pptx\OpenWithProgids"; name = 'QA Foreign before'; kind = 'String'; value = '' },
+  @{ when = 'before'; key = "$classes\.slide\OpenWithProgids"; name = 'QA Foreign before'; kind = 'DWord'; value = 17 },
+  @{ when = 'before'; key = "$classes\SlideStudio.Presentation"; name = 'QA Foreign before'; kind = 'String'; value = 'keep' },
+  @{ when = 'before'; key = "$classes\SlideStudio.LegacyPresentation\DefaultIcon"; name = 'QA Foreign before'; kind = 'Binary'; value = [byte[]](1, 2, 3) },
+  @{ when = 'before'; key = "$application\SupportedTypes"; name = '.foreign'; kind = 'String'; value = '' },
+  @{ when = 'before'; key = $capabilities; name = ''; kind = 'String'; value = '' },
+  @{ when = 'after'; key = "$classes\.pptx\OpenWithProgids"; name = 'QA Foreign after'; kind = 'String'; value = '' },
+  @{ when = 'after'; key = "$classes\SlideStudio.Presentation\shell\open\command"; name = 'QA Foreign after'; kind = 'Binary'; value = [byte[]](4, 5, 6) },
+  @{ when = 'after'; key = "$application\shell\print\command"; name = ''; kind = 'String'; value = '"C:\Foreign app\print.exe" "%1"' },
+  @{ when = 'after'; key = "$capabilities\FileAssociations"; name = '.foreign'; kind = 'String'; value = 'Foreign.Presentation' },
+  @{ when = 'after'; key = "$capabilities\ForeignChild"; name = 'QA Foreign after'; kind = 'DWord'; value = 42 },
+  @{ when = 'after'; key = 'HKCU:\Software\SlideStudio'; name = ''; kind = 'String'; value = '' }
+)
+function Add-Foreign([string]$When) {
+  foreach ($entry in $foreign | Where-Object when -eq $When) {
+    New-Item $entry.key -Force | Out-Null
+    (Get-Item $entry.key).SetValue($entry.name, $entry.value, [Microsoft.Win32.RegistryValueKind]$entry.kind)
+  }
+}
+function Assert-ForeignPreserved {
+  $failures = @()
+  foreach ($entry in $foreign) {
+    if (-not (Test-Path $entry.key)) { $failures += "missing key: $($entry.key)"; continue }
+    $key = Get-Item $entry.key
+    if (-not $key.GetValueNames().Contains([string]$entry.name)) { $failures += "missing value: $($entry.key) [$($entry.name)]"; continue }
+    if ([string]$key.GetValueKind($entry.name) -ne $entry.kind) { $failures += "changed type: $($entry.key) [$($entry.name)]"; continue }
+    $actual = $key.GetValue($entry.name)
+    $same = if ($entry.kind -eq 'Binary') { [Convert]::ToBase64String($actual) -eq [Convert]::ToBase64String($entry.value) } else { $actual -ceq $entry.value }
+    if (-not $same) { $failures += "changed data: $($entry.key) [$($entry.name)]" }
+  }
+  Assert-True ($failures.Count -eq 0) ("Foreign registry data lost: " + ($failures -join '; '))
+}
+Add-Foreign 'before'
+
 Add-Type @'
 using System;
 using System.Text;
@@ -86,15 +123,22 @@ function Assert-DefaultsPreserved {
 Install
 Assert-Installed
 Assert-DefaultsPreserved
+Add-Foreign 'after'
 Install
 Assert-Installed
 Assert-DefaultsPreserved
 New-ItemProperty 'HKCU:\Software\SlideStudio' -Name 'QA unrelated preference' -Value 'keep' -Force | Out-Null
 Uninstall
 Assert-DefaultsPreserved
-foreach ($key in @($application, $capabilities, "$classes\SlideStudio.Presentation", "$classes\SlideStudio.LegacyPresentation")) {
-  Assert-True (-not (Test-Path $key)) "Owned registration was not removed: $key"
+Assert-ForeignPreserved
+foreach ($extension in $types.Keys) {
+  $progId = $types[$extension]
+  Assert-True (-not (Get-Item "$classes\$extension\OpenWithProgids").GetValueNames().Contains($progId)) 'Owned Open With value was retained'
+  Assert-True (-not (Get-Item "$application\SupportedTypes").GetValueNames().Contains($extension)) 'Owned supported type was retained'
+  Assert-True (-not (Get-Item "$capabilities\FileAssociations").GetValueNames().Contains($extension)) 'Owned capability mapping was retained'
 }
+Assert-True (-not (Test-Path "$application\shell\open\command")) 'Owned application command was retained'
+Assert-True (-not (Test-Path "$classes\SlideStudio.Presentation\DefaultIcon")) 'Empty owned icon key was retained'
 Assert-True (-not (Get-Item $registered).GetValueNames().Contains('Slide Studio')) 'RegisteredApplications entry retained'
 Assert-True ((Get-ItemProperty 'HKCU:\Software\SlideStudio').'QA unrelated preference' -eq 'keep') 'Unrelated app preferences removed'
 
@@ -107,4 +151,5 @@ Uninstall
 Assert-True ((Default-Value "$classes\SlideStudio.Presentation\shell\open\command") -eq $otherCommand) 'Foreign replacement registration removed'
 Assert-True ((Get-Item "$classes\.pptx\OpenWithProgids").GetValueNames().Contains('SlideStudio.Presentation')) 'Foreign replacement candidate removed'
 Assert-DefaultsPreserved
-Write-Output 'PASS: install, reinstall, shell command resolution, existing defaults/UserChoice, owned cleanup and replacement ownership.'
+Assert-ForeignPreserved
+Write-Output 'PASS: install/reinstall/uninstall, existing defaults/UserChoice, 12 foreign registry values/subkeys including empty defaults, owned-value cleanup and replacement ownership.'

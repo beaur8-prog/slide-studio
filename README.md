@@ -40,7 +40,7 @@ Mac, Windows와 Linux에서 독립적으로 실행하는 프레젠테이션 편�
 
 Windows 설치판은 현재 사용자 계정의 `%LOCALAPPDATA%\Programs\Slide Studio`에 설치하고 시작 메뉴와 선택한 바탕화면 바로가기를 만듭니다. 업데이트 전에는 작업을 PPTX로 저장하고 앱을 종료한 뒤 새 Setup을 실행하세요. Windows 설정의 설치된 앱에서 제거할 수 있으며 자동 저장 자료는 보존합니다. 기존 ZIP 배포본과 같은 `%APPDATA%\Slide Studio` 사용자 자료를 사용합니다.
 
-소스의 설치 설정은 Windows·Mac·Linux에서 `.pptx`와 이전 `.slide` 파일의 지원 앱으로 Slide Studio를 등록합니다. Windows는 **연결 프로그램**과 **설정 → 기본 앱**, Mac은 **다음으로 열기**, Linux는 **다른 프로그램으로 열기**에서 선택할 수 있습니다. 설치가 기존 기본 앱을 변경하지 않으며, Windows·Linux 제거 시에는 Slide Studio의 등록만 정리합니다. 이전 `.slide` 파일은 열어서 편집한 뒤 PPTX로 저장합니다. 설치 등록 검증은 `npm run test:registration`으로 실행하며 Windows·Linux의 실제 등록·재설치·제거 검증은 별도의 임시 CI 환경에서 수행합니다.
+소스의 설치 설정은 Windows·Mac·Linux에서 `.pptx`와 이전 `.slide` 파일의 지원 앱으로 Slide Studio를 등록합니다. Windows는 **연결 프로그램**과 **설정 → 기본 앱**, Mac은 **다음으로 열기**, Linux는 **다른 프로그램으로 열기**에서 선택할 수 있습니다. 설치가 기존 기본 앱을 변경하지 않으며, Windows·Linux 제거 시에는 Slide Studio의 등록만 정리합니다. Windows에서는 등록한 값이 여전히 일치하는지 확인해 개별 삭제하며, 키는 Windows API로 값·하위 키 수가 모두 0임을 확인한 경우에만 정리합니다. 앱 전용 키 안에 다른 프로그램이 추가한 값·하위 키도 보존합니다. 이전 `.slide` 파일은 열어서 편집한 뒤 PPTX로 저장합니다. 설치 등록 검증은 `npm run test:registration`으로 실행하며 Windows·Linux의 실제 등록·재설치·제거 검증은 별도의 임시 CI 환경에서 수행합니다.
 
 Mac 빌드는 Apple 공증을 받지 않았고 Windows 빌드는 배포용 코드 서명이 없습니다. 따라서 다운로드·설치 또는 첫 실행 시 운영체제의 보안 경고가 표시되거나 실행이 제한될 수 있습니다. 앱 기능과 설치 검증 범위는 [1.6.9 검증 기록](qa/RELEASE-1.6.9.md)을 확인하세요. 실제 Windows/Linux 키보드 IME 직접 타이핑과 종이 출력은 미검증입니다. Intel Mac, Windows ARM 및 32비트용 패키지는 제공하지 않습니다.
 

@@ -15,6 +15,7 @@ ManifestDPIAware true
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\SlideStudio"
 !define CAPABILITIES_KEY "Software\SlideStudio\Capabilities"
 !define APPLICATION_KEY "Software\Classes\Applications\Slide Studio.exe"
+!define ASSOCIATION_DESCRIPTION "Edit PowerPoint presentations and open legacy Slide Studio files."
 Name "${PRODUCT} ${APP_VERSION}"
 OutFile "${OUTPUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\Slide Studio"
@@ -157,7 +158,7 @@ Function RegisterFileAssociations
   WriteRegStr HKCU "${APPLICATION_KEY}\DefaultIcon" "" '$\"$INSTDIR\Slide Studio.exe$\",0'
   WriteRegStr HKCU "${APPLICATION_KEY}\shell\open\command" "" '$\"$INSTDIR\Slide Studio.exe$\" $\"%1$\"'
   WriteRegStr HKCU "${CAPABILITIES_KEY}" "ApplicationName" "${PRODUCT}"
-  WriteRegStr HKCU "${CAPABILITIES_KEY}" "ApplicationDescription" "Edit PowerPoint presentations and open legacy Slide Studio files."
+  WriteRegStr HKCU "${CAPABILITIES_KEY}" "ApplicationDescription" "${ASSOCIATION_DESCRIPTION}"
   WriteRegStr HKCU "${CAPABILITIES_KEY}" "ApplicationIcon" '$\"$INSTDIR\Slide Studio.exe$\",0'
   !insertmacro RegisterPresentationType "pptx" "SlideStudio.Presentation" "PowerPoint Presentation"
   !insertmacro RegisterPresentationType "slide" "SlideStudio.LegacyPresentation" "Slide Studio Presentation (Legacy)"
@@ -167,30 +168,93 @@ Function RegisterFileAssociations
   done:
 FunctionEnd
 
-!macro UnregisterPresentationType EXTENSION PROGID
+; Old NSIS releases can interpret /ifempty as "no subkeys" even if values
+; remain. Query both counts explicitly, including an empty default value. On
+; any access/query error keep the key. Always use the installer's 64-bit view.
+Function un.DeleteEmptyAssociationKey
+  Exch $0
+  Push $1
+  Push $2
+  Push $3
+  Push $4
+  ; KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS | KEY_WOW64_64KEY
+  System::Call 'advapi32::RegOpenKeyExW(p 0x80000001, w r0, i 0, i 0x109, *p .r1) i .r2'
+  ${If} $2 == 0
+    System::Call 'advapi32::RegQueryInfoKeyW(p r1, p 0, p 0, p 0, *i .r2, p 0, p 0, *i .r3, p 0, p 0, p 0, p 0) i .r4'
+    System::Call 'advapi32::RegCloseKey(p r1)'
+    ${If} $4 == 0
+    ${AndIf} $2 == 0
+    ${AndIf} $3 == 0
+      DeleteRegKey /ifempty HKCU "$0"
+    ${EndIf}
+  ${EndIf}
+  Pop $4
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+FunctionEnd
+
+!macro DeleteEmptyAssociationKey KEY
+  Push "${KEY}"
+  Call un.DeleteEmptyAssociationKey
+!macroend
+
+!macro DeleteMatchingAssociationValue KEY NAME EXPECTED
+  ClearErrors
+  ReadRegStr $0 HKCU "${KEY}" "${NAME}"
+  ${IfNot} ${Errors}
+  ${AndIf} $0 == '${EXPECTED}'
+    DeleteRegValue HKCU "${KEY}" "${NAME}"
+  ${EndIf}
+!macroend
+
+!macro UnregisterPresentationType EXTENSION PROGID DESCRIPTION
   ReadRegStr $0 HKCU "Software\Classes\${PROGID}\shell\open\command" ""
   ${If} $0 == '$\"$INSTDIR\Slide Studio.exe$\" $\"%1$\"'
-    DeleteRegValue HKCU "Software\Classes\.${EXTENSION}\OpenWithProgids" "${PROGID}"
-    DeleteRegKey /ifempty HKCU "Software\Classes\.${EXTENSION}\OpenWithProgids"
-    DeleteRegKey HKCU "Software\Classes\${PROGID}"
+    !insertmacro DeleteMatchingAssociationValue "Software\Classes\.${EXTENSION}\OpenWithProgids" "${PROGID}" ""
+    !insertmacro DeleteEmptyAssociationKey "Software\Classes\.${EXTENSION}\OpenWithProgids"
+    ; Other programs can add values or verbs even under our own ProgID.
+    !insertmacro DeleteMatchingAssociationValue "Software\Classes\${PROGID}" "" "${DESCRIPTION}"
+    !insertmacro DeleteMatchingAssociationValue "Software\Classes\${PROGID}" "FriendlyTypeName" "${DESCRIPTION}"
+    !insertmacro DeleteMatchingAssociationValue "Software\Classes\${PROGID}\DefaultIcon" "" '$\"$INSTDIR\Slide Studio.exe$\",0'
+    !insertmacro DeleteMatchingAssociationValue "Software\Classes\${PROGID}\shell\open\command" "" '$\"$INSTDIR\Slide Studio.exe$\" $\"%1$\"'
+    !insertmacro DeleteEmptyAssociationKey "Software\Classes\${PROGID}\shell\open\command"
+    !insertmacro DeleteEmptyAssociationKey "Software\Classes\${PROGID}\shell\open"
+    !insertmacro DeleteEmptyAssociationKey "Software\Classes\${PROGID}\shell"
+    !insertmacro DeleteEmptyAssociationKey "Software\Classes\${PROGID}\DefaultIcon"
+    !insertmacro DeleteEmptyAssociationKey "Software\Classes\${PROGID}"
   ${EndIf}
 !macroend
 
 Function un.UnregisterFileAssociations
-  !insertmacro UnregisterPresentationType "pptx" "SlideStudio.Presentation"
-  !insertmacro UnregisterPresentationType "slide" "SlideStudio.LegacyPresentation"
+  !insertmacro UnregisterPresentationType "pptx" "SlideStudio.Presentation" "PowerPoint Presentation"
+  !insertmacro UnregisterPresentationType "slide" "SlideStudio.LegacyPresentation" "Slide Studio Presentation (Legacy)"
   ReadRegStr $0 HKCU "${APPLICATION_KEY}\shell\open\command" ""
   ${If} $0 == '$\"$INSTDIR\Slide Studio.exe$\" $\"%1$\"'
-    DeleteRegKey HKCU "${APPLICATION_KEY}"
+    !insertmacro DeleteMatchingAssociationValue "${APPLICATION_KEY}" "FriendlyAppName" "${PRODUCT}"
+    !insertmacro DeleteMatchingAssociationValue "${APPLICATION_KEY}\DefaultIcon" "" '$\"$INSTDIR\Slide Studio.exe$\",0'
+    !insertmacro DeleteMatchingAssociationValue "${APPLICATION_KEY}\shell\open\command" "" '$\"$INSTDIR\Slide Studio.exe$\" $\"%1$\"'
+    !insertmacro DeleteMatchingAssociationValue "${APPLICATION_KEY}\SupportedTypes" ".pptx" ""
+    !insertmacro DeleteMatchingAssociationValue "${APPLICATION_KEY}\SupportedTypes" ".slide" ""
+    !insertmacro DeleteEmptyAssociationKey "${APPLICATION_KEY}\shell\open\command"
+    !insertmacro DeleteEmptyAssociationKey "${APPLICATION_KEY}\shell\open"
+    !insertmacro DeleteEmptyAssociationKey "${APPLICATION_KEY}\shell"
+    !insertmacro DeleteEmptyAssociationKey "${APPLICATION_KEY}\DefaultIcon"
+    !insertmacro DeleteEmptyAssociationKey "${APPLICATION_KEY}\SupportedTypes"
+    !insertmacro DeleteEmptyAssociationKey "${APPLICATION_KEY}"
   ${EndIf}
   ReadRegStr $0 HKCU "${CAPABILITIES_KEY}" "ApplicationIcon"
   ${If} $0 == '$\"$INSTDIR\Slide Studio.exe$\",0'
-    ReadRegStr $0 HKCU "Software\RegisteredApplications" "${PRODUCT}"
-    ${If} $0 == "${CAPABILITIES_KEY}"
-      DeleteRegValue HKCU "Software\RegisteredApplications" "${PRODUCT}"
-    ${EndIf}
-    DeleteRegKey HKCU "${CAPABILITIES_KEY}"
-    DeleteRegKey /ifempty HKCU "Software\SlideStudio"
+    !insertmacro DeleteMatchingAssociationValue "Software\RegisteredApplications" "${PRODUCT}" "${CAPABILITIES_KEY}"
+    !insertmacro DeleteMatchingAssociationValue "${CAPABILITIES_KEY}" "ApplicationName" "${PRODUCT}"
+    !insertmacro DeleteMatchingAssociationValue "${CAPABILITIES_KEY}" "ApplicationDescription" "${ASSOCIATION_DESCRIPTION}"
+    !insertmacro DeleteMatchingAssociationValue "${CAPABILITIES_KEY}" "ApplicationIcon" '$\"$INSTDIR\Slide Studio.exe$\",0'
+    !insertmacro DeleteMatchingAssociationValue "${CAPABILITIES_KEY}\FileAssociations" ".pptx" "SlideStudio.Presentation"
+    !insertmacro DeleteMatchingAssociationValue "${CAPABILITIES_KEY}\FileAssociations" ".slide" "SlideStudio.LegacyPresentation"
+    !insertmacro DeleteEmptyAssociationKey "${CAPABILITIES_KEY}\FileAssociations"
+    !insertmacro DeleteEmptyAssociationKey "${CAPABILITIES_KEY}"
+    !insertmacro DeleteEmptyAssociationKey "Software\SlideStudio"
   ${EndIf}
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 FunctionEnd

@@ -40,6 +40,7 @@ import { resolveTableRowHeights } from "./table-layout";
 import { MAX_SLIDES, MAX_SLIDE_ELEMENTS, MAX_ELEMENTS } from "./document-limits";
 import { writeBackgroundImage } from "./pptx-background";
 import { writeGroups } from "./object-groups";
+import { rasterMime } from "./image-editing";
 import {
   writeObjectState,
   readObjectState,
@@ -91,40 +92,6 @@ function fail(message: string): never {
 }
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
-
-function rasterMime(bytes: Uint8Array): string | undefined {
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 137 &&
-    bytes[1] === 80 &&
-    bytes[2] === 78 &&
-    bytes[3] === 71 &&
-    bytes[4] === 13 &&
-    bytes[5] === 10 &&
-    bytes[6] === 26 &&
-    bytes[7] === 10
-  )
-    return "image/png";
-  if (
-    bytes.length >= 3 &&
-    bytes[0] === 255 &&
-    bytes[1] === 216 &&
-    bytes[2] === 255
-  )
-    return "image/jpeg";
-  if (
-    bytes.length >= 6 &&
-    String.fromCharCode(...bytes.subarray(0, 6)).match(/^GIF8[79]a$/)
-  )
-    return "image/gif";
-  if (
-    bytes.length >= 12 &&
-    String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
-    String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP"
-  )
-    return "image/webp";
-  return undefined;
-}
 
 function safeImage(value: unknown, label: string): string {
   if (

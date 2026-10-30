@@ -36,6 +36,7 @@ import {
   ChevronRight,
   Circle,
   Copy,
+  Crop,
   EyeOff,
   File,
   FolderOpen,
@@ -97,6 +98,8 @@ import {
 import FontManager from "./FontManager";
 import CommandSearch from "./CommandSearch";
 import FindReplacePanel from "./FindReplacePanel";
+import ImageCropDialog from "./ImageCropDialog";
+import { assertImageCapacity, frameImageCrop, imageSize, readImageFile, type ImageCrop } from "./image-editing";
 import { DEFAULT_SEARCH_OPTIONS, findDocumentText, replaceDocumentMatches, slideSearchText } from "./document-search";
 import TextColorPalette from "./TextColorPalette";
 import NumberInput from "./NumberInput";
@@ -184,6 +187,7 @@ type History = {
 };
 type Tab = "home" | "insert" | "design" | "transitions" | "slideshow" | "view";
 type Modal =
+  | "image-crop"
   | "fonts"
   | "new"
   | "library"
@@ -204,6 +208,7 @@ const contentDialogs: InsertContentKind[] = [
   "equation",
   "symbol",
 ];
+type ImageTarget = { deckId: string; slideId: string; elementId: string; src: string };
 const LIMIT = 60;
 const clone = <T,>(value: T): T => structuredClone(value);
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -400,6 +405,8 @@ export default function App() {
   const documentRef = useRef(history.present);
   documentRef.current = history.present;
   const [activeId, setActiveId] = useState(deck.slides[0].id);
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
   const activeIndex = Math.max(
     0,
     deck.slides.findIndex((s) => s.id === activeId),
@@ -686,6 +693,10 @@ export default function App() {
     direction: 0,
   });
   const imageInput = useRef<HTMLInputElement>(null);
+  const imageReplaceInput = useRef<HTMLInputElement>(null);
+  const imageOperationVersion = useRef(0);
+  const imageReplaceTarget = useRef<{ target: ImageTarget; version: number } | null>(null);
+  const [cropImage, setCropImage] = useState<{ target: ImageTarget; element: SlideElement } | null>(null);
   const videoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const transaction = useRef<Deck | null>(null);
@@ -959,6 +970,9 @@ export default function App() {
     setToast("");
     setFindOpen(false);
     setFindIndex(0);
+    imageOperationVersion.current++;
+    imageReplaceTarget.current = null;
+    setCropImage(null);
   };
 
   const openFind = (replace = false) => {
@@ -1776,45 +1790,87 @@ export default function App() {
   };
   const addImage = async (file: File) => {
     if (!canAddElements(1)) return;
-    if (!/^image\/(png|jpeg|gif|webp)$/.test(file.type)) {
-      notify("PNG, JPG, GIF, WebP 이미지를 선택해 주세요.");
-      return;
-    }
-    if (file.size > 15 * 1024 * 1024) {
-      notify("15MB 이하의 이미지를 선택해 주세요.");
-      return;
-    }
     try {
-      const src = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      });
-      const image = new window.Image();
-      image.src = src;
-      await image.decode();
+      const image = await readImageFile(file);
+      if (activeIdRef.current !== slide.id) { notify("그림을 읽는 동안 슬라이드가 바뀌어 삽입을 취소했습니다."); return; }
       if (!canAddElements(1)) return;
+      assertImageCapacity(documentRef.current, image.src);
       const ratio = Math.min(
         1,
-        (deck.width * 0.65) / image.naturalWidth,
-        (deck.height * 0.7) / image.naturalHeight,
+        (deckRef.current.width * 0.65) / image.width,
+        (deckRef.current.height * 0.7) / image.height,
       );
-      const width = image.naturalWidth * ratio,
-        height = image.naturalHeight * ratio;
+      const width = image.width * ratio,
+        height = image.height * ratio;
       const next = element("image", {
-        src,
+        src: image.src,
         alt: file.name,
-        x: (deck.width - width) / 2,
-        y: (deck.height - height) / 2,
+        x: (deckRef.current.width - width) / 2,
+        y: (deckRef.current.height - height) / 2,
         width,
         height,
       });
       changeSlide((s) => ({ ...s, elements: [...s.elements, next] }));
       setSelected([next.id]);
-    } catch {
-      notify("이 이미지를 열 수 없습니다. 다른 파일을 선택해 주세요.");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "이 이미지를 열 수 없습니다. 다른 파일을 선택해 주세요.");
     }
+  };
+  const selectedImageTarget = (): ImageTarget | undefined => {
+    if (selected.length !== 1 || selectedElement?.type !== "image" || selectedElement.locked || !selectedElement.src) return;
+    return { deckId: deck.id, slideId: slide.id, elementId: selectedElement.id, src: selectedElement.src };
+  };
+  const currentTargetImage = (target: ImageTarget): SlideElement | undefined => {
+    const current = documentRef.current;
+    if (current.id !== target.deckId) return;
+    const image = current.slides.find(slide => slide.id === target.slideId)?.elements.find(element => element.id === target.elementId);
+    return image?.type === "image" && image.src === target.src && !image.locked ? image : undefined;
+  };
+  const updateImage = (target: ImageTarget, patch: (current: SlideElement) => Partial<SlideElement>) => {
+    const image = currentTargetImage(target);
+    if (!image) { notify("그림이나 문서가 바뀌어 작업을 취소했습니다."); return; }
+    const changes = patch(image);
+    if ("crop" in changes && (image.crop ?? [0, 0, 0, 0]).every((value, index) =>
+      Math.abs(value - (changes.crop?.[index] ?? 0)) < 0.00000001)) changes.crop = image.crop;
+    commit(current => ({ ...current, slides: current.slides.map(slide => slide.id !== target.slideId ? slide : {
+      ...slide, elements: slide.elements.map(element => element.id === target.elementId ? { ...element, ...changes } : element),
+    }) }));
+  };
+  const openImageCrop = () => {
+    const target = selectedImageTarget();
+    if (!target || !selectedElement?.width || !selectedElement.height) return;
+    imageOperationVersion.current++;
+    finish(); setEditing(null);
+    setCropImage({ target, element: selectedElement });
+    setModal("image-crop");
+  };
+  const fitImage = async (mode: "fit" | "fill") => {
+    const target = selectedImageTarget();
+    if (!target) return;
+    const version = ++imageOperationVersion.current;
+    try {
+      const size = await imageSize(target.src);
+      if (version !== imageOperationVersion.current) return;
+      updateImage(target, image => ({ crop: frameImageCrop(image, size, mode) }));
+    } catch (error) { notify(error instanceof Error ? error.message : "그림을 조절하지 못했습니다."); }
+  };
+  const chooseReplacementImage = () => {
+    const target = selectedImageTarget();
+    if (!target) return;
+    imageReplaceTarget.current = { target, version: ++imageOperationVersion.current };
+    imageReplaceInput.current?.click();
+  };
+  const replaceImageFile = async (file: File, request: { target: ImageTarget; version: number }) => {
+    try {
+      const image = await readImageFile(file);
+      if (request.version !== imageOperationVersion.current) return;
+      if (!currentTargetImage(request.target)) { notify("그림이나 문서가 바뀌어 교체를 취소했습니다."); return; }
+      assertImageCapacity(documentRef.current, image.src, request.target);
+      updateImage(request.target, current => ({ src: image.src, alt: file.name,
+        crop: frameImageCrop(current, image, current.crop?.some(value => value < 0) ? "fit" : "fill",
+          current.crop ? { x: (current.crop[3] + 1 - current.crop[1]) / 2, y: (current.crop[0] + 1 - current.crop[2]) / 2 } : undefined),
+      }));
+    } catch (error) { notify(error instanceof Error ? error.message : "그림을 교체하지 못했습니다."); }
   };
   const saveBytes = async (
     name: string,
@@ -3015,6 +3071,13 @@ export default function App() {
     );
     ribbonTextSelection.current = captureTextSelection(host);
   };
+  const imageToolsDisabled = selected.length !== 1 || selectedElement?.type !== "image" || !!selectedElement.locked;
+  const imageTools = <div className="image-format-tools" role="group" aria-label="그림 서식">
+    <button aria-label="그림 자르기" disabled={imageToolsDisabled || !selectedElement?.width || !selectedElement.height} onClick={openImageCrop}><Crop size={15} />자르기</button>
+    <button aria-label="그림 교체" title="위치와 크기를 유지하여 그림 교체" disabled={imageToolsDisabled} onClick={chooseReplacementImage}><ImageIcon size={15} />그림 교체</button>
+    <button aria-label="그림 맞춤" title="전체 그림을 틀 안에 표시" disabled={imageToolsDisabled} onClick={() => void fitImage("fit")}><Maximize size={15} />맞춤</button>
+    <button aria-label="그림 채우기" title="그림의 비율을 유지하며 틀을 가득 채우기" disabled={imageToolsDisabled} onClick={() => void fitImage("fill")}><Crop size={15} />채우기</button>
+  </div>;
   const fontTools = (
     <>
       <div className="font-row">
@@ -3304,6 +3367,13 @@ export default function App() {
         disabled: locked,
         run: () => openTable(selectedElement.id),
       });
+    if (selected.length === 1 && selectedElement.type === "image")
+      objectMenuActions.push(
+        { label: "자르기", icon: <Crop size={16} />, separator: true, disabled: locked || !selectedElement.width || !selectedElement.height, run: openImageCrop },
+        { label: "그림 교체", icon: <ImageIcon size={16} />, disabled: locked, run: chooseReplacementImage },
+        { label: "그림 맞춤", icon: <Maximize size={16} />, disabled: locked, run: () => void fitImage("fit") },
+        { label: "그림 채우기", icon: <Crop size={16} />, disabled: locked, run: () => void fitImage("fill") },
+      );
     objectMenuActions.push(
       {
         label: "맨 앞으로 가져오기",
@@ -3803,7 +3873,7 @@ export default function App() {
                 {fontTools}
                 <span className="group-label">글꼴</span>
               </div>
-              <div className="ribbon-group shape-format-group" role="group" aria-label="도형 서식">
+              {selectedElement?.type === "image" ? <div className="ribbon-group">{imageTools}<span className="group-label">그림 서식</span></div> : <div className="ribbon-group shape-format-group" role="group" aria-label="도형 서식">
                 <div className="shape-format-controls">
                   <label>
                     채우기
@@ -3837,7 +3907,7 @@ export default function App() {
                   </label>
                 </div>
                 <span className="group-label">도형 서식</span>
-              </div>
+              </div>}
               <div className="ribbon-group">
                 <div className="tools-row align-tools">
                   {(
@@ -4956,6 +5026,7 @@ export default function App() {
                     <button className="text-button full" onClick={() => startPresent()}>현재 슬라이드에서 재생<Play size={14} /></button>
                     <p>MP4·WebM, 한 개당 20 MiB까지 지원합니다.</p>
                   </div>}
+                  {selectedElement.type === "image" && <div className="inspector-section"><h4>그림</h4>{imageTools}</div>}
                   {selectedElement.type === "text" && (
                     <div className="inspector-section">
                       <h4>텍스트</h4>
@@ -5426,6 +5497,12 @@ export default function App() {
       </div>
       <input ref={videoInput} type="file" hidden accept={VIDEO_ACCEPT}
         onChange={event => { if (event.target.files?.[0]) void addVideo(event.target.files[0]); event.target.value = ""; }} />
+      <input ref={imageReplaceInput} type="file" hidden aria-label="그림 교체 파일" accept=".png,.jpg,.jpeg,.gif,.webp"
+        onChange={event => {
+          const request = imageReplaceTarget.current, file = event.target.files?.[0];
+          imageReplaceTarget.current = null; event.target.value = "";
+          if (file && request) void replaceImageFile(file, request);
+        }} />
       <input
         ref={imageInput}
         type="file"
@@ -5457,6 +5534,12 @@ export default function App() {
           }
         }}
       />
+      {modal === "image-crop" && cropImage && <ImageCropDialog key={cropImage.target.elementId} element={cropImage.element}
+        onClose={() => { setModal(null); setCropImage(null); }}
+        onApply={(crop: ImageCrop | undefined) => {
+          updateImage(cropImage.target, () => ({ crop }));
+          setModal(null); setCropImage(null);
+        }} />}
       {modal === "fonts" && <FontManager onClose={() => setModal(null)} />}
       {modal === "table" && (
         <TableEditor

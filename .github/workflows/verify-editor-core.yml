@@ -42,6 +42,7 @@ jobs:
           tests/pptx-save.spec.ts
           tests/browser-output.spec.ts
           tests/recovery-storage.spec.ts
+          tests/audio.spec.ts
           tests/presentation-start-input.spec.ts
           tests/presentation-fullscreen.spec.ts
           tests/windows-ui.spec.ts
@@ -57,6 +58,17 @@ jobs:
           QA_APP_ROOT: ${{ github.workspace }}
           QA_NO_SANDBOX: '1'
         run: xvfb-run --auto-servernum node scripts/qa-save-native.cjs node_modules/electron/dist/electron qa/results/editor-core-native
+      - name: Verify Windows MP3 AAC WAV playback and PDF with synthetic media
+        if: always() && steps.build.outcome == 'success' && runner.os == 'Windows'
+        env:
+          QA_APP_ROOT: ${{ github.workspace }}
+        run: node scripts/qa-audio-native.cjs node_modules/electron/dist/electron.exe tests/fixtures/media/native-audio.pptx qa/results/editor-core-audio
+      - name: Verify Linux MP3 AAC WAV playback and PDF with synthetic media
+        if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
+        env:
+          QA_APP_ROOT: ${{ github.workspace }}
+          QA_NO_SANDBOX: '1'
+        run: xvfb-run --auto-servernum node scripts/qa-audio-native.cjs node_modules/electron/dist/electron tests/fixtures/media/native-audio.pptx qa/results/editor-core-audio
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
@@ -68,5 +80,7 @@ jobs:
             qa/results/editor-core-ci.json
             qa/results/editor-core-native/*.json
             qa/results/editor-core-native/*.png
+            qa/results/editor-core-audio/*.json
+            qa/results/editor-core-audio/*.png
             qa/results/editor-core-artifacts/**/*.png
             qa/results/editor-core-artifacts/**/trace.zip

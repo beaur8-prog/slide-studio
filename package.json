@@ -1,6 +1,6 @@
 {
   "name": "slide-studio",
-  "version": "1.6.16",
+  "version": "1.6.17",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",

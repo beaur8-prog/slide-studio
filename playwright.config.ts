@@ -2,12 +2,12 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests",
   timeout: 30000,
-  expect: { timeout: 5000 },
+  expect: { timeout: process.env.CI ? 10000 : 5000 },
   fullyParallel: false,
   workers: 1,
   reporter: "list",
   use: {
-    channel: "chrome",
+    channel: process.env.PLAYWRIGHT_CHANNEL || "chrome",
     viewport: { width: 1440, height: 900 },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
@@ -16,6 +16,6 @@ export default defineConfig({
     command: "npm run dev",
     url: "http://127.0.0.1:5190",
     reuseExistingServer: true,
-    timeout: 15000,
+    timeout: process.env.CI ? 60000 : 15000,
   },
 });

@@ -44,12 +44,13 @@ test("file capabilities do not accept a renderer path, remain bounded and expire
   expect(contexts.get(undefined)).toBeUndefined();
   expect(() => contexts.issue("relative.pptx", Buffer.from("a"))).toThrow();
   expect(() => contexts.issue("/tmp/legacy.slide", Buffer.from("a"))).toThrow();
-  const a = contexts.issue("/tmp/a.pptx", Buffer.from("a")),
-    b = contexts.issue("/tmp/b.pptx", Buffer.from("b")),
-    c = contexts.issue("/tmp/c.pptx", Buffer.from("c"));
+  const file = (name: string) => path.join(os.tmpdir(), name + ".pptx");
+  const a = contexts.issue(file("a"), Buffer.from("a")),
+    b = contexts.issue(file("b"), Buffer.from("b")),
+    c = contexts.issue(file("c"), Buffer.from("c"));
   expect(contexts.get(a.token)).toBeUndefined();
-  expect(contexts.get(b.token).path).toBe("/tmp/b.pptx");
-  expect(contexts.get(c.token).path).toBe("/tmp/c.pptx");
+  expect(contexts.get(b.token).path).toBe(file("b"));
+  expect(contexts.get(c.token).path).toBe(file("c"));
   contexts.clear();
   expect(contexts.get(c.token)).toBeUndefined();
 });

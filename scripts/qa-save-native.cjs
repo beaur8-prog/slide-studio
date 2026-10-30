@@ -60,7 +60,14 @@ const geometry = async (file) => {
     delete env.SLIDE_STUDIO_DEV;
     app = await _electron.launch({
       executablePath: path.resolve(executable),
-      args: ["--user-data-dir=" + profile, "--mute-audio"],
+      args: [
+        ...(env.QA_APP_ROOT ? [path.resolve(env.QA_APP_ROOT)] : []),
+        "--user-data-dir=" + profile,
+        "--mute-audio",
+        ...(process.platform === "linux" && env.QA_NO_SANDBOX === "1"
+          ? ["--no-sandbox"]
+          : []),
+      ],
       env,
       timeout: 45000,
     });

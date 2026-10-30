@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, session, shell, Notification } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, session, shell, Notification, screen } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
@@ -188,7 +188,13 @@ function showEditorForFileOpen() {
 }
 
 function setPresentationMode(enabled) {
-  presentationWindowController?.set(enabled);
+  let refreshFullscreen = false;
+  if (enabled && process.platform === 'win32' && mainWindow?.isFullScreen()) {
+    const bounds = mainWindow.getBounds();
+    const display = screen.getDisplayMatching(bounds).bounds;
+    refreshFullscreen = bounds.width !== display.width || bounds.height !== display.height;
+  }
+  presentationWindowController?.set(enabled, refreshFullscreen);
 }
 
 async function preparePrint(contents) {

@@ -73,7 +73,7 @@ function createPresentationWindowController(window, { onEntered = () => {}, onEn
   window.on('leave-full-screen', left);
   return {
     get isPresenting() { return active; },
-    set(enabled) {
+    set(enabled, refreshFullscreen = false) {
       if (disposed || window.isDestroyed()) return;
       if (enabled) {
         if (!active) {
@@ -95,7 +95,13 @@ function createPresentationWindowController(window, { onEntered = () => {}, onEn
         desired = true;
         window.setMenuBarVisibility(false);
         window.webContents.setBackgroundThrottling(false);
-        reconcile();
+        if (refreshFullscreen && transition === null && window.isFullScreen()) {
+          // An editor that entered fullscreen with an oversized minimum can
+          // retain those old bounds after the minimum is removed. Complete one
+          // native exit/re-entry while retaining the show and original intent.
+          transition = false;
+          window.setFullScreen(false);
+        } else reconcile();
       } else if (active) {
         active = false;
         restoring = restore;

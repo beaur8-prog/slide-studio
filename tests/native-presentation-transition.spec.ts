@@ -214,3 +214,21 @@ test("a previously fullscreen editor restores its minimum only after the user le
   await new Promise<void>((resolve) => setImmediate(resolve));
   expect(window.minimum).toEqual([1080, 720]);
 });
+
+test("refreshing oversized native fullscreen keeps the show active and preserves the original fullscreen editor", async () => {
+  const { window, controller, ended } = setup();
+  window.fullscreen = true;
+  controller.set(true, true);
+  expect(window.minimum).toEqual([0, 0]);
+  expect(window.requests).toEqual([false]);
+  window.finishBeforeState();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  expect(controller.isPresenting).toBe(true);
+  expect(window.requests).toEqual([false, true]);
+  window.finishBeforeState();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  controller.set(false);
+  expect(window.fullscreen).toBe(true);
+  expect(window.requests).toEqual([false, true]);
+  expect(ended()).toBe(0);
+});

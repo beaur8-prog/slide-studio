@@ -69,6 +69,14 @@ node scripts/qa-corpus.mjs usability-workplace dickinson-workplace.pptx dickinso
 
 검사 결과 JSON·스크린샷·생성 PPTX/PDF는 Git에 올리지 않는 `qa/results/` 아래에 둔다. Windows/Linux 설치 앱은 이번 Mac 세션에서 실행하지 않았으며, 해당 OS의 네이티브 설치/제거와 실제 한글 입력기 조작은 검증 범위 밖이다.
 
+## 로컬 앱과 소스 보관
+
+소스 개선은 `2dba5ec`부터 `da57959`까지 Git의 `main`에 반영했다. 검증한 Mac 1.6.15 앱을 `/Applications/Slide Studio.app`에 설치했고, 패키지 안의 57개 파일이 빌드 결과와 일치함을 확인했다. ASAR SHA-256은 `5dfe8b5ba36434dd792280ad746c89d7bdbc90b4f2a2a23f975a63a6d3241598`이다.
+
+기존 앱의 초기 제목 슬라이드·빈 노트·비활성 Undo/Redo와 열린 대화상자가 없음을 확인한 뒤 기본 메뉴로 정상 종료했다. 새 앱을 실행하고 실제 macOS UI에서 선택 창과 한글 찾기(`프레젠테이션`, 1/1곳)를 확인했다. 찾기를 닫고 선택을 해제하여 문서를 수정하지 않은 초기 화면으로 남겼다. 설치 후 서명과 ASAR 일치도 확인했다. Apple 공증을 새로 받았다는 의미는 아니다.
+
+원래 프로젝트의 iCloud `dataless` 파일(`.git/HEAD` 등)이 읽기 시간 초과를 내어 작업에 사용하지 못했다. 원본 폴더는 덮어쓰지 않았고, 별도 로컬 소스를 `~/.codex/workspaces/slide-studio-usability-20261030`에 보관했다. GitHub Release, 공개 다운로드 파일, 리토스 공유 문서는 갱신하지 않았다.
+
 ## 기준 문서
 
 - [PowerPoint 키보드 단축키](https://support.microsoft.com/en-us/accessibility/powerpoint/use-keyboard-shortcuts-to-create-powerpoint-presentations)

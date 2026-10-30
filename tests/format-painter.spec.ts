@@ -294,6 +294,8 @@ test("cell range formatting preserves text, dimensions, merges and unselected ce
       height: 500,
       table: createTable(2, 2),
     });
+    target.table!.cells[0][1] = "";
+    target.table!.merges = [{ row: 0, column: 0, rowSpan: 1, columnSpan: 2 }];
     const sample = captureObjectFormat(source, { row: 0, column: 0 });
     const painted = applyObjectFormat(target, sample, {
       startRow: 1,
@@ -309,6 +311,7 @@ test("cell range formatting preserves text, dimensions, merges and unselected ce
     };
   });
   expect(result.after.table!.cells).toEqual(result.before.table!.cells);
+  expect(result.after.table!.merges).toEqual(result.before.table!.merges);
   expect(result.after.table!.cellStyles?.[0]).toEqual([null, null]);
   expect(result.style).toMatchObject({
     color: "#8822CC",
@@ -337,4 +340,69 @@ test("copying and applying identical plain text or shape formatting adds no docu
     };
   });
   expect(result).toEqual({ text: true, shape: true });
+});
+
+test("right-click format paste preserves the selected characters and editing focus", async ({
+  page,
+}) => {
+  await seed(page);
+  await item(page, "source").click();
+  await page.keyboard.press("ControlOrMeta+Shift+c");
+  await page.keyboard.press("Escape");
+  await item(page, "target").dblclick();
+  await selectBeta(page);
+  await editor(page).click({ button: "right" });
+  await page
+    .getByRole("menu", { name: "텍스트 편집" })
+    .getByRole("menuitem", { name: "서식 붙여넣기", exact: true })
+    .click();
+  await expect(editor(page)).toBeFocused();
+  expect(await page.evaluate(() => getSelection()?.toString())).toBe("Beta");
+  expect((await charStyles(page)).slice(6)).toEqual(
+    Array(4).fill({
+      color: "#33AA77",
+      size: 28,
+      bold: true,
+      italic: true,
+      underline: false,
+    }),
+  );
+});
+
+test("dragging over text with the painter active applies the copied style only to that range", async ({
+  page,
+}) => {
+  await seed(page);
+  await item(page, "target").dblclick();
+  await editor(page).evaluate(async (host) => {
+    const { restoreTextOffsets } = await import("/src/text-selection.ts");
+    restoreTextOffsets(host as HTMLElement, 0, 5);
+  });
+  await page.getByRole("button", { name: "기울임", exact: true }).click();
+  await page.keyboard.press("ControlOrMeta+Shift+c");
+  const box = await editor(page).evaluate(async (host) => {
+    const { textRangeAtOffsets } = await import("/src/text-selection.ts");
+    const rect = textRangeAtOffsets(
+      host as HTMLElement,
+      6,
+      10,
+    ).getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  });
+  await page.mouse.move(box.x + 0.2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 0.2, box.y + box.height / 2, {
+    steps: 10,
+  });
+  await page.mouse.up();
+  await expect(
+    page.getByRole("status", { name: "서식 복사 모드" }),
+  ).toHaveCount(0);
+  const italic = (await charStyles(page)).map((style) => !!style.italic);
+  expect(italic).toEqual([
+    ...Array(5).fill(true),
+    false,
+    ...Array(4).fill(true),
+  ]);
+  expect(await page.evaluate(() => getSelection()?.toString())).toBe("Beta");
 });

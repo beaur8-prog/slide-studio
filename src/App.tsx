@@ -3346,10 +3346,6 @@ export default function App() {
 
   const objectMenuActions: ObjectMenuAction[] = [];
   if (selectedElement) {
-    objectMenuActions.push(
-      { label: "서식 복사", icon: <Paintbrush size={16} />, run: () => copyFormat() },
-      { label: "서식 붙여넣기", icon: <Paintbrush size={16} />, disabled: !formatSample || !!selectedElement.locked, run: () => pasteFormat() },
-    );
     const locked = slide.elements.some(
       (el) => selected.includes(el.id) && el.locked,
     );
@@ -3400,6 +3396,10 @@ export default function App() {
         disabled: locked,
         run: removeSelected,
       },
+    );
+    objectMenuActions.push(
+      { label: "서식 복사", icon: <Paintbrush size={16} />, separator: true, run: () => copyFormat() },
+      { label: "서식 붙여넣기", icon: <Paintbrush size={16} />, disabled: !formatSample || locked, run: () => pasteFormat() },
     );
     if (["text", "shape"].includes(selectedElement.type))
       objectMenuActions.push({
@@ -3511,7 +3511,8 @@ export default function App() {
           if (!painterMode || !(event.target instanceof Element) || !event.target.closest(".editing-text")) return;
           requestAnimationFrame(() => {
             const host = document.querySelector<HTMLElement>(".editing-text");
-            if (host && !captureTextSelection(host)?.range.collapsed) pasteFormat();
+            const selection = host && captureTextSelection(host);
+            if (selection && !selection.range.collapsed) pasteFormat();
           });
         }}
       >
@@ -5052,8 +5053,8 @@ export default function App() {
               </button>
             </div>
             <div className="inspector-tabs" aria-label="작업 창 종류">
-              <button aria-pressed={inspectorMode === "format"} onClick={() => setInspectorMode("format")}>서식</button>
-              <button aria-pressed={inspectorMode === "layers"} onClick={() => setInspectorMode("layers")}>선택 창</button>
+              <button aria-label="서식 보기" aria-pressed={inspectorMode === "format"} onClick={() => setInspectorMode("format")}>서식</button>
+              <button aria-label="선택 창 보기" aria-pressed={inspectorMode === "layers"} onClick={() => setInspectorMode("layers")}>선택 창</button>
             </div>
             <div className="inspector-body">
               <div hidden={inspectorMode !== "format"}>

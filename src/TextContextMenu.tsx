@@ -90,8 +90,6 @@ export default function TextContextMenu({
       textSelection={selection}
       onClose={close}
       actions={[
-        ...(onCopyFormat ? [{ label: "서식 복사", icon: <Paintbrush size={16} />, run: () => { restoreTextSelection(selection); onCopyFormat(); } }] : []),
-        ...(onCopyFormat ? [{ label: "서식 붙여넣기", icon: <Paintbrush size={16} />, disabled: !onPasteFormat || selection.range.collapsed, run: () => { restoreTextSelection(selection); onPasteFormat?.(); } }] : []),
         {
           label: "잘라내기",
           icon: <Scissors size={16} />,
@@ -124,6 +122,8 @@ export default function TextContextMenu({
             document.execCommand("delete");
           },
         },
+        ...(onCopyFormat ? [{ label: "서식 복사", icon: <Paintbrush size={16} />, separator: true, run: () => { restoreTextSelection(selection); onCopyFormat(); } }] : []),
+        ...(onCopyFormat ? [{ label: "서식 붙여넣기", icon: <Paintbrush size={16} />, disabled: !onPasteFormat || selection.range.collapsed, run: () => { restoreTextSelection(selection); onPasteFormat?.(); } }] : []),
         {
           label: "글자 색",
           icon: <Palette size={16} />,

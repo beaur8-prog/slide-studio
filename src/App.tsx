@@ -10,7 +10,7 @@ import { documentCapacityError, type DocumentAddition } from "./document-limits"
 import type { InkStroke } from "./presentation-ink";
 import { fitTableRows } from "./table-layout";
 import { sameDocument, sameValue } from "./document-changes";
-import { arrangeElements } from "./object-arrange";
+import { arrangeElements, selectionUnits } from "./object-arrange";
 import {
   Fragment,
   useCallback,
@@ -2243,6 +2243,7 @@ export default function App() {
         }
         return;
       }
+      if (e.defaultPrevented || e.isComposing || busy) return;
       if (objectMenu || textMenu || colorPalette || slideMenu || pendingInk)
         return;
       const cmd = e.metaKey || e.ctrlKey;
@@ -2275,6 +2276,14 @@ export default function App() {
         return;
       }
       if (editingTarget(e.target) || modal) return;
+      if (cmd && !e.altKey && !e.shiftKey && textCapable &&
+          ["b", "i", "u"].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        if (!e.repeat) toggleTextFormat(
+          ({ b: "bold", i: "italic", u: "underline" } as const)[e.key.toLowerCase() as "b" | "i" | "u"],
+        );
+        return;
+      }
       if (e.target instanceof Element && e.target.closest(".slide-insertion-gap") &&
           ["Delete", "Backspace"].includes(e.key)) {
         e.preventDefault();
@@ -2370,6 +2379,23 @@ export default function App() {
           });
           return;
         }
+      }
+      if (e.key === "Tab" && !cmd && !e.altKey &&
+          e.target instanceof Element && e.target.closest(".editable-slide [data-element-id]")) {
+        const units = selectionUnits(slide.elements, slide.elements.map(element => element.id));
+        if (!units.length) return;
+        e.preventDefault();
+        const focused = e.target.closest<HTMLElement>("[data-element-id]")?.dataset.elementId;
+        const index = units.findIndex(unit => unit.members.some(element => element.id === focused));
+        const next = units[(index + (e.shiftKey ? -1 : 1) + units.length) % units.length];
+        finish();
+        setEditing(null);
+        setTableSelection(null);
+        setSelected(next.members.map(element => element.id));
+        requestAnimationFrame(() => document.querySelector<HTMLElement>(
+          `.editable-slide [data-element-id="${CSS.escape(next.members[0].id)}"]`,
+        )?.focus({ preventScroll: true }));
+        return;
       }
       if (
         e.key === "Enter" &&

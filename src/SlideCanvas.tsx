@@ -460,6 +460,7 @@ export default function SlideCanvas({
   grid,
 }: Props) {
   const editPoint = useRef<{ id: string; x: number; y: number } | null>(null);
+  const pointerSelecting = useRef(false);
   const openContextMenu = (
     element: SlideElement,
     host: HTMLElement,
@@ -924,6 +925,9 @@ export default function SlideCanvas({
           backgroundImage: gradientCss(slide.backgroundGradient),
           transform: `scale(${scale})`,
         }}
+        onPointerDownCapture={() => { pointerSelecting.current = true; }}
+        onPointerUpCapture={() => { pointerSelecting.current = false; }}
+        onPointerCancelCapture={() => { pointerSelecting.current = false; }}
         onPointerDown={(e) => {
           if (
             e.target === e.currentTarget ||
@@ -986,6 +990,16 @@ export default function SlideCanvas({
               data-element-id={e.id}
               data-type={e.type}
               tabIndex={0}
+              onFocus={(event) => {
+                // Keyboard focus must identify the object that subsequent
+                // Delete/nudge commands act on. Pointer selection handles its
+                // own modifier/group semantics before the browser moves focus.
+                if (event.target !== event.currentTarget || pointerSelecting.current) return;
+                if (!selected.includes(e.id)) {
+                  select(expandGroups(slide.elements, [e.id]));
+                  selectTableCells(null);
+                }
+              }}
               className={`slide-element ${selected.includes(e.id) ? "selected" : ""} ${e.locked ? "locked" : ""} ${editing === e.id ? "editing" : ""}`}
               style={
                 {

@@ -99,8 +99,11 @@ export function readObjectState(node: Element): {
   const state = props?.getElementsByTagNameNS(SS, "state")[0];
   const key = state?.getAttribute("key") ?? undefined;
   const rawName = props?.getAttribute("name")?.replace(/[\u0000-\u001f]/g, "").slice(0, 160);
-  const named = state ? state.getAttribute("named") === "1"
-    : !!rawName && !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(rawName);
+  // A native editor may rename an object without updating our extension.
+  // Suppress automatic labels only while they still equal their stable key.
+  const named = state?.getAttribute("named") === "1" || (!!rawName && (key
+    ? rawName !== key
+    : !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(rawName)));
   let borders: SlideElement["borders"];
   try {
     const value: unknown = JSON.parse(state?.getAttribute("borders") ?? "null");

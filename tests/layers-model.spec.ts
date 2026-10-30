@@ -1,5 +1,82 @@
 import { test, expect } from "@playwright/test";
 
+test("native PowerPoint object and group renames take priority over automatic Studio labels", async ({
+  page,
+}) => {
+  await page.goto("http://127.0.0.1:5190");
+  const result = await page.evaluate(async () => {
+    const { blankDeck, element } = await import("/src/model.ts"),
+      { exportPptx, importPptx } = await import("/src/io.ts"),
+      { default: JSZip } = await import("/node_modules/.vite/deps/jszip.js");
+    const deck = blankDeck();
+    deck.slides[0].elements = [
+      element("text", {
+        id: "automatic-title",
+        text: "Title",
+        groups: ["automatic-group"],
+      }),
+    ];
+    const zip = await JSZip.loadAsync(await exportPptx(deck)),
+      path = "ppt/slides/slide1.xml";
+    const xml = new DOMParser().parseFromString(
+      await zip.file(path)!.async("string"),
+      "application/xml",
+    );
+    for (const props of xml.getElementsByTagNameNS("*", "cNvPr")) {
+      if (props.getAttribute("name") === "automatic-title")
+        props.setAttribute("name", "PowerPoint renamed title");
+      if (props.getAttribute("name") === "automatic-group")
+        props.setAttribute("name", "PowerPoint renamed group");
+    }
+    zip.file(path, new XMLSerializer().serializeToString(xml));
+    return (await importPptx(await zip.generateAsync({ type: "uint8array" })))
+      .deck.slides[0].elements[0];
+  });
+  expect(result.name).toBe("PowerPoint renamed title");
+  expect(result.groupNames).toEqual(["PowerPoint renamed group"]);
+});
+
+test("legacy object state keeps its automatic UUID private and accepts a native rename", async ({
+  page,
+}) => {
+  await page.goto("http://127.0.0.1:5190");
+  const result = await page.evaluate(async () => {
+    const { blankDeck, element } = await import("/src/model.ts"),
+      { exportPptx, importPptx } = await import("/src/io.ts"),
+      { default: JSZip } = await import("/node_modules/.vite/deps/jszip.js");
+    const deck = blankDeck();
+    deck.slides[0].elements = [element("text", { text: "Legacy text" })];
+    const zip = await JSZip.loadAsync(await exportPptx(deck)),
+      path = "ppt/slides/slide1.xml";
+    const xml = new DOMParser().parseFromString(
+      await zip.file(path)!.async("string"),
+      "application/xml",
+    );
+    for (const state of xml.getElementsByTagNameNS(
+      "urn:slide-studio:object-state:v1",
+      "state",
+    )) {
+      state.removeAttribute("key");
+      state.removeAttribute("named");
+    }
+    zip.file(path, new XMLSerializer().serializeToString(xml));
+    const automatic = (
+      await importPptx(await zip.generateAsync({ type: "uint8array" }))
+    ).deck.slides[0].elements[0].name;
+    const props = Array.from(xml.getElementsByTagNameNS("*", "cNvPr")).find(
+      (node) => node.getAttribute("name") === deck.slides[0].elements[0].id,
+    )!;
+    props.setAttribute("name", "Legacy external rename");
+    zip.file(path, new XMLSerializer().serializeToString(xml));
+    const renamed = (
+      await importPptx(await zip.generateAsync({ type: "uint8array" }))
+    ).deck.slides[0].elements[0].name;
+    return { automatic, renamed };
+  });
+  expect(result.automatic).toBeUndefined();
+  expect(result.renamed).toBe("Legacy external rename");
+});
+
 test("layer names, duplicate names, own/group visibility and asymmetric borders survive three PPTX round trips", async ({
   page,
 }) => {

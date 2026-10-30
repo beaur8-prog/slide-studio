@@ -21,6 +21,7 @@ import {
   useLayoutEffect,
   useEffect,
   useState,
+  useMemo,
 } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
@@ -133,7 +134,7 @@ function TextBorders({ element: e }: { element: SlideElement }) {
   );
 }
 
-export function ElementVisual({
+export const ElementVisual = memo(function ElementVisual({
   element,
   onTextHeight,
   playMedia = false,
@@ -161,7 +162,7 @@ export function ElementVisual({
       )}
     </>
   );
-}
+});
 
 function ArtworkVisual({
   element: e,
@@ -301,8 +302,9 @@ export const SlideVisual = memo(function SlideVisual({
   playMedia?: boolean;
   onSlideLink?: (slideId: string) => void;
 }) {
+  const links = useMemo(() => ({interactive,onSlideLink}),[interactive,onSlideLink]);
   return (
-    <SlideLinks.Provider value={{ interactive, onSlideLink }}>
+    <SlideLinks.Provider value={links}>
       <div
         className="slide-visual"
         style={{

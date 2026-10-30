@@ -806,6 +806,18 @@ export default function App() {
       return sameValue(next, h.present) ? h : { ...h, present: next };
     });
   }, []);
+  // Keep unchanged artwork memoizable while typing. A different active slide
+  // gets its own callback so a late measurement cannot resize another slide.
+  const resizeText = useCallback((id: string, height: number) => {
+    preview(d => {
+      const target = d.slides.find(s => s.id === slide.id);
+      const element = target?.elements.find(e => e.id === id);
+      if (!element?.autoHeight || element.locked || Math.abs(element.height-height) < 1) return d;
+      return {...d,slides:d.slides.map(s => s !== target ? s : {
+        ...s,elements:s.elements.map(e => e.id === id ? {...e,height} : e),
+      })};
+    });
+  },[preview,slide.id]);
   const previewText = useCallback(
     (
       update: (d: Deck) => Deck,
@@ -5049,33 +5061,7 @@ export default function App() {
                       begin={begin}
                       finish={finish}
                       cancel={cancel}
-                      resizeText={(id, height) =>
-                        preview((d) => {
-                          const target = d.slides.find(
-                            (s) => s.id === slide.id,
-                          );
-                          const el = target?.elements.find((e) => e.id === id);
-                          if (
-                            !el?.autoHeight ||
-                            el.locked ||
-                            Math.abs(el.height - height) < 1
-                          )
-                            return d;
-                          return {
-                            ...d,
-                            slides: d.slides.map((s) =>
-                              s !== target
-                                ? s
-                                : {
-                                    ...s,
-                                    elements: s.elements.map((e) =>
-                                      e.id === id ? { ...e, height } : e,
-                                    ),
-                                  },
-                            ),
-                          };
-                        })
-                      }
+                      resizeText={resizeText}
                       preview={(elements) =>
                         preview((d) => ({
                           ...d,

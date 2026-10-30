@@ -101,7 +101,12 @@ async function runFile(browser, filename, label, slides) {
     await cdp.send('HeapProfiler.collectGarbage');
     const data = await cdp.send('Performance.getMetrics');
     const read = key => data.metrics.find(m => m.name === key)?.value;
-    return { js_heap_mb: rounded(read('JSHeapUsedSize') / 1024 / 1024), nodes: read('Nodes'), documents: read('Documents') };
+    const rendered = await page.evaluate(() => ({
+      dom_nodes: document.getElementsByTagName('*').length,
+      thumbnail_previews: document.querySelectorAll('.thumbnail-list .slide-visual').length,
+      print_slides: document.querySelectorAll('.print-slide').length,
+    }));
+    return { js_heap_mb: rounded(read('JSHeapUsedSize') / 1024 / 1024), nodes: read('Nodes'), documents: read('Documents'), ...rendered };
   };
   const phase = async (name, action) => {
     log(label, name);

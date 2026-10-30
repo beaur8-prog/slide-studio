@@ -79,7 +79,14 @@ export function assertImageCapacity(
   source: string,
   replacing?: { slideId: string; elementId: string },
 ) {
-  let bytes = source.length * 0.75;
+  if (source.length * 0.75 > remainingAssetBytes(deck, replacing))
+    throw new Error("내장 그림·동영상·차트의 합계가 100MB를 초과합니다.");
+}
+export function remainingAssetBytes(
+  deck: Deck,
+  replacing?: { slideId: string; elementId: string },
+) {
+  let bytes = 0;
   for (const slide of deck.slides) {
     if (slide.backgroundImage) bytes += slide.backgroundImage.src.length * 0.75;
     for (const element of slide.elements) {
@@ -90,8 +97,7 @@ export function assertImageCapacity(
       if (element.chart) bytes += chartBytes(element.chart);
     }
   }
-  if (bytes > 100 * 1024 * 1024)
-    throw new Error("내장 그림·동영상·차트의 합계가 100MB를 초과합니다.");
+  return 100 * 1024 * 1024 - bytes;
 }
 export function validateImageCrop(crop: ImageCrop): ImageCrop {
   if (

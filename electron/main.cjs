@@ -199,12 +199,19 @@ function setPresentationMode(enabled) {
 async function preparePrint(contents) {
   // Font and image decoding must finish before Chromium snapshots the print layout.
   await contents.executeJavaScript(`(async () => {
+    window.dispatchEvent(new Event('beforeprint'));
     await document.fonts.ready;
     await Promise.all(Array.from(document.querySelectorAll('.print-deck img'),
       image => image.decode().catch(() => {})));
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     return true;
   })()`);
+}
+
+async function releasePrint(contents) {
+  // Also release after failures/cancellation; Chromium does not always emit
+  // afterprint when a native print job fails before its preview opens.
+  await contents.executeJavaScript("window.dispatchEvent(new Event('afterprint'))").catch(() => {});
 }
 
 function installMenu() {
@@ -429,34 +436,39 @@ function installIPC() {
       properties: ['createDirectory', 'showOverwriteConfirmation'],
     });
     if (result.canceled || !result.filePath) return null;
-    await preparePrint(mainWindow.webContents);
-    const buffer = await mainWindow.webContents.printToPDF({
-      printBackground: true,
-      preferCSSPageSize: true,
-      pageSize: { width: 13.333333, height: 7.5 },
-      margins: { top: 0, right: 0, bottom: 0, left: 0 },
-      displayHeaderFooter: false,
-    });
-    await atomicWrite(result.filePath, buffer);
-    return result.filePath;
+    const contents = mainWindow.webContents;
+    try {
+      await preparePrint(contents);
+      const buffer = await contents.printToPDF({
+        printBackground: true,
+        preferCSSPageSize: true,
+        pageSize: { width: 13.333333, height: 7.5 },
+        margins: { top: 0, right: 0, bottom: 0, left: 0 },
+        displayHeaderFooter: false,
+      });
+      await atomicWrite(result.filePath, buffer);
+      return result.filePath;
+    } finally { await releasePrint(contents); }
   }));
 
   ipcMain.handle('slide-studio:print', event => withNativeDialog(event, async () => {
     const contents = mainWindow.webContents;
-    await preparePrint(contents);
-    return new Promise((resolve, reject) => {
-      contents.print({
-        silent: false,
-        printBackground: true,
-        landscape: true,
-        usePrinterDefaultPageSize: true,
-        margins: { marginType: 'printableArea' },
-      }, (success, failureReason) => {
-        if (success) resolve(true);
-        else if (/cancel(?:led|ed)/i.test(failureReason)) resolve(false);
-        else reject(new Error(failureReason || 'The print job could not be submitted.'));
+    try {
+      await preparePrint(contents);
+      return await new Promise((resolve, reject) => {
+        contents.print({
+          silent: false,
+          printBackground: true,
+          landscape: true,
+          usePrinterDefaultPageSize: true,
+          margins: { marginType: 'printableArea' },
+        }, (success, failureReason) => {
+          if (success) resolve(true);
+          else if (/cancel(?:led|ed)/i.test(failureReason)) resolve(false);
+          else reject(new Error(failureReason || 'The print job could not be submitted.'));
+        });
       });
-    });
+    } finally { await releasePrint(contents); }
   }));
 
   // This channel is private to the preload's trusted click handler. It is never

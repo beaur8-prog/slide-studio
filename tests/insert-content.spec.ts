@@ -198,13 +198,13 @@ test("all insertion families remain editable through slide and PPTX round trips"
   expect(result.warnings).toEqual([]);
 });
 
-test("chart preview validates data, applies color and inserts the previewed objects", async ({
+test("chart preview validates data, applies color and inserts a native editable chart", async ({
   page,
 }, testInfo) => {
   await mountDialog(page, "chart");
-  await expect(page.getByRole("dialog")).toContainText("데이터 연동 안 됨");
+  await expect(page.getByRole("dialog")).toContainText("숫자를 바꾸면 차트가 갱신됩니다");
   await expect(page.getByRole("dialog")).toContainText(
-    "자동 갱신되지 않습니다",
+    "외부 Excel 파일과 실시간 연동되지는 않습니다",
   );
   const preview = page.getByTestId("insert-content-preview");
   await expect(preview.locator(".slide-element").first()).toBeVisible();
@@ -224,7 +224,7 @@ test("chart preview validates data, applies color and inserts the previewed obje
     .getByLabel("차트 데이터", { exact: true })
     .fill('"국내, 서울",20\n해외,30');
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(preview.locator("svg path")).toHaveCount(2);
+  await expect(preview.locator("[data-chart-slice]")).toHaveCount(2);
   await page
     .getByRole("dialog")
     .screenshot({ path: testInfo.outputPath("chart-dialog.png") });
@@ -236,7 +236,7 @@ test("chart preview validates data, applies color and inserts the previewed obje
   const inserted = await page.evaluate(() => (window as any).__inserted);
   expect(inserted).toHaveLength(count);
   expect(
-    inserted.some((e: any) => e.fill === "#286cb5" && e.shape === "custom"),
+    inserted.some((e: any) => e.type === "chart" && e.chart?.parts.length > 1),
   ).toBe(true);
 });
 

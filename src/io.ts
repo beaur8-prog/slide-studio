@@ -118,7 +118,8 @@ function safeImage(value: unknown, label: string): string {
       match![1].toLowerCase()
   )
     fail(`${label}: 이미지 형식과 데이터가 일치하지 않습니다.`);
-  return `data:${match![1].toLowerCase()};base64,${match![2]}`;
+  const prefix = `data:${match![1].toLowerCase()};base64,`;
+  return (value as string).startsWith(prefix) ? value as string : prefix + match![2];
 }
 
 function validateBackgroundImage(value: unknown, label: string): NonNullable<Slide["backgroundImage"]> {
@@ -135,7 +136,6 @@ function validateBackgroundImage(value: unknown, label: string): NonNullable<Sli
   return result;
 }
 
-/** Validate and copy known fields; untrusted project properties never enter app state. */
 export function parseDeckJson(text: string): Deck {
   if (text.length > MAX_EXPANDED)
     fail("프로젝트 파일이 너무 큽니다 (최대 200 MB).");
@@ -145,6 +145,38 @@ export function parseDeckJson(text: string): Deck {
   } catch {
     return fail("프로젝트 JSON을 읽을 수 없습니다. 파일 형식을 확인하세요.");
   }
+  return validateDeck(input);
+}
+
+// Count the exact compact JSON length without building one huge Unicode
+// string containing every embedded image. Individual fields are already
+// validated; base64/path strings need no escaping and can be counted directly.
+function jsonLength(value: unknown, maximum: number): number {
+  if (value === null) return 4;
+  if (typeof value === "string") return /[\x00-\x1f"\\\ud800-\udfff]/.test(value)
+    ? JSON.stringify(value).length : value.length + 2;
+  if (typeof value === "number" || typeof value === "boolean") return String(value).length;
+  let total = 2;
+  if (Array.isArray(value)) {
+    total += Math.max(0, value.length - 1);
+    for (const item of value) {
+      total += item === undefined ? 4 : jsonLength(item, maximum - total);
+      if (total > maximum) return total;
+    }
+  } else if (value && typeof value === "object") {
+    let count = 0;
+    for (const [key, item] of Object.entries(value)) {
+      if (item === undefined) continue;
+      total += (count++ ? 1 : 0) + JSON.stringify(key).length + 1 + jsonLength(item, maximum - total);
+      if (total > maximum) return total;
+    }
+  }
+  return total;
+}
+
+/** Validate and copy only known fields, sharing immutable media strings. This
+ * is the same boundary used by legacy JSON files and by native PPTX I/O. */
+export function validateDeck(input: unknown): Deck {
   const root = record(input, "프로젝트");
   if (root.version !== 1) fail("지원하지 않는 프로젝트 버전입니다.");
   if (
@@ -574,12 +606,14 @@ export function parseDeckJson(text: string): Deck {
       };
     }),
   };
+  if (jsonLength(deck, MAX_EXPANDED) > MAX_EXPANDED)
+    fail("프로젝트 파일이 너무 큽니다 (최대 200 MB).");
   return deck;
 }
 
 export function serializeDeck(deck: Deck): string {
   return JSON.stringify(
-    parseDeckJson(JSON.stringify(resolveDeckFields(deck))),
+    validateDeck(resolveDeckFields(deck)),
     null,
     2,
   );
@@ -780,7 +814,7 @@ function restoreTableXml(doc: Document, elements: SlideElement[]) {
 
 /** Produce actual editable DrawingML objects, not screenshots of the slide. */
 export async function exportPptx(input: Deck): Promise<Uint8Array> {
-  const deck = parseDeckJson(JSON.stringify(resolveDeckFields(input)));
+  const deck = validateDeck(resolveDeckFields(input));
   const pptx = new PptxGenJS();
   pptx.defineLayout({
     name: "SLIDE_STUDIO",
@@ -3323,5 +3357,5 @@ export async function importPptx(
       );
     }
   }
-  return { deck: parseDeckJson(JSON.stringify(deck)), warnings: [...warnings] };
+  return { deck: validateDeck(deck), warnings: [...warnings] };
 }

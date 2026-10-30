@@ -122,6 +122,46 @@ test.beforeEach(async ({ page }) => {
   await page.goto(origin);
 });
 
+test("object validation matches legacy JSON validation without serializing embedded media", async ({ page }) => {
+  const result = await page.evaluate(async input => {
+    const { validateDeck, parseDeckJson } = await import("/src/io.ts");
+    const direct = validateDeck(input), legacy = parseDeckJson(JSON.stringify(input));
+    const original = JSON.stringify(input);
+    direct.slides[0].elements[0].text = "changed";
+    const invalid = [
+      { ...input, width: Infinity },
+      { ...input, slides: [input.slides[0], input.slides[0]] },
+      { ...input, slides: [{ ...input.slides[0], elements: [{ ...input.slides[0].elements[0], opacity: -1 }] }] },
+      { ...input, slides: [{ ...input.slides[0], elements: [{ ...input.slides[0].elements[0], type: "script" }] }] },
+    ];
+    const rejects = invalid.map(value => {
+      try { validateDeck(value); return false; } catch { return true; }
+    });
+    return { equal: JSON.stringify(validateDeck(input)) === JSON.stringify(legacy), sourceUnchanged: JSON.stringify(input) === original, rejects };
+  }, fixture);
+  expect(result).toEqual({ equal: true, sourceUnchanged: true, rejects: [true, true, true, true] });
+});
+
+test("direct validation retains the total 200 MiB compact-JSON boundary including escaped text", async ({ page }) => {
+  test.setTimeout(60000);
+  const result = await page.evaluate(async () => {
+    const { validateDeck } = await import("/src/io.ts");
+    const { blankDeck, newSlide, element } = await import("/src/model.ts");
+    // Reuse each text string to test an aggregate 200+ MiB document without
+    // allocating a similarly huge intermediate JSON file in the test itself.
+    const make = (value: string, count: number) => ({ ...blankDeck(), slides: Array.from({ length: 500 }, () => ({ ...newSlide("blank"),
+      elements: Array.from({ length: count }, () => element("text", { text: value })) })) });
+    const text = "x".repeat(100000);
+    const accepted = validateDeck(make(text, 4)).slides.length;
+    const errors = [make(text, 5), make("\n".repeat(100000), 3)].map(deck => {
+      try { validateDeck(deck); return "accepted"; } catch (error) { return (error as Error).message; }
+    });
+    return { accepted, errors };
+  });
+  expect(result.accepted).toBe(500);
+  expect(result.errors.every(error => error.includes("200 MB"))).toBe(true);
+});
+
 test("PPTX exports editable objects and imports geometry, styles, notes, images and transitions", async ({
   page,
 }) => {

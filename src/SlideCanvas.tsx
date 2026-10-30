@@ -409,6 +409,7 @@ interface Props {
   select: (ids: string[]) => void;
   edit: (id: string | null) => void;
   editTable?: (id: string, range?: TableCellRange) => void;
+  editChart?: (id: string) => void;
   resizeTable: (id: string, before: TableData, after: TableData) => void;
   appendTableRow: (id: string) => void;
   tableResizeEnabled: boolean;
@@ -447,6 +448,7 @@ export default function SlideCanvas({
   select,
   edit,
   editTable,
+  editChart,
   resizeTable,
   appendTableRow,
   tableResizeEnabled,
@@ -1059,6 +1061,10 @@ export default function SlideCanvas({
               onPointerDown={(ev) => down(ev, e)}
               onDoubleClick={(ev) => {
                 ev.stopPropagation();
+                if (e.type === "chart" && !e.locked) {
+                  select([e.id]);
+                  editChart?.(e.id);
+                }
                 if (e.type === "table" && !e.locked) {
                   select([e.id]);
                   const selection = tableSelectionRef.current;

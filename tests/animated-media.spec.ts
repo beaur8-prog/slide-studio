@@ -125,10 +125,13 @@ test("GIF is still in editing/thumbnails/print, animates only in the current sli
   await expect(
     page.locator(".thumbnail-list img.element-image"),
   ).toHaveAttribute("src", preview!);
+  await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
   await expect(page.locator(".print-deck img.element-image")).toHaveAttribute(
     "src",
     preview!,
   );
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+  await expect(page.locator(".print-deck img")).toHaveCount(0);
   await expect
     .poll(() =>
       page.evaluate(async () => {

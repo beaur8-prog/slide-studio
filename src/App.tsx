@@ -104,7 +104,10 @@ import FontManager from "./FontManager";
 import CommandSearch from "./CommandSearch";
 import FindReplacePanel from "./FindReplacePanel";
 import ImageCropDialog from "./ImageCropDialog";
-import { assertImageCapacity, frameImageCrop, imageSize, readImageFile, type ImageCrop } from "./image-editing";
+import { readEditableChart } from "./chart-editing";
+import SlidePreview from "./SlidePreview";
+import { usePrintRendering } from "./print-rendering";
+import { assertImageCapacity, remainingAssetBytes, frameImageCrop, imageSize, readImageFile, type ImageCrop } from "./image-editing";
 import { DEFAULT_SEARCH_OPTIONS, findDocumentText, replaceDocumentMatches, slideSearchText } from "./document-search";
 import TextColorPalette from "./TextColorPalette";
 import NumberInput from "./NumberInput";
@@ -152,7 +155,7 @@ import {
   uid,
 } from "./model";
 import SlideCanvas, { SlideVisual } from "./SlideCanvas";
-import { exportPptx, importPptx, parseDeckJson } from "./io";
+import { exportPptx, importPptx, parseDeckJson, validateDeck } from "./io";
 import { loadAutosave, saveAutosave } from "./storage";
 import { restoreWindowBuffer } from "./startup";
 import type { RecentPresentationFile } from "./types";
@@ -394,6 +397,7 @@ function LibraryContents({
 }
 
 export default function App() {
+  const printRendering = usePrintRendering();
   const [history, setHistory] = useState<History>(() => ({
     past: [],
     present: blankDeck(),
@@ -611,6 +615,8 @@ export default function App() {
     modalInstance.current++;
   }, [modal]);
   const [tableEditId, setTableEditId] = useState<string | null>(null);
+  const [chartEditId, setChartEditId] = useState<string | null>(null);
+  const selectedEditableChart = useMemo(() => readEditableChart(selectedElement?.chart), [selectedElement?.chart]);
   const [tableEditRange, setTableEditRange] = useState<TableCellRange>();
   const [footerInitial, setFooterInitial] = useState<
     "footer" | "date" | "number"
@@ -1445,9 +1451,7 @@ export default function App() {
     try {
       // Validate new objects against the same limits as saved projects before
       // adding them to the undo history. Existing image strings remain shared.
-      const checked = parseDeckJson(
-        JSON.stringify({ ...deck, slides: [{ ...slide, elements }] }),
-      ).slides[0].elements;
+      const checked = validateDeck({ ...deck, slides: [{ ...slide, elements }] }).slides[0].elements;
       if (!canAddElements(checked.length)) return;
       changeSlide((s) => ({ ...s, elements: [...s.elements, ...checked] }));
       setSelected(checked.map((el) => el.id));
@@ -1458,6 +1462,17 @@ export default function App() {
     } catch (err) {
       notify((err as Error).message);
     }
+  };
+  const openChart = (id: string | null = null) => {
+    if (id) {
+      const target = slide.elements.find(e => e.id === id);
+      if (!target || target.locked || !readEditableChart(target.chart)) return;
+    }
+    finish();
+    setEditing(null);
+    setChartEditId(id);
+    setModal("chart");
+    setMenu(null);
   };
   const openTable = (id: string | null = null, range?: TableCellRange) => {
     if (editing) {
@@ -1936,7 +1951,7 @@ export default function App() {
         setBusy("PDF를 만들고 있습니다");
         const result = await window.desktop.exportPDF(deck.name);
         if (result) notify("PDF 파일을 저장했습니다.");
-      } else window.print();
+      } else await printDeck();
     } catch (error) {
       notify(
         `PDF 내보내기 실패: ${error instanceof Error ? error.message : String(error)}`,
@@ -1957,6 +1972,7 @@ export default function App() {
         const submitted = await window.desktop.print();
         notify(submitted ? "인쇄 작업을 보냈습니다." : "인쇄를 취소했습니다.");
       } else {
+        window.dispatchEvent(new Event("beforeprint"));
         await document.fonts.ready;
         await new Promise<void>((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
@@ -1975,6 +1991,7 @@ export default function App() {
       );
     } finally {
       printing.current = false;
+      window.dispatchEvent(new Event("afterprint"));
       setBusy("");
     }
   };
@@ -2569,6 +2586,13 @@ export default function App() {
         return;
       }
       if (
+        e.key === "Enter" &&
+        selectedElement?.type === "chart" && selected.length === 1 && selectedEditableChart &&
+        !selectedElement.locked
+      ) {
+        e.preventDefault();
+        openChart(selectedElement.id);
+      } else if (
         e.key === "Enter" &&
         selectedElement?.type === "table" &&
         !selectedElement.locked
@@ -3431,6 +3455,11 @@ export default function App() {
         disabled: locked,
         run: () => openTable(selectedElement.id),
       });
+    if (selected.length === 1 && selectedEditableChart)
+      objectMenuActions.push({
+        label: "차트 데이터 편집", icon: <BarChart3 size={16} />, separator: true,
+        disabled: locked, run: () => openChart(selectedElement.id),
+      });
     if (selected.length === 1 && selectedElement.type === "image")
       objectMenuActions.push(
         { label: "자르기", icon: <Crop size={16} />, separator: true, disabled: locked || !selectedElement.width || !selectedElement.height, run: openImageCrop },
@@ -3648,7 +3677,7 @@ export default function App() {
                 id: "chart",
                 label: "차트 삽입",
                 keywords: "그래프 막대 원 꺾은선",
-                run: () => setModal("chart"),
+                run: () => openChart(),
               },
               {
                 id: "diagram",
@@ -4217,7 +4246,7 @@ export default function App() {
                   </Tool>
                   <Tool
                     icon={<BarChart3 size={25} />}
-                    onClick={() => setModal("chart")}
+                    onClick={() => openChart()}
                   >
                     차트
                   </Tool>
@@ -4611,11 +4640,12 @@ export default function App() {
                         className="thumbnail-preview"
                         style={{ height: (176 * deck.height) / deck.width }}
                       >
-                        <SlideVisual
+                        <SlidePreview
                           slide={s}
                           width={deck.width}
                           height={deck.height}
-                          scale={176 / deck.width}
+                          size={176}
+                          active={s.id === slide.id}
                         />
                       </div>
                     </button>
@@ -4680,11 +4710,12 @@ export default function App() {
                         overflow: "hidden",
                       }}
                     >
-                      <SlideVisual
+                      <SlidePreview
                         slide={s}
                         width={deck.width}
                         height={deck.height}
-                        scale={260 / deck.width}
+                        size={260}
+                        active={s.id === slide.id}
                       />
                     </div>
                     <span>
@@ -4775,6 +4806,7 @@ export default function App() {
                       }}
                       edit={setEditing}
                       editTable={(id, range) => openTable(id, range)}
+                      editChart={openChart}
                       tableResizeEnabled={!modal && !busy && !presenting}
                       resizeTable={(id, before, table) =>
                         commit((d) => {
@@ -5117,7 +5149,10 @@ export default function App() {
                   </div>
                   {selectedElement.type === "chart" && <div className="inspector-section">
                     <h4>PowerPoint 차트</h4>
-                    <p className="section-note">차트의 위치와 크기를 조절할 수 있습니다. 저장하면 원본 차트와 데이터가 유지됩니다. 데이터 편집은 PowerPoint에서 할 수 있습니다.</p>
+                    {selectedEditableChart && <button className="text-button full" disabled={selectedElement.locked || selected.length !== 1}
+                      onClick={() => openChart(selectedElement.id)}><BarChart3 size={15} />차트 데이터 편집</button>}
+                    <p className="section-note">{selectedEditableChart ? "더블클릭하거나 데이터 편집에서 숫자·제목·종류·색상을 바꿀 수 있습니다. PPTX로 저장한 뒤에도 다시 편집할 수 있습니다."
+                      : "위치와 크기를 조절할 수 있으며 원본 차트와 데이터가 유지됩니다. 이 차트의 데이터 편집은 PowerPoint에서 할 수 있습니다."}</p>
                   </div>}
                   {selectedElement.type === "video" && <div className="inspector-section">
                     <h4>동영상 재생</h4>
@@ -5652,10 +5687,21 @@ export default function App() {
       )}
       {modal && contentDialogs.includes(modal as InsertContentKind) && (
         <InsertContentDialog
+          key={modal === "chart" ? `${slide.id}:${chartEditId ?? "new"}` : modal}
           kind={modal as InsertContentKind}
           deck={deck}
           background={slide.background}
-          onInsert={insertElements}
+          initialChart={modal === "chart" && chartEditId ? slide.elements.find(e => e.id === chartEditId) : undefined}
+          chartAssetBudget={modal === "chart" ? remainingAssetBytes(deck, chartEditId ? { slideId: slide.id, elementId: chartEditId } : undefined) : undefined}
+          onInsert={elements => {
+            if (modal === "chart" && chartEditId) {
+              const original = slide.elements.find(e => e.id === chartEditId);
+              if (original && !original.locked && elements[0]?.chart) {
+                changeSlide(s => ({ ...s, elements: s.elements.map(e => e.id === original.id ? { ...e, chart: elements[0].chart } : e) }));
+              }
+              setModal(null);
+            } else insertElements(elements);
+          }}
           onCancel={() => setModal(null)}
         />
       )}
@@ -6086,7 +6132,7 @@ export default function App() {
       )}
       <div className="print-deck">
         <style>{`@media print { @page { size: ${deck.width / 96}in ${deck.height / 96}in; margin: 0; } }`}</style>
-        {deck.slides.map((s) => (
+        {printRendering && deck.slides.map((s) => (
           <div
             className="print-slide"
             key={s.id}

@@ -4,7 +4,6 @@ import { THEMES } from "./model";
 import { SlideVisual } from "./SlideCanvas";
 import type { Deck, SlideElement } from "./types";
 import {
-  createChart,
   createDiagram,
   createEquation,
   createIcon,
@@ -13,19 +12,20 @@ import {
   EQUATION_PRESETS,
   INSERT_ICONS,
   INSERT_SYMBOLS,
-  parseChartData,
   parseDiagramLabels,
-  type ChartKind,
   type DiagramKind,
   type InsertContentKind,
   type WordArtStyle,
 } from "./insert-content";
 import "./insert-content.css";
+import ChartEditorDialog from "./ChartEditorDialog";
 
 export interface InsertContentDialogProps {
   kind: InsertContentKind;
   deck: Pick<Deck, "width" | "height" | "theme">;
   background?: string;
+  initialChart?: SlideElement;
+  chartAssetBudget?: number;
   onInsert: (elements: SlideElement[]) => void;
   onCancel: () => void;
 }
@@ -37,12 +37,6 @@ const NAMES: Record<InsertContentKind, string> = {
   equation: "수식",
   symbol: "기호",
 };
-const CHARTS: { id: ChartKind; name: string; glyph: string }[] = [
-  { id: "column", name: "세로 막대", glyph: "▥" },
-  { id: "bar", name: "가로 막대", glyph: "▤" },
-  { id: "line", name: "꺾은선", glyph: "⌁" },
-  { id: "pie", name: "원형", glyph: "◕" },
-];
 const DIAGRAMS: { id: DiagramKind; name: string }[] = [
   { id: "process", name: "순서" },
   { id: "cycle", name: "주기" },
@@ -56,20 +50,32 @@ const WORD_STYLES: { id: WordArtStyle; name: string }[] = [
   { id: "badge", name: "컬러 박스" },
 ];
 
-export function InsertContentDialog({
+export function InsertContentDialog(props: InsertContentDialogProps) {
+  if (props.kind === "chart")
+    return (
+      <ChartEditorDialog
+        deck={props.deck}
+        background={props.background}
+        initial={props.initialChart}
+        assetBudget={props.chartAssetBudget}
+        onApply={(element) => props.onInsert([element])}
+        onCancel={props.onCancel}
+      />
+    );
+  return <ContentDialog {...props} kind={props.kind} />;
+}
+
+function ContentDialog({
   kind,
   deck,
   background,
   onInsert,
   onCancel,
-}: InsertContentDialogProps) {
+}: Omit<InsertContentDialogProps, "kind"> & {
+  kind: Exclude<InsertContentKind, "chart">;
+}) {
   const theme = THEMES.find((t) => t.id === deck.theme) ?? THEMES[0];
   const [color, setColor] = useState(theme.accent);
-  const [chart, setChart] = useState<ChartKind>("column");
-  const [chartTitle, setChartTitle] = useState("분기별 실적");
-  const [data, setData] = useState(
-    "항목,값\n1분기,32\n2분기,48\n3분기,41\n4분기,65",
-  );
   const [diagram, setDiagram] = useState<DiagramKind>("process");
   const [labels, setLabels] = useState("기획\n설계\n개발\n검증");
   const [icon, setIcon] = useState<string>("star");
@@ -116,27 +122,21 @@ export function InsertContentDialog({
         textColor: theme.text,
       };
       const elements =
-        kind === "chart"
-          ? createChart(chart, parseChartData(data), chartTitle, canvas)
-          : kind === "diagram"
-            ? createDiagram(
-                diagram,
-                parseDiagramLabels(labels, diagram),
-                canvas,
-              )
-            : kind === "icons"
-              ? createIcon(icon, canvas)
-              : kind === "wordart"
-                ? createWordArt(word, wordStyle, canvas)
-                : kind === "equation"
-                  ? createEquation(
-                      formula,
-                      canvas,
-                      equationStyle === "fraction"
-                        ? { numerator, denominator }
-                        : undefined,
-                    )
-                  : createSymbol(symbol, canvas);
+        kind === "diagram"
+          ? createDiagram(diagram, parseDiagramLabels(labels, diagram), canvas)
+          : kind === "icons"
+            ? createIcon(icon, canvas)
+            : kind === "wordart"
+              ? createWordArt(word, wordStyle, canvas)
+              : kind === "equation"
+                ? createEquation(
+                    formula,
+                    canvas,
+                    equationStyle === "fraction"
+                      ? { numerator, denominator }
+                      : undefined,
+                  )
+                : createSymbol(symbol, canvas);
       return { elements, error: "" };
     } catch (error) {
       return {
@@ -151,9 +151,6 @@ export function InsertContentDialog({
     deck.height,
     theme.text,
     color,
-    chart,
-    data,
-    chartTitle,
     diagram,
     labels,
     icon,
@@ -176,13 +173,11 @@ export function InsertContentDialog({
     [background, theme.background, result.elements],
   );
   const hint =
-    kind === "chart"
-      ? "데이터 연동 안 됨: 차트는 도형과 글자로 삽입됩니다. 엑셀이나 원본 데이터의 숫자를 바꿔도 자동 갱신되지 않습니다. 값을 바꾸려면 차트를 다시 삽입하세요."
-      : kind === "equation"
-        ? "수식은 텍스트로 편집할 수 있습니다. 분수는 분자와 분모를 각각 편집할 수 있습니다."
-        : kind === "icons"
-          ? "삽입한 아이콘의 크기와 색상을 자유롭게 바꿀 수 있습니다."
-          : "삽입 후 각 도형과 글자를 편집할 수 있습니다.";
+    kind === "equation"
+      ? "수식은 텍스트로 편집할 수 있습니다. 분수는 분자와 분모를 각각 편집할 수 있습니다."
+      : kind === "icons"
+        ? "삽입한 아이콘의 크기와 색상을 자유롭게 바꿀 수 있습니다."
+        : "삽입 후 각 도형과 글자를 편집할 수 있습니다.";
   return (
     <div
       className="modal-backdrop insert-content-backdrop"
@@ -238,60 +233,6 @@ export function InsertContentDialog({
         </header>
         <div className="insert-content-body">
           <div className="insert-content-controls">
-            {kind === "chart" && (
-              <>
-                <fieldset>
-                  <legend>차트 종류</legend>
-                  <div className="insert-content-choices">
-                    {CHARTS.map((option) => (
-                      <button
-                        type="button"
-                        key={option.id}
-                        aria-pressed={chart === option.id}
-                        onClick={() => setChart(option.id)}
-                      >
-                        <span aria-hidden="true">{option.glyph}</span>
-                        {option.name}
-                      </button>
-                    ))}
-                  </div>
-                </fieldset>
-                <label>
-                  차트 제목
-                  <input
-                    aria-label="차트 제목"
-                    value={chartTitle}
-                    maxLength={80}
-                    onChange={(event) => setChartTitle(event.target.value)}
-                  />
-                </label>
-                <label>
-                  차트 데이터
-                  <textarea
-                    aria-label="차트 데이터"
-                    value={data}
-                    rows={8}
-                    spellCheck={false}
-                    aria-invalid={Boolean(result.error)}
-                    aria-describedby={result.error ? errorId : undefined}
-                    onChange={(event) => setData(event.target.value)}
-                  />
-                </label>
-                <p className="insert-content-help">
-                  항목과 값을 쉼표 또는 탭으로 구분하세요. 숫자만 한 줄씩
-                  입력해도 됩니다. 최대 12개 항목, 값 열 1개를 지원합니다.
-                </p>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() =>
-                    setData("항목,값\n1분기,32\n2분기,48\n3분기,41\n4분기,65")
-                  }
-                >
-                  예제 데이터 사용
-                </button>
-              </>
-            )}
             {kind === "diagram" && (
               <>
                 <fieldset>

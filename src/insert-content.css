@@ -12,6 +12,8 @@
   flex-direction: column;
   overflow: hidden;
 }
+.chart-editor-dialog::backdrop { background: #0008; }
+.chart-editor-dialog:not([open]) { display: none; }
 .insert-content-heading {
   display: flex;
   align-items: flex-start;

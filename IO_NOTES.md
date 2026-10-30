@@ -28,6 +28,16 @@ styles. Table cell painting preserves content, merges, and column widths; automa
 rows can expand to fit the resulting font. A gradient source uses its solid fallback
 when applied to a table cell because gradient table-cell fills are not modeled.
 
+Normal editing mounts slide-preview artwork around the thumbnail/sorter
+viewport, retaining every slide button and its accessible name for selection,
+keyboard navigation and drag/drop. The full print tree is mounted synchronously
+on `beforeprint`; native printing waits for fonts/images and releases the tree
+on success, cancellation or failure. Browser printing uses the same lifecycle.
+Native PPTX import/export validates known model fields directly, without a
+whole-document JSON encode/decode copy. Compact JSON length is counted with
+escaping so the 200 MiB model limit and all existing asset/geometry checks
+remain enforced. Legacy JSON input still checks its original file length.
+
 Slide Studio saves user files as PowerPoint (.pptx). The separate .slide save
 command has been removed. Existing .slide files remain readable so users can
 migrate them to PPTX. The complete editor model is still autosaved locally in
@@ -156,9 +166,17 @@ and sheared groups remain partial or unsupported.
 The known layout regressions and current limits are documented in
 [the corpus report](qa/REPORT.md).
 
-Insert-generated charts, diagrams, icons, WordArt and equations use editable
-shapes, text and numeric custom paths. They are not native chart/SmartArt/Office
-Math data objects. Chart insertion supports one series and up to 12 categories.
+Newly inserted column/bar, line and pie charts are native DrawingML charts with
+an embedded XLSX workbook. Double-click, Enter, the inspector or the context menu
+opens a draft editor for data/title/type/color. Apply is one undo step; cancel
+and unchanged apply create no history. The editor supports one series and up to
+12 categories and remains available after PPTX reopening. It does not connect to
+an external Excel file. An extension marks editor-authored charts, but values
+are always read from standard chart caches. Unsupported added series or external
+links retain the original chart package instead of being rebuilt. Older charts
+made from individual shapes are not automatically converted.
+Insert-generated diagrams, icons, WordArt and equations use editable shapes,
+text and numeric custom paths, rather than SmartArt/Office Math data objects.
 Slide numbers export as native `slidenum` fields. Generated dates and footer
 labels preserve their field kind in this app; automatic dates refresh here and
 export their current text rather than an Office automatic-date field.
@@ -199,7 +217,8 @@ Imported classic DrawingML charts retain their original chart XML, cached data,
 embedded XLSX workbooks, and supported chart styles/color parts. The editor
 previews line, column/bar, area, pie/doughnut, scatter and simple combinations
 as vector graphics. Move, resize, rotate, duplicate, group, print/PDF and native
-PPTX save/reopen preserve the chart; chart data editing is done in PowerPoint.
+PPTX save/reopen preserve the chart; data editing of externally authored charts
+is done in PowerPoint.
 Part names/relationships are remapped per exported object so copied charts do
 not share or overwrite their workbooks. External references are never fetched.
 Preview differences remain for advanced labels/layouts, 3D effects and secondary

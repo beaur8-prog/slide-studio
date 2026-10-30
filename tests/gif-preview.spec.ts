@@ -165,9 +165,8 @@ test("static server rendering and multiple GIF slides never mount animated origi
     mimeType: "application/json",
     buffer: Buffer.from(fixture.json),
   });
-  await expect(page.locator(".thumbnail-list img.element-image")).toHaveCount(
-    40,
-  );
+  await expect.poll(() => page.locator(".thumbnail-list img.element-image").count()).toBeGreaterThan(0);
+  expect(await page.locator(".thumbnail-list img.element-image").count()).toBeLessThan(40);
   const originals = page.locator(`img[src="${original}"]`);
   await expect(originals).toHaveCount(0);
   const stills = await page

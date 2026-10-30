@@ -7,6 +7,23 @@ export const MAX_XML = 8 * 1024 * 1024;
 const MAX_ZIP_FILES = 5000;
 export const REL_NS =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const STRICT_PREFIX = "http://purl.oclc.org/ooxml/";
+const strictNamespaces = new Map([
+  ["presentationml/main", "presentationml/2006/main"],
+  ["drawingml/main", "drawingml/2006/main"],
+  ["drawingml/chart", "drawingml/2006/chart"],
+  ["drawingml/chartDrawing", "drawingml/2006/chartDrawing"],
+  ["drawingml/diagram", "drawingml/2006/diagram"],
+  ["drawingml/picture", "drawingml/2006/picture"],
+  ["drawingml/spreadsheetDrawing", "drawingml/2006/spreadsheetDrawing"],
+  ["drawingml/wordprocessingDrawing", "drawingml/2006/wordprocessingDrawing"],
+  ["officeDocument/relationships", "officeDocument/2006/relationships"],
+  ["officeDocument/math", "officeDocument/2006/math"],
+  ["officeDocument/docPropsVTypes", "officeDocument/2006/docPropsVTypes"],
+  ["officeDocument/extendedProperties", "officeDocument/2006/extendedProperties"],
+  ["spreadsheetml/main", "spreadsheetml/2006/main"],
+  ["wordprocessingml/main", "wordprocessingml/2006/main"],
+].map(([from, to]) => [STRICT_PREFIX + from, "http://schemas.openxmlformats.org/" + to]));
 export const relsPath = (path: string) => {
   const bits = path.split("/"),
     name = bits.pop()!;
@@ -95,6 +112,34 @@ export function xmlDocument(text: string, path: string): Document {
     xml.documentElement.localName === "parsererror"
   )
     fail(`${path}: XML이 손상되었습니다.`);
+  if (text.includes(STRICT_PREFIX)) {
+    // The writer emits Transitional OOXML. Normalize actual namespaces and
+    // relationship Type attributes before copying native parts; treating Strict
+    // r:embed as an unrelated attribute silently drops its media dependency.
+    // Walk a snapshot iteratively so deeply nested XML does not recurse here.
+    for (const node of Array.from(xml.getElementsByTagName("*"))) {
+      const converted = xml.createElementNS(
+        strictNamespaces.get(node.namespaceURI ?? "") ?? node.namespaceURI,
+        node.nodeName,
+      );
+      for (const attribute of Array.from(node.attributes)) {
+        let value = attribute.value;
+        if (attribute.namespaceURI === "http://www.w3.org/2000/xmlns/")
+          value = strictNamespaces.get(value) ?? value;
+        if (node.localName === "Relationship" &&
+            node.namespaceURI === "http://schemas.openxmlformats.org/package/2006/relationships" &&
+            attribute.name === "Type" && value.startsWith(STRICT_PREFIX + "officeDocument/relationships/"))
+          value = REL_NS + value.slice((STRICT_PREFIX + "officeDocument/relationships").length);
+        converted.setAttributeNS(
+          strictNamespaces.get(attribute.namespaceURI ?? "") ?? attribute.namespaceURI,
+          attribute.name,
+          value,
+        );
+      }
+      while (node.firstChild) converted.appendChild(node.firstChild);
+      node.parentNode!.replaceChild(converted, node);
+    }
+  }
   return xml;
 }
 export function resolvePart(from: string, target: string): string | undefined {

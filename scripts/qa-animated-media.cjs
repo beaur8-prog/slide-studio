@@ -35,7 +35,39 @@ async function verifyAnimatedMedia(page, output, { app }) {
         const decoded = Buffer.from(gifStill.split(',')[1], 'base64');
         expect((await sharp(decoded, { animated: true }).metadata()).pages ?? 1).toBe(1);
         await expect(page.locator('.thumbnail-list img.element-image')).toHaveAttribute('src', gifStill);
-        await expect(page.locator('.print-deck img.element-image')).toHaveAttribute('src', gifStill);
+        const version = await app.evaluate(({ app }) => app.getVersion());
+        if (version.localeCompare('1.6.16', undefined, { numeric: true }) >= 0) {
+          // Print content now exists only during a native print/PDF request.
+          // Inspect the real PDF input before its lifecycle cleanup, rather
+          // than requiring every slide to stay mounted while editing.
+          await expect(page.locator('.print-slide')).toHaveCount(0);
+          const pdf = path.join(directory, 'gif-static-frame.pdf');
+          await app.evaluate(({ BrowserWindow, dialog }, filePath) => {
+            const contents = BrowserWindow.getAllWindows()[0].webContents;
+            contents.__qaGifPDF = contents.printToPDF;
+            dialog.__qaGifSave = dialog.showSaveDialog;
+            dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+            contents.printToPDF = async function (options) {
+              this.__qaGifPrintSource = await this.executeJavaScript("document.querySelector('.print-deck img.element-image')?.getAttribute('src')");
+              return this.__qaGifPDF.call(this, options);
+            };
+          }, pdf);
+          try {
+            expect(await page.evaluate(() => window.desktop.exportPDF('GIF 고정 프레임 검증'))).toBe(pdf);
+            expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.__qaGifPrintSource)).toBe(gifStill);
+            expect((await fs.stat(pdf)).size).toBeGreaterThan(1000);
+            await expect(page.locator('.print-slide')).toHaveCount(0);
+          } finally {
+            await app.evaluate(({ BrowserWindow, dialog }) => {
+              const contents = BrowserWindow.getAllWindows()[0].webContents;
+              contents.printToPDF = contents.__qaGifPDF;
+              dialog.showSaveDialog = dialog.__qaGifSave;
+              delete contents.__qaGifPDF; delete contents.__qaGifPrintSource; delete dialog.__qaGifSave;
+            });
+          }
+        } else {
+          await expect(page.locator('.print-deck img.element-image')).toHaveAttribute('src', gifStill);
+        }
         await expect(page.locator(`img[src="${gifOriginal}"]`)).toHaveCount(0);
         await page.screenshot({ path: path.join(directory, 'gif-editor-still.png') });
       }
@@ -112,6 +144,14 @@ if (require.main === module) (async () => {
   const app = await electron.launch({ executablePath, args: [`--user-data-dir=${profile}`], chromiumSandbox: process.platform === 'linux', env, timeout: 45000 });
   try {
     const page = await app.firstWindow(); page.setDefaultTimeout(20000);
+    const fixtureDialogs = await require('./qa-generated-documents.cjs')(page, app, output);
     await verifyAnimatedMedia(page, output, { app });
-  } finally { await app.close(); }
+    fixtureDialogs();
+  } finally {
+    await app.evaluate(({ BrowserWindow }) => {
+      for (const window of BrowserWindow.getAllWindows()) window.destroy();
+    }).catch(() => {});
+    await app.close().catch(() => {});
+    await fs.rm(profile, { recursive: true, force: true });
+  }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -88,3 +88,5 @@ jobs:
             qa/results/editor-core-audio/*.png
             qa/results/editor-core-artifacts/**/*.png
             qa/results/editor-core-artifacts/**/trace.zip
+            qa/results/editor-core-native-history/**/*.png
+            qa/results/editor-core-native-history/**/trace.zip

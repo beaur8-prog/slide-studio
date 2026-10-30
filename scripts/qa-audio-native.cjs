@@ -64,7 +64,7 @@ async function mediaHashes(file) {
     await expect(page.locator(".save-indicator")).toHaveText("저장됨", {
       timeout: 20000,
     });
-    const open = async (file, expectedTitle = "오디오와 한글 제목") => {
+    const open = async (file, expectedTitle = "오디오와 한글 제목", expectedSlides = 5) => {
       await app.evaluate(({ dialog }, file) => {
         dialog.showOpenDialog = async () => ({
           canceled: false,
@@ -78,7 +78,7 @@ async function mediaHashes(file) {
           .filter({ hasText: "파일 열기" })
           .click(),
       );
-      await expect(page.locator(".thumbnail-button")).toHaveCount(5);
+      await expect(page.locator(".thumbnail-button")).toHaveCount(expectedSlides);
       await expect(page.locator(".editable-slide")).toContainText(
         expectedTitle,
       );
@@ -185,6 +185,52 @@ async function mediaHashes(file) {
     await expect(page.locator("audio[data-audio-id]")).toHaveCount(0);
     results.push("native-PDF-with-still-icons-no-playback");
     await page.screenshot({ path: path.join(output, "reopened.png") });
+    // Audio is a new editable object type. Check that cloning it and its
+    // containing slide preserves independent IDs and native media on disk.
+    const audioObjects = page.locator('.editable-slide [data-type="audio"]');
+    await audioObjects.first().click();
+    await page.keyboard.press("ControlOrMeta+d");
+    await expect(audioObjects).toHaveCount(2);
+    const nativeHistory = (label) => app.evaluate(({ Menu, BrowserWindow }, label) => {
+      const item = Menu.getApplicationMenu().items.find(i => i.label === 'Edit')
+        .submenu.items.find(i => i.label === label);
+      item.click(item, BrowserWindow.getAllWindows()[0], {});
+    }, label);
+    await nativeHistory('Undo');
+    await expect(audioObjects).toHaveCount(1);
+    await nativeHistory('Redo');
+    await expect(audioObjects).toHaveCount(2);
+    results.push("native-audio-object-duplicate-menu-undo-redo");
+    await page.locator('.thumbnail-button').first().click();
+    await page.keyboard.press("ControlOrMeta+Shift+d");
+    await expect(page.locator('.thumbnail-button')).toHaveCount(6);
+    await nativeHistory('Undo');
+    await expect(page.locator('.thumbnail-button')).toHaveCount(5);
+    await nativeHistory('Redo');
+    await expect(page.locator('.thumbnail-button')).toHaveCount(6);
+    results.push("native-audio-slide-duplicate-menu-undo-redo");
+    const copied = path.join(output, 'native-audio-duplicated.pptx');
+    await fs.rm(copied, { force: true });
+    await app.evaluate(({ dialog }, filePath) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+    }, copied);
+    await page.getByRole('button', { name: '파일', exact: true }).click();
+    await page.locator('.file-popover').getByRole('button', { name: /^다른 이름으로 저장/ }).click();
+    await expect.poll(() => fs.stat(copied).then(s => s.size, () => 0)).toBeGreaterThan(1000);
+    assert.deepEqual(await mediaHashes(copied), await mediaHashes(source));
+    const copiedZip = await JSZip.loadAsync(await fs.readFile(copied));
+    for (const number of [1, 2]) {
+      const xml = await copiedZip.file(`ppt/slides/slide${number}.xml`).async('string');
+      assert.equal((xml.match(/<a:audioFile\b/g) || []).length, 2);
+      const ids = [...xml.matchAll(/<p:cNvPr\b[^>]*\bid="(\d+)"/g)].map(m => m[1]);
+      assert.equal(new Set(ids).size, ids.length, 'duplicate native shape IDs');
+    }
+    results.push("native-duplicated-audio-media-hashes-and-unique-shape-ids");
+    await open(copied, '설치형 오디오·한글 검증', 6);
+    await expect(audioObjects).toHaveCount(2);
+    await page.locator('.thumbnail-button').nth(1).click();
+    await expect(audioObjects).toHaveCount(2);
+    results.push("native-reopen-duplicated-audio-objects-and-slides");
     assert.deepEqual(errors, []);
     assert.deepEqual(securityErrors, []);
     const report = {
@@ -195,6 +241,7 @@ async function mediaHashes(file) {
       securityErrors,
       saved,
       pdf,
+      duplicated: copied,
     };
     await fs.rm(path.join(output, "failure.json"), { force: true });
     await fs.writeFile(

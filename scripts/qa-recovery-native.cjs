@@ -14,6 +14,9 @@ if (!executable || !source)
     "Usage: node scripts/qa-recovery-native.cjs <app> <cmu-lecture-3.pptx> [output]",
   );
 const output = path.resolve(target || "qa/results/native-recovery");
+const reloadCycles = Number(process.env.QA_RELOAD_CYCLES || 3);
+assert(Number.isInteger(reloadCycles) && reloadCycles >= 3 && reloadCycles <= 10,
+  "QA_RELOAD_CYCLES must be an integer from 3 to 10");
 const hashFile = async (file) =>
   crypto
     .createHash("sha256")
@@ -121,7 +124,7 @@ const hashFile = async (file) =>
         .map((p) => ({ type: p.type, pid: p.pid, memory: p.memory })),
     );
     results.push("production-native-151-slides-auto-save-above-127MiB");
-    for (let index = 0; index < 3; index++) {
+    for (let index = 0; index < reloadCycles; index++) {
       await page.reload();
       await expect(page.locator(".thumbnail-row")).toHaveCount(151);
       await expect(notes).toHaveValue("설치형 대용량 복구 — 한글 😀");
@@ -153,12 +156,13 @@ const hashFile = async (file) =>
     assert.equal(original.sourceChars, expectedSourceData.length);
     assert.equal(original.digest, expectedDigest);
     assert.equal(original.elements, 1186);
-    results.push("source-archive-hash-preserved-after-three-native-reloads");
+    results.push("source-archive-hash-preserved-after-" + reloadCycles + "-native-reloads");
     assert.equal(await hashFile(source), sourceHash);
     assert.deepEqual(errors, []);
     await page.screenshot({ path: path.join(output, "reloaded.png") });
     const report = {
       version: await app.evaluate(({ app }) => app.getVersion()),
+      reloadCycles,
       results,
       original,
       errors,

@@ -11,6 +11,13 @@ class WindowDouble extends EventEmitter {
   throttled = true;
   pending: boolean | null = null;
   requests: boolean[] = [];
+  minimum: [number, number] = [1080, 720];
+  getMinimumSize() {
+    return [...this.minimum];
+  }
+  setMinimumSize(width: number, height: number) {
+    this.minimum = [width, height];
+  }
   webContents = {
     setBackgroundThrottling: (value: boolean) => {
       this.throttled = value;
@@ -69,10 +76,10 @@ test("stopping before initial fullscreen entry waits for entry before requesting
   controller.set(false);
   expect(window.requests).toEqual([true]);
   window.finish();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(window.requests).toEqual([true, false]);
   window.finish();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(window.fullscreen).toBe(false);
   expect(controller.isPresenting).toBe(false);
   expect(ended()).toBe(0);
@@ -85,22 +92,22 @@ test("restart during an exit ignores its stale leave event and preserves the new
   const { window, controller, ended } = setup();
   controller.set(true);
   window.finish();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   controller.set(false);
   window.resizeBeforeEvent(); // Cocoa's geometry has settled but leave event is still pending.
   controller.set(true);
   expect(window.requests).toEqual([true, false]);
   window.finish();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(controller.isPresenting).toBe(true);
   expect(ended()).toBe(0);
   expect(window.requests).toEqual([true, false, true]);
   window.finish();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(window.fullscreen).toBe(true);
   controller.set(false);
   window.finish();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(window.fullscreen).toBe(false);
   expect(window.menu).toBe(true);
 });
@@ -111,14 +118,14 @@ test("stop and restart before initial entry keeps only the latest presentation i
   controller.set(false);
   controller.set(true);
   window.finish();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(window.requests).toEqual([true]);
   expect(controller.isPresenting).toBe(true);
   expect(entered()).toBe(1);
   expect(ended()).toBe(0);
   controller.set(false);
   window.finish();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(window.fullscreen).toBe(false);
 });
 
@@ -139,7 +146,7 @@ test("an actual native exit ends the current show and restores editor chrome onc
   const { window, controller, ended } = setup();
   controller.set(true);
   window.finish();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   window.fullscreen = false;
   window.emit("leave-full-screen");
   expect(controller.isPresenting).toBe(false);
@@ -156,12 +163,12 @@ test("native entry reported before isFullScreen updates does not leave a phantom
   const { window, controller } = setup();
   controller.set(true);
   window.finishBeforeState();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(window.requests).toEqual([true]);
   controller.set(false);
   expect(window.requests).toEqual([true, false]);
   window.finishBeforeState();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(window.fullscreen).toBe(false);
   expect(controller.isPresenting).toBe(false);
 });
@@ -170,15 +177,40 @@ test("restart waits for native exit state even when its event arrives first", as
   const { window, controller, ended } = setup();
   controller.set(true);
   window.finish();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   controller.set(false);
   controller.set(true);
   window.finishBeforeState();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(window.requests).toEqual([true, false, true]);
   window.finishBeforeState();
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
   expect(window.fullscreen).toBe(true);
   expect(controller.isPresenting).toBe(true);
   expect(ended()).toBe(0);
+});
+
+test("presentation removes editor minimum bounds until native fullscreen exit completes", async () => {
+  const { window, controller } = setup();
+  controller.set(true);
+  expect(window.minimum).toEqual([0, 0]);
+  window.finish();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  controller.set(false);
+  expect(window.minimum).toEqual([0, 0]);
+  window.finishBeforeState();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  expect(window.minimum).toEqual([1080, 720]);
+});
+
+test("a previously fullscreen editor restores its minimum only after the user leaves fullscreen", async () => {
+  const { window, controller } = setup();
+  window.fullscreen = true;
+  controller.set(true);
+  controller.set(false);
+  expect(window.minimum).toEqual([0, 0]);
+  window.fullscreen = false;
+  window.emit("leave-full-screen");
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  expect(window.minimum).toEqual([1080, 720]);
 });

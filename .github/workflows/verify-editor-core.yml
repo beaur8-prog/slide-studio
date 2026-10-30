@@ -40,6 +40,8 @@ jobs:
           tests/native-files.spec.ts
           tests/save-context-ui.spec.ts
           tests/pptx-save.spec.ts
+          tests/browser-output.spec.ts
+          tests/recovery-storage.spec.ts
           tests/presentation-start-input.spec.ts
           tests/presentation-fullscreen.spec.ts
           tests/windows-ui.spec.ts

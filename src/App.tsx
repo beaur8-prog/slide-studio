@@ -1205,7 +1205,7 @@ export default function App() {
         if (disposed) return;
         if (saved && restoreWindowBuffer) {
           try {
-            const safe = parseDeckJson(JSON.stringify(saved));
+            const safe = validateDeck(saved);
             setHistory({ past: [], present: safe, future: [] });
             setFileSnapshot(restoredFileChanges.current ? null : safe);
             setActiveId(safe.slides[0].id);
@@ -2026,16 +2026,20 @@ export default function App() {
     }
   };
   const exportPdf = async () => {
+    // Browser PDF output uses its print dialog. Let printDeck own that
+    // operation's guard so it does not reject the request as already printing.
+    if (!window.desktop) {
+      await printDeck();
+      return;
+    }
     if (printing.current || savingPptx.current || busy || modal) return;
     printing.current = true;
     setMenu(null);
     commitPendingInputs();
     try {
-      if (window.desktop) {
-        setBusy("PDF를 만들고 있습니다");
-        const result = await window.desktop.exportPDF(deck.name);
-        if (result) notify("PDF 파일을 저장했습니다.");
-      } else await printDeck();
+      setBusy("PDF를 만들고 있습니다");
+      const result = await window.desktop.exportPDF(deck.name);
+      if (result) notify("PDF 파일을 저장했습니다.");
     } catch (error) {
       notify(
         `PDF 내보내기 실패: ${error instanceof Error ? error.message : String(error)}`,

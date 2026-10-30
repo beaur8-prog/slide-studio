@@ -9,11 +9,23 @@ function createPresentationWindowController(window, { onEntered = () => {}, onEn
   let desired = window.isFullScreen();
   let transition = null;
   let disposed = false;
+  let previousMinimum = null;
+
+  const restoreMinimum = () => {
+    if (previousMinimum && !active && !window.isFullScreen()) {
+      const minimum = previousMinimum;
+      previousMinimum = null;
+      window.setMinimumSize?.(...minimum);
+    }
+  };
 
   const reconcile = () => {
     if (disposed || window.isDestroyed() || transition !== null) return;
     if (window.isFullScreen() === desired) {
-      if (!active) restoring = null;
+      if (!active) {
+        restoring = null;
+        restoreMinimum();
+      }
       return;
     }
     transition = desired;
@@ -55,6 +67,7 @@ function createPresentationWindowController(window, { onEntered = () => {}, onEn
       restoreChrome(previous);
       onEnded();
     }
+    setImmediate(restoreMinimum);
   };
   window.on('enter-full-screen', entered);
   window.on('leave-full-screen', left);
@@ -72,7 +85,13 @@ function createPresentationWindowController(window, { onEntered = () => {}, onEn
           };
           restoring = null;
           active = true;
+          // Editor size constraints must not enlarge a slideshow beyond a
+          // smaller display (e.g. 1024px Windows). Restore only after leaving
+          // fullscreen; restoring while fullscreen can resize it again.
+          if (!previousMinimum && window.getMinimumSize && window.setMinimumSize)
+            previousMinimum = window.getMinimumSize();
         }
+        if (previousMinimum) window.setMinimumSize(0, 0);
         desired = true;
         window.setMenuBarVisibility(false);
         window.webContents.setBackgroundThrottling(false);

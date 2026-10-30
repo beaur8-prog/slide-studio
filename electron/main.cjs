@@ -60,7 +60,7 @@ async function withCaptureOperation(event, task) {
 app.setName(PRODUCT_NAME);
 const customUserData=app.commandLine?.getSwitchValue?.('user-data-dir')||'';
 app.setPath('userData',customUserData&&path.isAbsolute(customUserData)?path.resolve(customUserData):path.join(app.getPath('appData'), PRODUCT_NAME));
-const updates = createStudioUpdater({ app, dialog, shell, Notification, id: 'slide', getWindow: () => mainWindow });
+const updates = createStudioUpdater({ app, dialog, shell, Notification, id: 'slide', getWindow: () => mainWindow, platform: process.platform, arch: process.arch });
 updates.onChange(installMenu);
 if (process.platform === 'win32') app.setAppUserModelId('local.slidestudio.app');
 

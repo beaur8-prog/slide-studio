@@ -92,7 +92,11 @@ async function runFile(browser, filename, label, slides) {
   page.setDefaultTimeout(180000);
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  const metrics = { label, filename, bytes: (await fs.stat(filename)).size, slides, stages: {}, errors };
+  const metrics = { label, filename, bytes: (await fs.stat(filename)).size, slides, stages: {}, errors, output_warnings: [] };
+  // Large source packages can exceed the documented preservation budget.
+  // Record the actual loss warning and explicitly approve this disposable QA
+  // copy, rather than silently dismissing it and waiting forever for a download.
+  page.on('dialog', async dialog => { metrics.output_warnings.push(dialog.message()); await dialog.accept(); });
   await fs.mkdir(path.join(output, label), { recursive: true });
   const record = async () => fs.writeFile(path.join(output, label, 'metrics.json'), JSON.stringify(metrics, null, 2));
   const cdp = await context.newCDPSession(page);

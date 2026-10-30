@@ -291,3 +291,6 @@ export interface RecentPresentationFile {
   lastUsedAt: number;
   available: boolean;
 }
+// Ephemeral native file authority, kept outside Deck/PPTX/recovery contents.
+export interface PresentationFileContext { token: string; path: string; }
+export interface OpenPresentationFile { name: string; data: Uint8Array; context?: PresentationFileContext; }

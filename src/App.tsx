@@ -32,6 +32,7 @@ import {
   useState,
 } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { flushSync } from "react-dom";
 import {
   AArrowUp,
   AArrowDown,
@@ -147,6 +148,8 @@ import type {
   Slide,
   SlideElement,
   TableCellFormat,
+  PresentationFileContext,
+  OpenPresentationFile,
 } from "./types";
 import { editText, patchText, scaleElement } from "./text-layout";
 import {
@@ -609,6 +612,7 @@ export default function App() {
   // The window's recovery buffer is not a saved PPTX. Keep the last file
   // snapshot so autosave cannot silently authorize discarding a user's work.
   const [fileSnapshot, setFileSnapshot] = useState<Deck | null>(history.present);
+  const [fileContext, setFileContext] = useState<PresentationFileContext>();
   const hasFileChanges = useMemo(
     () => !sameDocument(history.present, fileSnapshot),
     [history.present, fileSnapshot],
@@ -625,7 +629,7 @@ export default function App() {
   const printing = useRef(false);
   const savingPptx = useRef(false);
   const [openRequestVersion, setOpenRequestVersion] = useState(0);
-  const [requestedFile, setRequestedFile] = useState<{ name: string; data: Uint8Array } | null>(null);
+  const [requestedFile, setRequestedFile] = useState<OpenPresentationFile | null>(null);
   const takingRequestedFile = useRef(false);
   const openingRequestedFile = useRef(false);
   const [modal, setModal] = useState<Modal>(null);
@@ -997,6 +1001,7 @@ export default function App() {
     // Leave the old deck's presentation before its slide indexes become invalid.
     if (presentationActive.current) stopPresent();
     setHistory({ past: [], present: next, future: [] });
+    setFileContext(undefined);
     setFileSnapshot(next);
     transaction.current = null;
     setActiveId(next.slides[0].id);
@@ -1963,13 +1968,20 @@ export default function App() {
   const saveBytes = async (
     name: string,
     data: Uint8Array,
+    saveAs: boolean,
+    documentId: string,
   ) => {
-    if (window.desktop)
-      return !!(await window.desktop.saveFile({
+    if (window.desktop) {
+      const result = await window.desktop.saveFile({
         name,
         data,
         extensions: ["pptx"],
-      }));
+        context: { ...(fileContext ? {token:fileContext.token} : {}), saveAs },
+      });
+      if (result && documentRef.current.id === documentId)
+        setFileContext(typeof result === "string" ? undefined : result);
+      return !!result;
+    }
     const url = URL.createObjectURL(new Blob([new Uint8Array(data)]));
     const link = document.createElement("a");
     link.href = url;
@@ -1978,16 +1990,26 @@ export default function App() {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
     return true;
   };
-  const savePptx = async () => {
-    if (savingPptx.current || printing.current || busy) return;
+  const commitPendingInputs = () => {
+    // Native shortcuts do not blur numeric inputs. Commit their complete draft
+    // and finish text history before taking the exact snapshot to serialize.
+    // Keep contenteditable focus so typing/inline undo can continue after Save.
+    flushSync(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement) active.blur();
+      finish();
+    });
+  };
+  const savePptx = async (saveAs = false) => {
+    if (savingPptx.current || printing.current || busy || modal) return;
     savingPptx.current = true;
     setMenu(null);
-    finish();
-    const snapshot = history.present;
+    commitPendingInputs();
+    const snapshot = documentRef.current;
     setBusy("PowerPoint 파일을 만들고 있습니다");
     try {
       const losses = new Set<string>();
-      const bytes = await exportPptx(deck, {
+      const bytes = await exportPptx(resolveDeckFields(snapshot), {
         onWarning: message => losses.add(message),
       });
       if (losses.size && !window.confirm(
@@ -1995,8 +2017,8 @@ export default function App() {
         [...losses].map(message => "• " + message).join("\n") +
         "\n\n원본을 유지하려면 취소하세요. 이 내용을 제외한 PPTX를 저장하시겠습니까?",
       )) return;
-      if (await saveBytes(`${deck.name}.pptx`, bytes)) {
-        setFileSnapshot(snapshot);
+      if (await saveBytes(`${snapshot.name}.pptx`, bytes, saveAs, snapshot.id)) {
+        if (documentRef.current.id === snapshot.id) setFileSnapshot(snapshot);
         notify("PPTX 파일을 저장했습니다.");
       }
     } catch (error) {
@@ -2009,7 +2031,10 @@ export default function App() {
     }
   };
   const exportPdf = async () => {
+    if (printing.current || savingPptx.current || busy || modal) return;
+    printing.current = true;
     setMenu(null);
+    commitPendingInputs();
     try {
       if (window.desktop) {
         setBusy("PDF를 만들고 있습니다");
@@ -2021,13 +2046,14 @@ export default function App() {
         `PDF 내보내기 실패: ${error instanceof Error ? error.message : String(error)}`,
       );
     } finally {
+      printing.current = false;
       setBusy("");
     }
   };
   const printDeck = async () => {
-    if (printing.current || busy) return;
+    if (printing.current || savingPptx.current || busy || modal) return;
     printing.current = true;
-    finish();
+    commitPendingInputs();
     setEditing(null);
     setMenu(null);
     setBusy("인쇄 창을 열고 있습니다");
@@ -2062,7 +2088,7 @@ export default function App() {
   const canReplaceDocument = () => !hasFileChanges || window.confirm(
     "PPTX 파일에 저장하지 않은 변경 사항이 있습니다. 저장하지 않고 계속하시겠습니까?\n\n내용을 보관하려면 취소를 누른 뒤 PPTX로 저장해 주세요.",
   );
-  const readFile = async (name: string, data: ArrayBuffer | Uint8Array) => {
+  const readFile = async (name: string, data: ArrayBuffer | Uint8Array, context?: PresentationFileContext) => {
     if (!canReplaceDocument()) return;
     setBusy("프레젠테이션을 열고 있습니다");
     try {
@@ -2070,6 +2096,7 @@ export default function App() {
       if (/\.pptx$/i.test(name)) {
         const result = await importPptx(data);
         replaceDeck(result.deck);
+        setFileContext(context);
         setWarnings(result.warnings);
       } else {
         const imported = parseDeckJson(new TextDecoder().decode(data));
@@ -2088,7 +2115,7 @@ export default function App() {
     try {
       if (window.desktop) {
         const file = await window.desktop.openFile();
-        if (file) await readFile(file.name, file.data);
+        if (file) await readFile(file.name, file.data, file.context);
       } else fileInput.current?.click();
     } catch (error) {
       notify(
@@ -2113,7 +2140,7 @@ export default function App() {
     openingRequestedFile.current = true;
     // Use the normal import path and its unsaved-document confirmation. Waiting
     // for a render here also checks edits made while the file bytes were read.
-    void readFile(requestedFile.name, requestedFile.data).finally(() => {
+    void readFile(requestedFile.name, requestedFile.data, requestedFile.context).finally(() => {
       openingRequestedFile.current = false;
       setRequestedFile(null);
       setOpenRequestVersion(version => version + 1);
@@ -2506,7 +2533,7 @@ export default function App() {
       }
       if (cmd && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        void savePptx();
+        void savePptx(e.shiftKey);
         return;
       }
       if (cmd && e.key.toLowerCase() === "o") {
@@ -2965,6 +2992,7 @@ export default function App() {
       if (action === "new") setModal("new");
       if (action === "open") void openProject();
       if (action === "save") void savePptx();
+      if (action === "save-as") void savePptx(true);
       if (action === "export-pdf") void exportPdf();
       if (action === "print") void printDeck();
       if (action === "present") startPresent();
@@ -2976,6 +3004,11 @@ export default function App() {
     // shortcut before a text editor stops bubbling the key event.
     if (window.desktop) return;
     const onPrintKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault(); event.stopPropagation();
+        if (!event.repeat && !presentationActive.current) void savePptx(event.shiftKey);
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
         event.preventDefault();
         event.stopPropagation();
@@ -3665,6 +3698,7 @@ export default function App() {
           <div className="document-title">
             <input
               aria-label="프레젠테이션 이름"
+              title={fileContext?.path ?? "아직 파일로 저장하지 않은 프레젠테이션"}
               value={deck.name}
               maxLength={100}
               onChange={(e) => commit((d) => ({ ...d, name: e.target.value }))}
@@ -3754,6 +3788,7 @@ export default function App() {
                 hint: shortcut("S"),
                 run: () => void savePptx(),
               },
+              { id:"save-as", label:"다른 이름으로 저장", hint: isMac ? "⇧⌘S" : "Ctrl+Shift+S", run:()=>void savePptx(true) },
               {
                 id: "text",
                 label: "텍스트 상자 삽입",
@@ -3948,6 +3983,8 @@ export default function App() {
                   <Save size={16} />
                   PPTX 저장<span>{shortcut("S")}</span>
                 </button>
+                <button onClick={()=>void savePptx(true)}><Save size={16}/>다른 이름으로 저장<span>{isMac?"⇧⌘S":"Ctrl+Shift+S"}</span></button>
+                {fileContext && <div className="file-current" title={fileContext.path}>현재 파일: {fileContext.path.split(/[\\/]/).at(-1)}</div>}
                 <button onClick={() => void exportPdf()}>
                   <FileDown size={16} />
                   PDF 내보내기
@@ -6014,7 +6051,7 @@ export default function App() {
                 onNew={() => setModal("new")}
                 onOpen={async (id) => {
                   const file = await window.desktop?.openRecentFile?.(id);
-                  if (file) await readFile(file.name, file.data);
+                  if (file) await readFile(file.name, file.data, file.context);
                 }}
               />
             ) : modal === "shortcuts" ? (
@@ -6024,6 +6061,7 @@ export default function App() {
                 <div className="shortcut-list">
                   {[
                     ["PPTX 저장", "⌘ / Ctrl + S"],
+                    ["다른 이름으로 저장", "⌘ / Ctrl + Shift + S"],
                     ["파일 열기", "⌘ / Ctrl + O"],
                     ["인쇄", "⌘ / Ctrl + P"],
                     ["새 슬라이드", "⌘ / Ctrl + M"],

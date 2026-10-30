@@ -10,6 +10,9 @@ const { RecentFiles } = require('./recent-files.cjs');
 const { createPresentationWindowController } = require('./presentation-window.cjs');
 const { createStudioUpdater } = require('./studio-updater.cjs');
 const { FileOpenRequests } = require('./file-open-requests.cjs');
+const { FileContexts } = require('./file-contexts.cjs');
+const { createPresentationSaver } = require('./presentation-save.cjs');
+const { atomicWrite } = require('./atomic-write.cjs');
 
 const PRODUCT_NAME = 'Slide Studio';
 const APP_ICON = path.join(__dirname, 'assets', 'SlideStudio.png');
@@ -26,6 +29,7 @@ const CHROME_THEMES = {
 
 let mainWindow = null;
 const fileOpenRequests = new FileOpenRequests();
+const fileContexts = new FileContexts({ maxBytes: MAX_FILE_BYTES });
 const presenterWindows = new Set();
 let nativeOperationPending = false;
 let documentDirectory;
@@ -128,15 +132,6 @@ async function withNativeDialog(event, task) {
   }
 }
 
-async function atomicWrite(filename, buffer) {
-  const temporary = path.join(path.dirname(filename), `.${path.basename(filename)}.${randomUUID()}.tmp`);
-  try {
-    await fs.writeFile(temporary, buffer, { flag: 'wx', mode: 0o600 });
-    await fs.rename(temporary, filename);
-  } finally {
-    await fs.rm(temporary, { force: true }).catch(() => {});
-  }
-}
 
 function dialogDirectoryFile() {
   return path.join(app.getPath('userData'), 'file-dialog-location.json');
@@ -231,7 +226,8 @@ function installMenu() {
         { label: 'New Presentation', accelerator: 'CmdOrCtrl+N', click: () => sendMenuAction('new') },
         { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => sendMenuAction('open') },
         { type: 'separator' },
-        { label: 'Save PowerPoint…', accelerator: 'CmdOrCtrl+S', click: () => sendMenuAction('save') },
+        { label: 'Save PowerPoint', accelerator: 'CmdOrCtrl+S', click: () => sendMenuAction('save') },
+        { label: 'Save PowerPoint As…', accelerator: 'CmdOrCtrl+Shift+S', click: () => sendMenuAction('save-as') },
         { label: 'Export PDF…', click: () => sendMenuAction('export-pdf') },
         { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: () => sendMenuAction('print') },
         { type: 'separator' },
@@ -265,8 +261,10 @@ async function readPresentationFile(filename) {
     if (buffer.length > MAX_FILE_BYTES) throw new Error('Choose a presentation no larger than 256 MiB.');
     await rememberDocumentDirectory(filename);
     await recentFiles.remember(filename).catch(() => {});
+    const realPath = await fs.realpath(filename).catch(() => undefined);
+    const context = extension === 'pptx' && realPath && /\.pptx$/i.test(realPath) ? fileContexts.issue(realPath, buffer) : undefined;
     return { name: path.basename(filename),
-      data: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength) };
+      data: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength), ...(context ? { context } : {}) };
   } finally {
     await handle.close();
   }
@@ -392,29 +390,16 @@ function installIPC() {
     if (process.platform === 'win32') mainWindow.setTitleBarOverlay(CHROME_THEMES[theme]);
   });
 
-  ipcMain.handle('slide-studio:save-file', (event, payload) => withNativeDialog(event, async () => {
-    const file = decodeFilePayload(payload);
-    const result = await dialog.showSaveDialog(mainWindow, {
-      title: 'Save PowerPoint',
-      defaultPath: await defaultDialogPath(file.name),
-      filters: [{ name: 'PowerPoint Presentation', extensions: ['pptx'] }],
-      properties: ['createDirectory', 'showOverwriteConfirmation'],
-    });
-    if (result.canceled || !result.filePath) return null;
-    const filename = /\.pptx$/i.test(result.filePath) ? result.filePath : result.filePath + '.pptx';
-    if (filename !== result.filePath && await fs.stat(filename).then(() => true, () => false)) {
-      // The native overwrite prompt covered the typed name, not this completed name.
-      const answer = await dialog.showMessageBox(mainWindow, {
-        type: 'question', message: '같은 이름의 PPTX 파일이 있습니다. 바꾸시겠습니까?',
-        detail: filename, buttons: ['바꾸기', '취소'], defaultId: 1, cancelId: 1, noLink: true,
-      });
-      if (answer.response !== 0) return null;
-    }
-    await atomicWrite(filename, file.data);
-    await rememberDocumentDirectory(filename);
-    await recentFiles.remember(filename).catch(() => {});
-    return filename;
-  }));
+  const savePresentation = createPresentationSaver({
+    contexts: fileContexts, dialog, getWindow: () => mainWindow,
+    defaultPath: defaultDialogPath, atomicWrite,
+    onSaved: async filename => {
+      await rememberDocumentDirectory(filename);
+      await recentFiles.remember(filename).catch(() => {});
+    },
+  });
+  ipcMain.handle('slide-studio:save-file', (event, payload) => withNativeDialog(event, () =>
+    savePresentation(decodeFilePayload(payload), payload.context)));
 
   ipcMain.handle('slide-studio:open-file', event => withNativeDialog(event, async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -612,7 +597,7 @@ async function createWindow() {
     if (mainFrame && !inPlace) { clearCaptureSources(); setPresentationMode(false); }
   });
   mainWindow.webContents.on('render-process-gone', () => { clearCaptureSources(); setPresentationMode(false); });
-  mainWindow.on('closed', () => { for(const child of presenterWindows)if(!child.isDestroyed())child.destroy();presenterWindows.clear();clearCaptureSources(); presentationWindowController?.dispose(); presentationWindowController = null; mainWindow = null; });
+  mainWindow.on('closed', () => { fileContexts.clear(); for(const child of presenterWindows)if(!child.isDestroyed())child.destroy();presenterWindows.clear();clearCaptureSources(); presentationWindowController?.dispose(); presentationWindowController = null; mainWindow = null; });
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
   try {

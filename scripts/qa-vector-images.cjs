@@ -108,7 +108,8 @@ async function vectorHashes(file) {
     await app.evaluate(({ dialog }, filePath) => {
       dialog.showSaveDialog = async () => ({ canceled: false, filePath });
     }, saved);
-    await page.getByRole("button", { name: "PPTX 저장", exact: true }).click();
+    await page.getByRole("button", { name: "파일", exact: true }).click();
+    await page.locator(".file-popover").getByRole("button", {name:/^다른 이름으로 저장/}).click();
     await expect(page.locator(".toast")).toContainText(
       "PPTX 파일을 저장했습니다",
     );

@@ -1,4 +1,4 @@
-import type { RecentPresentationFile } from "./types";
+import type { RecentPresentationFile, PresentationFileContext, OpenPresentationFile } from "./types";
 
 declare global {
   interface Window {
@@ -27,12 +27,13 @@ declare global {
         name: string;
         data: Uint8Array;
         extensions: ["pptx"];
-      }): Promise<string | null>;
-      openFile(): Promise<{ name: string; data: Uint8Array } | null>;
-      takeRequestedFile?(): Promise<{ name: string; data: Uint8Array } | null>;
+        context?: { token?: string; saveAs?: boolean };
+      }): Promise<string | PresentationFileContext | null>;
+      openFile(): Promise<OpenPresentationFile | null>;
+      takeRequestedFile?(): Promise<OpenPresentationFile | null>;
       onOpenRequested?(callback: () => void): () => void;
       recentFiles?(): Promise<RecentPresentationFile[]>;
-      openRecentFile?(id: string): Promise<{ name: string; data: Uint8Array }>;
+      openRecentFile?(id: string): Promise<OpenPresentationFile>;
       exportPDF(name: string): Promise<string | null>;
       print(): Promise<boolean>;
       onMenu(callback: (action: string) => void): () => void;

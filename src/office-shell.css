@@ -166,6 +166,7 @@
 .office-shell .popover { background: var(--chrome-surface); color: var(--chrome-text); border-color: var(--chrome-border); border-radius: 4px; box-shadow: 0 8px 24px #0006; }
 .office-shell .popover > button:hover { background: var(--chrome-hover); }
 .office-shell .popover h4, .office-shell .popover > button > span { color: var(--chrome-secondary); }
+.file-current { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 9px; font-size: 10px; color: var(--chrome-secondary); }
 .office-shell .slide-sorter > button { background: var(--chrome-surface); border-color: var(--chrome-border); border-radius: 2px; }
 .office-shell .slide-sorter > button > span { color: var(--chrome-text); }
 .office-shell .slide-sorter > .sorter-add { color: var(--chrome-secondary); }

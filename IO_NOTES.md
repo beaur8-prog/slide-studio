@@ -1,5 +1,33 @@
 # Presentation file compatibility
 
+The development editor now includes table-aware document find/replace, nondestructive
+picture crop/fit/fill/replacement, a selection pane, and format painting. Search
+and selection navigation do not author document changes. Replacing all text,
+applying one image crop, and each layer or whole-object format action are atomic
+document undo steps. Inline format painting is a single native text edit and
+retains the selected range, rich-run links and paragraph metadata.
+
+Object and group names use standard PresentationML `cNvPr@name` and visibility
+uses `cNvPr@hidden`. Names can be duplicated. Internal object-state extensions
+retain stable IDs for composite borders and distinguish automatic labels from
+explicit user names. Own hidden state is independent of ancestor group hidden
+state; unhiding a group preserves independently hidden descendants. Hidden objects
+remain editable in the selection pane and saved to PPTX, but are excluded from
+canvas painting, thumbnails, slide shows, and PDF/print rendering. Group sibling
+reordering preserves hierarchy; moving an object into another group is not supported.
+
+Picture operations retain the embedded original raster bytes and write the
+standard image crop rectangle. Negative crop values represent fitted letterbox
+space. Animated GIF bytes are retained through replacement, cropping and PPTX
+round trips. The editor still uses a static preview; slide shows animate GIFs.
+
+Format painting copies supported typography, alignment, fill, line and shadow
+styles. It excludes content, geometry, IDs, names, visibility, links, grouping,
+image source/crop, and chart data. Partial text painting only changes character
+styles. Table cell painting preserves content, merges, and column widths; automatic
+rows can expand to fit the resulting font. A gradient source uses its solid fallback
+when applied to a table cell because gradient table-cell fills are not modeled.
+
 Slide Studio saves user files as PowerPoint (.pptx). The separate .slide save
 command has been removed. Existing .slide files remain readable so users can
 migrate them to PPTX. The complete editor model is still autosaved locally in

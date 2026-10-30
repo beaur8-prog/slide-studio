@@ -131,9 +131,8 @@ test("group hide and show retains child visibility; show all, undo and slide sho
   await page.keyboard.press("ControlOrMeta+z");
   await expect(canvasItem(page, "d")).toHaveCount(0);
   await page.keyboard.press("F5");
-  await expect(page.locator('.presentation [data-element-id="d"]')).toHaveCount(
-    0,
-  );
+  await expect(page.getByTestId("presentation-view")).toBeVisible();
+  await expect(page.locator(".presentation-view .slide-element.static")).toHaveCount(4);
   await page.keyboard.press("Escape");
 });
 

@@ -1,0 +1,37 @@
+.format-painting .editable-slide .slide-element {
+  cursor: copy;
+}
+.format-painter-status {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  padding: 8px 12px;
+  border: 1px solid var(--chrome-border);
+  border-radius: 6px;
+  background: var(--chrome-surface);
+  color: var(--chrome-text);
+  box-shadow: 0 3px 14px #0003;
+  font-size: 11px;
+}
+.format-painter-status span {
+  line-height: 1.5;
+}
+.format-painter-status button {
+  white-space: nowrap;
+  padding: 4px 6px;
+  border-radius: 3px;
+  color: var(--chrome-text);
+  border: 1px solid var(--chrome-border);
+}
+.format-painter-status button:hover {
+  background: var(--chrome-hover);
+}
+.office-shell .canvas-workspace {
+  position: relative;
+}

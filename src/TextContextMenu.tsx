@@ -6,6 +6,7 @@ import {
   Type,
   Square,
   Palette,
+  Paintbrush,
 } from "lucide-react";
 import ObjectContextMenu from "./ObjectContextMenu";
 
@@ -21,6 +22,8 @@ export default function TextContextMenu({
   onObjectMenu,
   onColor,
   onError,
+  onCopyFormat,
+  onPasteFormat,
 }: {
   x: number;
   y: number;
@@ -29,6 +32,8 @@ export default function TextContextMenu({
   onObjectMenu: () => void;
   onColor: () => void;
   onError: (message: string) => void;
+  onCopyFormat?: () => void;
+  onPasteFormat?: () => void;
 }) {
   const close = useCallback(
     (restore = true) => {
@@ -85,6 +90,8 @@ export default function TextContextMenu({
       textSelection={selection}
       onClose={close}
       actions={[
+        ...(onCopyFormat ? [{ label: "서식 복사", icon: <Paintbrush size={16} />, run: () => { restoreTextSelection(selection); onCopyFormat(); } }] : []),
+        ...(onCopyFormat ? [{ label: "서식 붙여넣기", icon: <Paintbrush size={16} />, disabled: !onPasteFormat || selection.range.collapsed, run: () => { restoreTextSelection(selection); onPasteFormat?.(); } }] : []),
         {
           label: "잘라내기",
           icon: <Scissors size={16} />,

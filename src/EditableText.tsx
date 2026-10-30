@@ -13,6 +13,7 @@ import {
   type TextFormatRange,
 } from "./text-formatting";
 import { textPointOffset, restoreTextOffsets } from "./text-selection";
+import { PAINT_TEXT_EVENT, paintTextRange, type PaintTextDetail } from "./format-painter";
 import {
   continueTextBullet,
   toggleTextBullets,
@@ -116,11 +117,20 @@ export default function EditableText({
       const range = listSelection();
       if (range) applyList(toggleTextNumbering(element, range.indices), range);
     };
+    const paint = (event: Event) => {
+      const range = listSelection(), detail = (event as CustomEvent<PaintTextDetail>).detail;
+      if (!range || range.end <= range.start || !detail?.sample.text || element.locked) return;
+      const next = paintTextRange(element, detail.sample, range.start, range.end);
+      detail.applied = true;
+      if (next !== element) applyList(next, range);
+    };
     host.addEventListener("slide-studio:toggle-numbering", numbers);
     host.addEventListener("slide-studio:toggle-bullets", toggle);
+    host.addEventListener(PAINT_TEXT_EVENT, paint);
     return () => {
       host.removeEventListener("slide-studio:toggle-numbering", numbers);
       host.removeEventListener("slide-studio:toggle-bullets", toggle);
+      host.removeEventListener(PAINT_TEXT_EVENT, paint);
     };
   }, [element]);
   useLayoutEffect(() => {

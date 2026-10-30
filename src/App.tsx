@@ -13,6 +13,8 @@ import { sameDocument, sameValue } from "./document-changes";
 import { arrangeElements, selectionUnits } from "./object-arrange";
 import { isElementHidden } from "./layers";
 import { LayerPanel } from "./LayerPanel";
+import { applyObjectFormat, captureInlineFormat, captureObjectFormat, PAINT_TEXT_EVENT, type FormatSample, type PaintTextDetail } from "./format-painter";
+import "./format-painter.css";
 import {
   Fragment,
   useCallback,
@@ -96,6 +98,7 @@ import {
   Sigma,
   Omega,
   Camera,
+  Paintbrush,
 } from "lucide-react";
 import FontManager from "./FontManager";
 import CommandSearch from "./CommandSearch";
@@ -434,6 +437,8 @@ export default function App() {
     "selection",
   );
   const [editing, setEditing] = useState<string | null>(null);
+  const [formatSample, setFormatSample] = useState<FormatSample | null>(null);
+  const [painterMode, setPainterMode] = useState<"once" | "repeat" | null>(null);
   const nudgeKey = useRef<string | null>(null);
   const [inlineFormat, setInlineFormat] = useState<
     Record<InlineFormat, boolean>
@@ -3041,6 +3046,49 @@ export default function App() {
       if (selection) ribbonTextSelection.current = selection;
     }
   };
+  const copyFormat = (repeat = false) => {
+    if (!selectedElement) return;
+    let sample = captureObjectFormat(selectedElement, activeTableSelection?.focus);
+    const host = document.querySelector<HTMLElement>(".editing-text");
+    const selection = host && captureTextSelection(host);
+    if (selection) sample = captureInlineFormat(selection, sample);
+    setFormatSample(sample);
+    setPainterMode(repeat ? "repeat" : "once");
+  };
+  const pasteFormat = (ids = selected, pointer = false) => {
+    if (!formatSample) return;
+    const host = document.querySelector<HTMLElement>(".editing-text");
+    if (host && !pointer) {
+      const detail: PaintTextDetail = { sample: formatSample, applied: false };
+      host.dispatchEvent(new CustomEvent(PAINT_TEXT_EVENT, { detail }));
+      if (!detail.applied) { notify("서식을 적용할 글자를 먼저 선택하세요."); return; }
+    } else {
+      if (!ids.length) return;
+      finish(); setEditing(null);
+      changeSlide(s => ({ ...s, elements: s.elements.map(element => ids.includes(element.id)
+        ? applyObjectFormat(element, formatSample, activeTableSelection?.elementId === element.id ? tableRange : undefined) : element) }));
+      setSelected(ids);
+    }
+    if (painterMode !== "repeat") setPainterMode(null);
+  };
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || presenting || busy || modal || pendingInk) return;
+      if (event.key === "Escape" && painterMode) {
+        event.preventDefault(); event.stopPropagation(); setPainterMode(null); return;
+      }
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey || event.altKey || event.repeat) return;
+      const value = event.key.toLowerCase();
+      if (!["c", "v"].includes(value)) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (editingTarget(target) && !target?.closest(".editing-text")) return;
+      event.preventDefault(); event.stopPropagation();
+      if (value === "c") copyFormat(); else pasteFormat();
+    };
+    window.addEventListener("keydown", key, true);
+    return () => window.removeEventListener("keydown", key, true);
+  });
+  useEffect(() => { if (presenting || busy || modal) setPainterMode(null); }, [presenting, busy, modal]);
   const setTextStyle = (
     key: "fontFamily" | "fontSize" | "align",
     value: string | number,
@@ -3298,6 +3346,10 @@ export default function App() {
 
   const objectMenuActions: ObjectMenuAction[] = [];
   if (selectedElement) {
+    objectMenuActions.push(
+      { label: "서식 복사", icon: <Paintbrush size={16} />, run: () => copyFormat() },
+      { label: "서식 붙여넣기", icon: <Paintbrush size={16} />, disabled: !formatSample || !!selectedElement.locked, run: () => pasteFormat() },
+    );
     const locked = slide.elements.some(
       (el) => selected.includes(el.id) && el.locked,
     );
@@ -3444,8 +3496,24 @@ export default function App() {
   return (
     <>
       <div
-        className={`app-shell office-shell ${window.desktop?.platform === "win32" ? "desktop-windows" : ""}`}
+        className={`app-shell office-shell ${window.desktop?.platform === "win32" ? "desktop-windows" : ""} ${painterMode ? "format-painting" : ""}`}
         inert={presenting}
+        onPointerDownCapture={event => {
+          if (!painterMode || !formatSample || event.button !== 0 || modal || busy) return;
+          const target = event.target instanceof Element ? event.target : null;
+          const item = target?.closest<HTMLElement>(".editable-slide [data-element-id]");
+          if (!item || target?.closest(".editing-text")) return;
+          const id = item.dataset.elementId!;
+          event.preventDefault(); event.stopPropagation();
+          pasteFormat(selected.includes(id) ? selected : expandGroups(slide.elements, [id]), true);
+        }}
+        onPointerUpCapture={event => {
+          if (!painterMode || !(event.target instanceof Element) || !event.target.closest(".editing-text")) return;
+          requestAnimationFrame(() => {
+            const host = document.querySelector<HTMLElement>(".editing-text");
+            if (host && !captureTextSelection(host)?.range.collapsed) pasteFormat();
+          });
+        }}
       >
         <header className="topbar">
           <button
@@ -3638,6 +3706,8 @@ export default function App() {
                 run: () => openInspector(),
               },
               { id: "layers", label: "선택 창 열기", keywords: "레이어 이름 숨김 순서 개체", hint: "Alt+F10", run: () => openInspector("layers") },
+              ...(selectedElement ? [{ id: "copy-format", label: "서식 복사", keywords: "글꼴 색 선 채우기", run: () => copyFormat() }] : []),
+              ...(selectedElement && formatSample ? [{ id: "paste-format", label: "서식 붙여넣기", keywords: "글꼴 색 선 채우기", run: () => pasteFormat() }] : []),
               { id: "find", label: "찾기", keywords: "검색 문서 내용", hint: shortcut("F"), run: () => openFind() },
               { id: "replace", label: "바꾸기", keywords: "찾기 텍스트 일괄 변경", run: () => openFind(true) },
               {
@@ -3844,6 +3914,11 @@ export default function App() {
                       <Copy size={14} />
                       복사
                     </button>
+                    <button aria-label="서식 복사" aria-pressed={!!painterMode} disabled={!selectedElement}
+                      title={`서식 복사 ${isMac ? "⇧⌘C" : "Ctrl+Shift+C"} · 두 번 클릭하면 계속 적용`}
+                      data-text-selection-control onMouseDown={event => event.preventDefault()}
+                      onClick={event => { if (event.detail < 2) { if (painterMode) setPainterMode(null); else copyFormat(); } }}
+                      onDoubleClick={() => setPainterMode(formatSample ? "repeat" : null)}><Paintbrush size={14} />서식 복사</button>
                   </div>
                 </div>
                 <span className="group-label">클립보드</span>
@@ -4624,6 +4699,12 @@ export default function App() {
               </div>
             ) : (
               <div className="canvas-workspace">
+                {painterMode && <div className="format-painter-status" role="status" aria-label="서식 복사 모드">
+                  <Paintbrush size={16} />
+                  <span>개체를 클릭해 서식을 적용하세요.{painterMode === "repeat" ? " 계속 적용 중" : " 한 번 적용"} · Esc로 종료</span>
+                  <button aria-pressed={painterMode === "repeat"} onClick={() => setPainterMode(painterMode === "repeat" ? "once" : "repeat")}>계속 적용</button>
+                  <button onClick={() => setPainterMode(null)}>종료</button>
+                </div>}
                 <div
                   id="slide-workspace"
                   className="canvas-area"
@@ -5463,6 +5544,8 @@ export default function App() {
             {...textMenu}
             onClose={closeTextMenu}
             onError={notify}
+            onCopyFormat={copyFormat}
+            onPasteFormat={formatSample ? () => pasteFormat() : undefined}
             onColor={() =>
               openTextColor(textMenu.selection, {
                 x: textMenu.x,

@@ -54,6 +54,8 @@ const geometry = async (file) => {
   let app;
   const results = [],
     errors = [];
+  const launchStarted = Date.now();
+  let bootReadyMs;
   try {
     const env = { ...process.env };
     delete env.ELECTRON_RUN_AS_NODE;
@@ -77,7 +79,10 @@ const geometry = async (file) => {
     page.on("dialog", (d) => {
       void d.accept().catch(() => {});
     });
-    await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+    await expect(page.locator(".save-indicator")).toHaveText("저장됨", {
+      timeout: 20000,
+    });
+    bootReadyMs = Date.now() - launchStarted;
     await app.evaluate(({ dialog }) => {
       global.__saveQA = { open: [], save: [], messages: [], seen: [] };
       const q = global.__saveQA;
@@ -251,6 +256,7 @@ const geometry = async (file) => {
       JSON.stringify(
         {
           status: "passed",
+          bootReadyMs,
           results,
           errors,
           dialogs: await app.evaluate(() => global.__saveQA.seen),

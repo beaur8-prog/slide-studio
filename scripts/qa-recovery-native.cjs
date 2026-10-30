@@ -28,9 +28,15 @@ const hashFile = async (file) =>
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.SLIDE_STUDIO_DEV;
   const sourceHash = await hashFile(source),
+    expectedSourceData = (await fs.readFile(source)).toString("base64"),
+    expectedDigest = crypto
+      .createHash("sha256")
+      .update(expectedSourceData)
+      .digest("hex"),
     results = [],
     errors = [],
-    memory = [];
+    memory = [],
+    processMemory = [];
   let app;
   try {
     app = await _electron.launch({
@@ -109,16 +115,17 @@ const hashFile = async (file) =>
           digest,
         };
       });
-    const original = await inspect();
-    assert(original.blob, "Large recovery must use a Blob record");
-    assert(original.sourceChars > 50 * 1024 * 1024);
+    const initialProcessMemory = await app.evaluate(({ app }) =>
+      app
+        .getAppMetrics()
+        .map((p) => ({ type: p.type, pid: p.pid, memory: p.memory })),
+    );
     results.push("production-native-151-slides-auto-save-above-127MiB");
     for (let index = 0; index < 3; index++) {
       await page.reload();
       await expect(page.locator(".thumbnail-row")).toHaveCount(151);
       await expect(notes).toHaveValue("설치형 대용량 복구 — 한글 😀");
       await expect(page.locator(".save-indicator")).toHaveText("저장됨");
-      assert.deepEqual(await inspect(), original);
       assert.equal(
         await page.evaluate(() =>
           sessionStorage.getItem("slide-studio-file-dirty"),
@@ -127,11 +134,26 @@ const hashFile = async (file) =>
       );
       await cdp.send("HeapProfiler.collectGarbage");
       memory.push(await cdp.send("Runtime.getHeapUsage"));
+      processMemory.push(
+        await app.evaluate(({ app }) =>
+          app
+            .getAppMetrics()
+            .map((p) => ({ type: p.type, pid: p.pid, memory: p.memory })),
+        ),
+      );
       results.push(
-        "production-native-reload-preserves-edits-and-source-hash-" +
-          (index + 1),
+        "production-native-reload-preserves-edited-notes-" + (index + 1),
       );
     }
+    // Inspect the stored archive only after measuring ordinary UI reloads.
+    // Parsing a second full recovery document for integrity checks would itself
+    // inflate the renderer's peak and distort these memory observations.
+    const original = await inspect();
+    assert(original.blob, "Large recovery must use a Blob record");
+    assert.equal(original.sourceChars, expectedSourceData.length);
+    assert.equal(original.digest, expectedDigest);
+    assert.equal(original.elements, 1186);
+    results.push("source-archive-hash-preserved-after-three-native-reloads");
     assert.equal(await hashFile(source), sourceHash);
     assert.deepEqual(errors, []);
     await page.screenshot({ path: path.join(output, "reloaded.png") });
@@ -141,6 +163,10 @@ const hashFile = async (file) =>
       original,
       errors,
       memory,
+      processMemory,
+      initialProcessMemory,
+      memoryMeasurement:
+        "Native UI reloads and GC before integrity inspection; process memory in KiB, JS heap in bytes",
       sourceSHA256: sourceHash,
     };
     await fs.writeFile(

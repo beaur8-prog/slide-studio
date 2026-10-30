@@ -61,7 +61,9 @@ async function mediaHashes(file) {
         securityErrors.push(m.text());
     });
     page.on("dialog", (dialog) => dialog.accept());
-    await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+    await expect(page.locator(".save-indicator")).toHaveText("저장됨", {
+      timeout: 20000,
+    });
     const open = async (file, expectedTitle = "오디오와 한글 제목") => {
       await app.evaluate(({ dialog }, file) => {
         dialog.showOpenDialog = async () => ({

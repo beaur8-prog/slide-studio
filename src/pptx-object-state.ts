@@ -38,8 +38,10 @@ export function writeObjectState(doc: Document, elements: SlideElement[]) {
     if (!props) continue;
     const node = props.parentElement?.parentElement;
     if (!node) continue;
+    const state = extension(props, "state");
+    state.setAttribute("key", el.id);
+    if (el.name !== undefined) state.setAttribute("named", "1");
     if (el.type === "text") {
-      const state = extension(props, "state");
       state.setAttribute("textBox", "1");
       if (el.borders) {
         state.setAttribute("borders", JSON.stringify(el.borders));
@@ -87,11 +89,18 @@ export function writeObjectState(doc: Document, elements: SlideElement[]) {
 
 export function readObjectState(node: Element): {
   preserveBox: boolean;
+  key?: string;
+  name?: string;
+  hidden?: boolean;
   borders?: SlideElement["borders"];
   locked?: boolean;
 } {
   const props = properties(node);
   const state = props?.getElementsByTagNameNS(SS, "state")[0];
+  const key = state?.getAttribute("key") ?? undefined;
+  const rawName = props?.getAttribute("name")?.replace(/[\u0000-\u001f]/g, "").slice(0, 160);
+  const named = state ? state.getAttribute("named") === "1"
+    : !!rawName && !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(rawName);
   let borders: SlideElement["borders"];
   try {
     const value: unknown = JSON.parse(state?.getAttribute("borders") ?? "null");
@@ -122,6 +131,9 @@ export function readObjectState(node: Element): {
   ].flatMap((name) => Array.from(node.getElementsByTagNameNS(A, name)));
   return {
     preserveBox: state?.getAttribute("textBox") === "1",
+    ...(key ? { key } : {}),
+    ...(named && rawName?.trim() ? { name: rawName } : {}),
+    ...(["1", "true"].includes(props?.getAttribute("hidden") ?? "") ? { hidden: true } : {}),
     ...(borders ? { borders } : {}),
     ...(locks.some((n) =>
       ["noMove", "noResize", "noRot"].some((k) =>
@@ -137,7 +149,7 @@ export function compositeBorderNodes(doc: Document): Set<Element> {
   const owners = new Map(
     Array.from(doc.getElementsByTagNameNS("*", "sp")).flatMap((node) => {
       const state = readObjectState(node),
-        name = properties(node)?.getAttribute("name");
+        name = state.key ?? properties(node)?.getAttribute("name");
       return state.borders && name ? [[name, state.borders] as const] : [];
     }),
   );
@@ -154,4 +166,25 @@ export function compositeBorderNodes(doc: Document): Set<Element> {
       );
     }),
   );
+}
+
+export function writeGroupState(props: Element, id: string, named: boolean) {
+  const state = extension(props, "state");
+  state.setAttribute("key", id);
+  if (named) state.setAttribute("named", "1");
+}
+
+// All geometry/link/chart/group patches address stable internal IDs. Change
+// user-facing names last; names need not be unique in a PowerPoint file.
+export function writeObjectLabels(doc: Document, elements: SlideElement[]) {
+  const names = new Map(Array.from(doc.getElementsByTagNameNS("*", "cNvPr")).map(props => [props.getAttribute("name"), props]));
+  for (const element of elements) {
+    for (const suffix of ["", "-textbody", "-edge-0", "-edge-1", "-edge-2", "-edge-3"]) {
+      const props = names.get(element.id + suffix);
+      if (!props) continue;
+      if (element.name !== undefined) props.setAttribute("name", element.name + (suffix ? ` ${suffix.slice(1)}` : ""));
+      if (element.hidden) props.setAttribute("hidden", "1");
+      else props.removeAttribute("hidden");
+    }
+  }
 }

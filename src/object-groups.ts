@@ -1,4 +1,5 @@
 import type { SlideElement } from "./types";
+import { writeGroupState } from "./pptx-object-state";
 
 export function expandGroups(
   elements: SlideElement[],
@@ -33,6 +34,8 @@ export function groupElements(
       ? members.map((item) => ({
           ...item,
           groups: [id, ...(item.groups ?? [])],
+          ...(item.groupNames ? { groupNames: ["", ...item.groupNames] } : {}),
+          ...(item.groupHidden ? { groupHidden: [false, ...item.groupHidden] } : {}),
         }))
       : selected.has(e.id)
         ? []
@@ -52,11 +55,15 @@ export function ungroupElements(
   );
   if (elements.some((e) => roots.has(e.groups?.[0]) && e.locked))
     return elements;
-  return elements.map((e) =>
-    roots.has(e.groups?.[0])
-      ? { ...e, groups: e.groups!.length > 1 ? e.groups!.slice(1) : undefined }
-      : e,
-  );
+  return elements.map(e => {
+    if (!roots.has(e.groups?.[0])) return e;
+    const groups = e.groups!.slice(1), names = e.groupNames?.slice(1), hidden = e.groupHidden?.slice(1);
+    return { ...e, groups: groups.length ? groups : undefined,
+      groupNames: names?.some(Boolean) ? names : undefined,
+      groupHidden: hidden?.some(Boolean) ? hidden : undefined,
+      ...(e.groupHidden?.[0] ? { hidden: true } : {}),
+    };
+  });
 }
 
 export function copyElements(
@@ -125,6 +132,10 @@ export function writeGroups(doc: Document, elements: SlideElement[]) {
         if (name === "cNvPr") {
           prop.setAttribute("id", String(nextId++));
           prop.setAttribute("name", group);
+          const name = children.find(element => element.groupNames?.[depth])?.groupNames?.[depth];
+          if (name) prop.setAttribute("name", name);
+          if (children.some(element => element.groupHidden?.[depth])) prop.setAttribute("hidden", "1");
+          writeGroupState(prop, group, !!name);
         }
         nv.append(prop);
       }

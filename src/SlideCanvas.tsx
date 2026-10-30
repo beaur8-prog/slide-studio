@@ -68,6 +68,7 @@ import {
 import { expandGroups } from "./object-groups";
 import { snapMovement } from "./object-arrange";
 import { TableVisual } from "./TableEditor";
+import { isElementHidden } from "./layers";
 import { TableResizer } from "./TableResizer";
 import {
   tableMerge,
@@ -310,7 +311,7 @@ export const SlideVisual = memo(function SlideVisual({
         }}
       >
         <SlideBackground slide={slide} width={width} height={height} playMedia={playMedia} />
-        {slide.elements.map((e) => (
+        {slide.elements.filter(e => !isElementHidden(e)).map((e) => (
           <div
             key={e.id}
             className="slide-element static"
@@ -773,6 +774,7 @@ export default function SlideCanvas({
       };
       setMarquee(box);
       const contained = slide.elements.filter((e) => {
+        if (isElementHidden(e)) return false;
         const angle = (e.rotation * Math.PI) / 180;
         const w =
           Math.abs(e.width * Math.cos(angle)) +
@@ -983,7 +985,7 @@ export default function SlideCanvas({
               />
             </>
           )}
-          {slide.elements.map((e) => (
+          {slide.elements.filter(e => !isElementHidden(e)).map((e) => (
             <div
               key={e.id}
               data-testid="slide-element"
@@ -1205,7 +1207,7 @@ export default function SlideCanvas({
           />
         )}
         {slide.elements
-          .filter((e) => selected.includes(e.id))
+          .filter((e) => selected.includes(e.id) && !isElementHidden(e))
           .map((e) => (
             <div
               key={e.id}
@@ -1367,7 +1369,7 @@ export default function SlideCanvas({
             const items = slide.elements.filter(
               (e) => selected.includes(e.id) && !e.locked,
             );
-            if (items.length < 2) return null;
+            if (items.length < 2 || items.every(isElementHidden)) return null;
             const box = selectionBounds(items);
             return (
               <div

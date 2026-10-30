@@ -11,6 +11,8 @@ import type { InkStroke } from "./presentation-ink";
 import { fitTableRows } from "./table-layout";
 import { sameDocument, sameValue } from "./document-changes";
 import { arrangeElements, selectionUnits } from "./object-arrange";
+import { isElementHidden } from "./layers";
+import { LayerPanel } from "./LayerPanel";
 import {
   Fragment,
   useCallback,
@@ -638,6 +640,11 @@ export default function App() {
   const [guides, setGuides] = useState(false);
   const [sorter, setSorter] = useState(false);
   const [inspectorVisible, setInspectorVisible] = useState(false);
+  const [inspectorMode, setInspectorMode] = useState<"format" | "layers">("format");
+  const openInspector = (mode: "format" | "layers" = "format") => {
+    setInspectorMode(mode);
+    setInspectorVisible(true);
+  };
   const [ribbonCollapsed, setRibbonCollapsed] = useState(false);
   const [rulerVisible, setRulerVisible] = useState(false);
   const [chromeTheme, setChromeTheme] = useState<"dark" | "light">(() => {
@@ -1012,6 +1019,11 @@ export default function App() {
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || presenting || busy || modal || pendingInk) return;
+      if (event.altKey && event.key === "F10") {
+        event.preventDefault(); event.stopPropagation();
+        finish(); setEditing(null); openInspector("layers");
+        return;
+      }
       if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
       const value = event.key.toLowerCase();
       if (value !== "f" && !(value === "h" && (!isMac || event.shiftKey))) return;
@@ -1784,7 +1796,7 @@ export default function App() {
         alt: file.name, autoPlay: true, loop: true, muted: true });
       changeSlide(s => ({ ...s, elements: [...s.elements, next] }));
       setSelected([next.id]);
-      setInspectorVisible(true);
+      openInspector();
       notify("동영상을 추가했습니다. 서식에서 자동 시작·반복·음소거를 설정하세요.");
     } catch (error) { notify(error instanceof Error ? error.message : "동영상을 열 수 없습니다."); }
   };
@@ -2536,7 +2548,7 @@ export default function App() {
       }
       if (e.key === "Tab" && !cmd && !e.altKey &&
           e.target instanceof Element && e.target.closest(".editable-slide [data-element-id]")) {
-        const units = selectionUnits(slide.elements, slide.elements.map(element => element.id));
+        const units = selectionUnits(slide.elements, slide.elements.map(element => element.id)).filter(unit => unit.members.some(element => !isElementHidden(element)));
         if (!units.length) return;
         e.preventDefault();
         const focused = e.target.closest<HTMLElement>("[data-element-id]")?.dataset.elementId;
@@ -2547,7 +2559,7 @@ export default function App() {
         setTableSelection(null);
         setSelected(next.members.map(element => element.id));
         requestAnimationFrame(() => document.querySelector<HTMLElement>(
-          `.editable-slide [data-element-id="${CSS.escape(next.members[0].id)}"]`,
+          `.editable-slide [data-element-id="${CSS.escape(next.members.find(element => !isElementHidden(element))!.id)}"]`,
         )?.focus({ preventScroll: true }));
         return;
       }
@@ -2582,7 +2594,7 @@ export default function App() {
           e.target.closest(".thumbnail-list,.slide-sorter")
         )
           setSlideSelection(deck.slides.map((s) => s.id));
-        else setSelected(slide.elements.map((el) => el.id));
+        else setSelected(expandGroups(slide.elements, slide.elements.filter(el => !isElementHidden(el)).map(el => el.id)));
       } else if (cmd && e.key.toLowerCase() === "c") {
         e.preventDefault();
         copySelection();
@@ -3415,7 +3427,7 @@ export default function App() {
       {
         label: "개체 서식",
         icon: <Settings2 size={16} />,
-        run: () => setInspectorVisible(true),
+        run: () => openInspector(),
       },
     );
   }
@@ -3623,8 +3635,9 @@ export default function App() {
                 id: "format",
                 label: "서식 패널 열기",
                 keywords: "배경 위치 크기 회전",
-                run: () => setInspectorVisible(true),
+                run: () => openInspector(),
               },
+              { id: "layers", label: "선택 창 열기", keywords: "레이어 이름 숨김 순서 개체", hint: "Alt+F10", run: () => openInspector("layers") },
               { id: "find", label: "찾기", keywords: "검색 문서 내용", hint: shortcut("F"), run: () => openFind() },
               { id: "replace", label: "바꾸기", keywords: "찾기 텍스트 일괄 변경", run: () => openFind(true) },
               {
@@ -4048,6 +4061,7 @@ export default function App() {
               </div>
               <div className="ribbon-group">
                 <div className="tools-stack">
+                  <button title="선택 창 Alt+F10" onClick={() => openInspector("layers")}><Layers size={15} />선택 창</button>
                   <button title={`찾기 ${shortcut("F")}`} onClick={() => openFind()}><Search size={15} />찾기</button>
                   <button title={`바꾸기 ${isMac ? "⇧⌘H" : "Ctrl+H"}`} onClick={() => openFind(true)}><Replace size={15} />바꾸기</button>
                 </div>
@@ -4947,7 +4961,7 @@ export default function App() {
           <aside className="inspector" hidden={!inspectorVisible}>
             <div className="inspector-heading">
               <Settings2 size={16} />
-              <span>{selectedElement ? "개체 서식" : "슬라이드 서식"}</span>
+              <span>{inspectorMode === "layers" ? "선택 창" : selectedElement ? "개체 서식" : "슬라이드 서식"}</span>
               <button
                 className="icon-button"
                 aria-label="서식 패널 닫기"
@@ -4956,7 +4970,12 @@ export default function App() {
                 <X size={14} />
               </button>
             </div>
+            <div className="inspector-tabs" aria-label="작업 창 종류">
+              <button aria-pressed={inspectorMode === "format"} onClick={() => setInspectorMode("format")}>서식</button>
+              <button aria-pressed={inspectorMode === "layers"} onClick={() => setInspectorMode("layers")}>선택 창</button>
+            </div>
             <div className="inspector-body">
+              <div hidden={inspectorMode !== "format"}>
               {selectedElement ? (
                 <>
                   <div className="inspector-section">
@@ -5357,41 +5376,11 @@ export default function App() {
                   </div>
                 </>
               )}
-              <div className="layers-section">
-                <h4>
-                  <Layers size={14} />
-                  레이어<span>{slide.elements.length}</span>
-                </h4>
-                {slide.elements.length === 0 ? (
-                  <p>텍스트나 이미지를 추가해 보세요.</p>
-                ) : (
-                  [...slide.elements].reverse().map((e) => (
-                    <button
-                      key={e.id}
-                      className={selected.includes(e.id) ? "chosen" : ""}
-                      onClick={() => setSelected([e.id])}
-                    >
-                      {e.type === "text" ? (
-                        <Type size={13} />
-                      ) : e.type === "chart" ? (<BarChart3 size={13} />
-                      ) : e.type === "video" ? (<Play size={13} />) : e.type === "image" ? (
-                        <ImageIcon size={13} />
-                      ) : (
-                        <Square size={13} />
-                      )}
-                      <span>
-                        {e.type === "text"
-                          ? (e.text || "텍스트").split("\n")[0]
-                          : e.type === "image"
-                            ? e.alt || "이미지"
-                            : e.type === "chart" ? "PowerPoint 차트"
-                            : e.type === "video" ? e.alt || "동영상" : "도형"}
-                      </span>
-                      {e.locked && <LockKeyhole size={11} />}
-                    </button>
-                  ))
-                )}
               </div>
+              {inspectorMode === "layers" && <LayerPanel key={slide.id} elements={slide.elements} selected={selected}
+                onSelect={ids => { finish(); setEditing(null); setSelected(ids); setTableSelection(null); }}
+                onChange={elements => changeSlide(s => ({ ...s, elements }))}
+                onDelete={removeSelected} onError={notify} />}
             </div>
           </aside>
         </main>

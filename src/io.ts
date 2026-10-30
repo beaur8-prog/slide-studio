@@ -43,6 +43,7 @@ import { writeGroups } from "./object-groups";
 import { rasterMime } from "./image-editing";
 import {
   writeObjectState,
+  writeObjectLabels,
   readObjectState,
   compositeBorderNodes,
 } from "./pptx-object-state";
@@ -223,6 +224,8 @@ export function parseDeckJson(text: string): Deck {
           if (elementIds.has(el.id))
             fail(`${label}: 개체 ID가 중복되어 있습니다.`);
           elementIds.add(el.id);
+          if (source.name !== undefined) el.name = stringValue(source.name, `${elLabel} 이름`, 160, false);
+          if (source.hidden !== undefined) el.hidden = booleanValue(source.hidden, `${elLabel} 숨김`);
           for (const key of [
             "fillOpacity",
             "strokeOpacity",
@@ -269,6 +272,12 @@ export function parseDeckJson(text: string): Deck {
             el.groups = source.groups.map((id: unknown) =>
               stringValue(id, `${elLabel} 그룹`, 160, false),
             );
+          }
+          for (const key of ["groupNames", "groupHidden"] as const) {
+            if (source[key] === undefined) continue;
+            if (!Array.isArray(source[key]) || source[key].length !== (el.groups?.length ?? 0)) fail(`${elLabel}: 그룹 정보가 계층과 일치하지 않습니다.`);
+            if (key === "groupNames") el.groupNames = source[key].map(value => stringValue(value, `${elLabel} 그룹 이름`, 160));
+            else el.groupHidden = source[key].map(value => booleanValue(value, `${elLabel} 그룹 숨김`));
           }
           if (el.type === "table") {
             el.table = validateTable(source.table);
@@ -1085,6 +1094,7 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
     writeObjectState(doc, slide.elements);
     writeGroups(doc, slide.elements);
     writeVideoPlayback(doc, slide.elements);
+    writeObjectLabels(doc, slide.elements);
     if (slide.transition === "fade") {
       const transition = doc.createElementNS(
         "http://schemas.openxmlformats.org/presentationml/2006/main",
@@ -3079,11 +3089,13 @@ export async function importPptx(
             sourceRelationships,
             decorationsOnly,
           );
-          for (let i = firstElement; i < slide.elements.length; i++)
-            slide.elements[i].groups = [
-              groupId,
-              ...(slide.elements[i].groups ?? []),
-            ];
+          const groupState = readObjectState(node);
+          for (let i = firstElement; i < slide.elements.length; i++) {
+            const element = slide.elements[i], previousGroups = element.groups ?? [];
+            element.groups = [groupId, ...previousGroups];
+            if (groupState.name || element.groupNames) element.groupNames = [groupState.name ?? "", ...(element.groupNames ?? previousGroups.map(() => ""))];
+            if (groupState.hidden || element.groupHidden) element.groupHidden = [!!groupState.hidden, ...(element.groupHidden ?? previousGroups.map(() => false))];
+          }
           if (rotation || flipH || flipV) {
             // Child coordinates are already translated/scaled into slide
             // space. Reflect and rotate their centers around this group's
@@ -3248,6 +3260,8 @@ export async function importPptx(
           }
           for (let i = elementStart; i < slide.elements.length; i++) {
             const state = readObjectState(node);
+            if (state.name) slide.elements[i].name = state.name;
+            if (state.hidden) slide.elements[i].hidden = true;
             if (state.locked) slide.elements[i].locked = true;
             if (state.borders && slide.elements[i].type === "text")
               slide.elements[i].borders = state.borders;

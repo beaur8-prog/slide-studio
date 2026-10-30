@@ -139,8 +139,12 @@ export interface ChartData {
 }
 export interface SlideElement {
   id: string;
+  name?: string;
+  hidden?: boolean;
   // Outer group first. Coordinates remain in slide space for fast editing.
   groups?: string[];
+  groupNames?: string[];
+  groupHidden?: boolean[];
   type: "text" | "shape" | "image" | "table" | "video" | "chart";
   table?: TableData;
   chart?: ChartData;

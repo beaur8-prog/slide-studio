@@ -1,4 +1,5 @@
 import type { SlideElement } from "./types";
+import { isElementHidden } from "./layers";
 
 export function artworkBounds(e: SlideElement) {
   const a = (e.rotation * Math.PI) / 180;
@@ -24,7 +25,7 @@ export function snapMovement(
   axis?: "x" | "y",
 ) {
   const boxes = elements.filter((e) => ids.includes(e.id)).map(artworkBounds),
-    others = elements.filter((e) => !ids.includes(e.id)).map(artworkBounds);
+    others = elements.filter((e) => !ids.includes(e.id) && !isElementHidden(e)).map(artworkBounds);
   if (!boxes.length)
     return { dx, dy, guides: [] as { axis: "x" | "y"; at: number }[] };
   const left = Math.min(...boxes.map((b) => b.x)),

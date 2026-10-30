@@ -710,6 +710,24 @@ export async function writePreservedPptx(
   let partCount = 0,
     expanded = 0;
   const addType = (path: string, type: string) => {
+    // Keep conventional metafile defaults as well as the exact per-part type.
+    // Some Office/OPC consumers only inspect extension defaults for these media.
+    const extension = path.split(".").pop()!.toLowerCase();
+    if (
+      ["emf", "wmf"].includes(extension) &&
+      type.startsWith("image/") &&
+      !all(ct, "Default").some(
+        (n) => n.getAttribute("Extension")?.toLowerCase() === extension,
+      )
+    ) {
+      const defaultType = ct.createElementNS(CT, "Default");
+      defaultType.setAttribute("Extension", extension);
+      defaultType.setAttribute("ContentType", type);
+      ct.documentElement.insertBefore(
+        defaultType,
+        ct.documentElement.firstChild,
+      );
+    }
     const n = ct.createElementNS(CT, "Override");
     n.setAttribute("PartName", "/" + path);
     n.setAttribute("ContentType", type);

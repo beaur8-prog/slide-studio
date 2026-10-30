@@ -20,7 +20,7 @@ async function verifyAnimatedMedia(page, output, { app }) {
       console.log('Native media verification: ' + ext);
       await page.locator('input[accept*=".pptx"]').setInputFiles(blank);
       await expect(page.locator('.editable-slide .slide-element')).toHaveCount(0);
-      const input = ext === 'gif' ? page.locator('input[accept="image/png,image/jpeg,image/gif,image/webp"]') : page.locator('input[accept*="video/mp4"]');
+      const input = ext === 'gif' ? page.getByLabel("그림 삽입 파일", { exact: true }) : page.locator('input[accept*="video/mp4"]');
       await input.setInputFiles(path.resolve(__dirname, `../tests/fixtures/media/animated.${ext}`));
       await expect(page.locator('.editable-slide .slide-element')).toHaveCount(1);
       await expect(page.locator('.save-indicator')).toHaveText('저장됨');

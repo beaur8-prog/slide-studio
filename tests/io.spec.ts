@@ -337,7 +337,7 @@ test("layout placeholder geometry, theme font and scheme colors are inherited", 
   });
 });
 
-test("JSON rejects invalid geometry, unknown types, duplicate IDs, SVG and external images", async ({
+test("JSON rejects invalid geometry, unknown types, duplicate IDs, malformed SVG and external images", async ({
   page,
 }) => {
   const errors = await page.evaluate(async (deck) => {

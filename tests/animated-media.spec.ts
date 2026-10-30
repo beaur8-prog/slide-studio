@@ -111,7 +111,7 @@ test("GIF is still in editing/thumbnails/print, animates only in the current sli
 }) => {
   await emptyDeck(page);
   await page
-    .locator('input[accept="image/png,image/jpeg,image/gif,image/webp"]')
+    .getByLabel("그림 삽입 파일", { exact: true })
     .setInputFiles({
       name: "animated.gif",
       mimeType: "image/gif",

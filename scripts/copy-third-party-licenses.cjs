@@ -24,6 +24,10 @@ for (const [relative, entry] of Object.entries(lock.packages).sort(([a], [b]) =>
   if (!files.length) throw Error('Missing license text: ' + manifest.name);
   texts.push('\n' + '='.repeat(72) + `\n${manifest.name} ${manifest.version}\nLicense: ${entry.license || manifest.license}\n`);
   for (const name of files) texts.push(`\n--- ${name} ---\n` + fs.readFileSync(path.join(directory, name), 'utf8'));
+  if (manifest.name === 'emf-converter') {
+    const notice = path.join(directory, 'THIRD_PARTY_NOTICES');
+    texts.push('\n--- THIRD_PARTY_NOTICES ---\n' + fs.readFileSync(notice, 'utf8'));
+  }
   if (manifest.name === 'pako') {
     const source = fs.readFileSync(path.join(directory, 'lib/zlib/deflate.js'), 'utf8');
     const end = source.indexOf('\nvar ');

@@ -1,39 +1,16 @@
 import type { Deck, SlideElement } from "./types";
 import { chartBytes } from "./chart";
-import { bytesDataUrl } from "./video";
 import { stillImageSource } from "./gif-preview";
+import { decodeEmbeddedImage } from "./import-image";
+export { rasterMime } from "./image-format";
 
 export type ImageCrop = NonNullable<SlideElement["crop"]>;
 export type ImageSize = { width: number; height: number };
-export const IMAGE_ACCEPT = "image/png,image/jpeg,image/gif,image/webp";
+export const IMAGE_ACCEPT =
+  "image/png,image/jpeg,image/gif,image/webp,image/svg+xml,.svg,.emf,.wmf";
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MIN_VISIBLE = 0.00101;
 
-export function rasterMime(bytes: Uint8Array): string | undefined {
-  if (
-    bytes.length >= 8 &&
-    [137, 80, 78, 71, 13, 10, 26, 10].every((value, i) => bytes[i] === value)
-  )
-    return "image/png";
-  if (
-    bytes.length >= 3 &&
-    bytes[0] === 255 &&
-    bytes[1] === 216 &&
-    bytes[2] === 255
-  )
-    return "image/jpeg";
-  if (
-    bytes.length >= 6 &&
-    /^GIF8[79]a$/.test(String.fromCharCode(...bytes.subarray(0, 6)))
-  )
-    return "image/gif";
-  if (
-    bytes.length >= 12 &&
-    String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
-    String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP"
-  )
-    return "image/webp";
-}
 export async function imageSize(
   src: string,
   original = false,
@@ -63,11 +40,13 @@ export async function readImageFile(file: File) {
   if (file.size > MAX_IMAGE_BYTES)
     throw new Error("15MB 이하의 이미지를 선택해 주세요.");
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const mime = rasterMime(bytes);
-  if (!mime) throw new Error("PNG, JPG, GIF, WebP 이미지를 선택해 주세요.");
   // Preserve GIF frames and all other source bytes. A still preview is used
   // only for measuring/editing, never as the saved replacement image.
-  const src = bytesDataUrl(bytes, mime);
+  const src = await decodeEmbeddedImage(bytes);
+  if (!src)
+    throw new Error(
+      "PNG, JPG, GIF, WebP, SVG, EMF, WMF 이미지를 선택해 주세요.",
+    );
   try {
     return { src, ...(await imageSize(src, true)) };
   } catch {

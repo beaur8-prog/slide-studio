@@ -107,7 +107,7 @@ import ImageCropDialog from "./ImageCropDialog";
 import { readEditableChart } from "./chart-editing";
 import SlidePreview from "./SlidePreview";
 import { usePrintRendering } from "./print-rendering";
-import { assertImageCapacity, remainingAssetBytes, frameImageCrop, imageSize, readImageFile, type ImageCrop } from "./image-editing";
+import { IMAGE_ACCEPT, assertImageCapacity, remainingAssetBytes, frameImageCrop, imageSize, readImageFile, type ImageCrop } from "./image-editing";
 import { DEFAULT_SEARCH_OPTIONS, findDocumentText, replaceDocumentMatches, slideSearchText } from "./document-search";
 import TextColorPalette from "./TextColorPalette";
 import NumberInput from "./NumberInput";
@@ -5631,7 +5631,7 @@ export default function App() {
       </div>
       <input ref={videoInput} type="file" hidden accept={VIDEO_ACCEPT}
         onChange={event => { if (event.target.files?.[0]) void addVideo(event.target.files[0]); event.target.value = ""; }} />
-      <input ref={imageReplaceInput} type="file" hidden aria-label="그림 교체 파일" accept=".png,.jpg,.jpeg,.gif,.webp"
+      <input ref={imageReplaceInput} type="file" hidden aria-label="그림 교체 파일" accept={IMAGE_ACCEPT}
         onChange={event => {
           const request = imageReplaceTarget.current, file = event.target.files?.[0];
           imageReplaceTarget.current = null; event.target.value = "";
@@ -5641,7 +5641,8 @@ export default function App() {
         ref={imageInput}
         type="file"
         hidden
-        accept="image/png,image/jpeg,image/gif,image/webp"
+        aria-label="그림 삽입 파일"
+        accept={IMAGE_ACCEPT}
         onChange={(e) => {
           if (e.target.files?.[0]) void addImage(e.target.files[0]);
           e.target.value = "";

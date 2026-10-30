@@ -1,0 +1,22 @@
+[
+  {
+    "path": "src/__fixtures__/sample-gradient-clip.emf",
+    "bytes": 972,
+    "url": "https://raw.githubusercontent.com/ChristopherVR/emf-converter/main/src/__fixtures__/sample-gradient-clip.emf"
+  },
+  {
+    "path": "src/__fixtures__/sample-clip-gdi.emf",
+    "bytes": 708,
+    "url": "https://raw.githubusercontent.com/ChristopherVR/emf-converter/main/src/__fixtures__/sample-clip-gdi.emf"
+  },
+  {
+    "path": "src/__fixtures__/gdi/wmf-shapes-twips.wmf",
+    "bytes": 2162,
+    "url": "https://raw.githubusercontent.com/ChristopherVR/emf-converter/main/src/__fixtures__/gdi/wmf-shapes-twips.wmf"
+  },
+  {
+    "path": "src/__fixtures__/gdi/wmf-bitmaps.wmf",
+    "bytes": 16034,
+    "url": "https://raw.githubusercontent.com/ChristopherVR/emf-converter/main/src/__fixtures__/gdi/wmf-bitmaps.wmf"
+  }
+]

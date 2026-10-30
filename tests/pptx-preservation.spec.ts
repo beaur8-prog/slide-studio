@@ -201,8 +201,9 @@ test("native animations, audio, SVG originals, picture fallbacks and timed trans
     info.outputPath("results.json"),
     JSON.stringify({ ...result, output: undefined }, null, 2),
   );
-  expect(result.originalCount).toBe(3);
-  expect(result.finalCount).toBe(3);
+  // SVG-only artwork now has a visible image instead of an opaque-only node.
+  expect(result.originalCount).toBe(4);
+  expect(result.finalCount).toBe(4);
   expect(result.text).toBe("수정한 제목 3");
   for (const round of result.rounds) {
     expect(round.animations).toBe(1);
@@ -829,7 +830,7 @@ test("asymmetric text borders remain one editable object on a preserved animated
     },
     [...input],
   );
-  expect(result).toEqual(Array(3).fill({ elements: 3, borders: [1, 2, 3, 4] }));
+  expect(result).toEqual(Array(3).fill({ elements: 4, borders: [1, 2, 3, 4] }));
 });
 
 test("external audio is never fetched and saving reports its exclusion without a dangling sound relationship", async ({

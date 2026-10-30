@@ -49,8 +49,8 @@ change that document folder. Deleted folders fall back to Documents.
 Legacy JSON loading validates object kinds, IDs, slide and object limits, finite geometry,
 font sizes, opacity, colors, embedded raster image signatures, rich paragraphs,
 image crops, cell borders, and bounded numeric drawing paths. Unknown JSON
-properties are discarded. Raw SVG, external image URLs, and script-bearing URLs
-are not accepted.
+properties are discarded. Embedded SVG images are parsed and sanitized at the same
+validation boundary. External image URLs and script-bearing URLs are not accepted.
 
 PPTX export creates real editable PresentationML text boxes, basic shapes, lines,
 arrow lines, and embedded images. It preserves slide dimensions, backgrounds,
@@ -142,7 +142,40 @@ objects are rendered. SmartArt with a saved `diagramDrawing` part is imported as
 individual shapes, lines and text, using the source relationships and geometry;
 there is no SmartArt layout engine or automatic reflow. Source formulas stored as raster images remain images,
 not editable equations. Safe custom paths are reconstructed from numeric commands;
-arbitrary embedded SVG is still excluded.
+embedded SVG images are rendered only through isolated `<img>` sources, never as
+application DOM. The SVG sanitizer retains static paths, text, local styles,
+gradients, clipping, masks and supported filters. Scripts, event handlers,
+foreign HTML, animation, external resource URLs, external CSS/fonts and XML
+entity declarations are removed or rejected. Source PPTX bytes remain opaque
+in the preservation package; only a sanitized static copy is displayed.
+
+SVG is supported both as a direct picture and as Office's `asvg:svgBlip` extension,
+which takes precedence over its raster fallback. Supported EMF/WMF are converted
+to SVG by the bundled `emf-converter` browser implementation, without system
+converters or native addons. Playback runs in a disposable worker with an
+8-second outer timeout, a 5-second replay budget and bounded records/output.
+The worker is terminated on success and failure. The packaged CSP explicitly
+allows the bundled blob worker without enabling arbitrary inline/eval scripts.
+Repeated media are cached once per PPTX import, including failed conversions.
+Picture backgrounds and video posters share the same image decoder.
+
+SVG input/output is limited to 4 MiB and 20,000 descendants; its default raster
+preview dimensions are capped at 2048 per side while the viewBox retains vector
+coordinates. Metafiles are capped at 16 MiB and 50,000 top-level records before
+playback. Existing aggregate image/media limits continue to apply. SVG, EMF and
+WMF can also be inserted/replaced through picture file pickers. Newly inserted
+metafiles are stored/exported as sanitized SVG with a PNG compatibility fallback.
+Imported original vector bytes remain in standard reachable PPTX media parts
+after saving, including when a picture is moved, resized, flipped or cropped.
+Metafiles also declare conventional extension content types for legacy consumers.
+
+If a preferred vector is malformed or cannot be converted, its embedded Office
+raster fallback is used and reported. If no valid rendition exists, the image is
+excluded with a compatibility notice; no remote resource is fetched. Conversion
+is not a complete Windows GDI/EMF+ emulator in this app: uncommon records/effects
+and missing fonts may differ. SVG text inside an isolated image uses available
+system fonts, not the main document's CSS font faces. Vector images are edited
+as whole pictures, not as individual imported paths or text objects.
 
 Embedded PNG/JPEG/GIF/WebP slide background pictures are resolved from the owning
 slide, layout, or master relationship part, with slide-local backgrounds overriding
@@ -227,8 +260,9 @@ Each chart package is limited to 128 parts / 16 MiB; previews to 64 series,
 10,000 points per series and 100,000 points total. Charts count toward the
 100 MiB embedded-asset budget.
 
-SmartArt without saved drawing geometry, object animations, audio and SVG/EMF/WMF
-artwork do not gain editable/playing representations in this app. Their native
+SmartArt without saved drawing geometry, object animations and standalone audio
+do not gain editable/playing representations in this app. SVG and supported
+EMF/WMF artwork now have scalable picture representations as described above. Their native
 source data can nevertheless survive PPTX saving. Imports needing preservation
 retain one bounded source archive in the local model/autosave, with hashes and
 bindings to editable objects. This data is also retained by internal slide copy

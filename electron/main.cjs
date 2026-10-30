@@ -509,6 +509,7 @@ function hardenSession() {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "media-src 'self' data: blob:",
+      "worker-src 'self' blob:",
       "font-src 'self' data:",
       `connect-src ${IS_DEV ? 'http://127.0.0.1:5190 ws://127.0.0.1:5190' : "'none'"}`,
       "object-src 'none'", "frame-src 'none'", "base-uri 'none'", "form-action 'none'",

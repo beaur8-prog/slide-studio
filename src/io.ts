@@ -46,6 +46,9 @@ import { MAX_SLIDES, MAX_SLIDE_ELEMENTS, MAX_ELEMENTS } from "./document-limits"
 import { writeBackgroundImage } from "./pptx-background";
 import { writeGroups } from "./object-groups";
 import { rasterMime } from "./image-editing";
+import { safeSvgImage } from "./svg-image";
+import { decodeEmbeddedImage } from "./import-image";
+import { vectorKind } from "./vector-image";
 import {
   writeObjectState,
   writeObjectLabels,
@@ -101,12 +104,13 @@ function safeImage(value: unknown, label: string): string {
     value.length > Math.ceil((MAX_IMAGE * 4) / 3) + 100
   )
     fail(`${label}: 이미지는 16 MB 이하의 내장 이미지여야 합니다.`);
+  if (/^data:image\/svg\+xml;/i.test(value as string)) return safeSvgImage(value as string);
   const match =
     /^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/]*={0,2})$/i.exec(
       value as string,
     );
   if (!match || !match[2] || match[2].length % 4 !== 0)
-    fail(`${label}: PNG, JPEG, GIF, WebP 데이터 URL만 지원합니다.`);
+    fail(`${label}: PNG, JPEG, GIF, WebP, SVG 데이터 URL만 지원합니다.`);
   let raw: string;
   try {
     raw = atob(match![2]);
@@ -1505,7 +1509,7 @@ function bodyText(body: Element | undefined): string {
 
 /**
  * Import the editable subset of PresentationML. Unsupported objects produce
- * explicit warnings; no remote relationship, macro, OLE object, or SVG executes.
+ * explicit warnings; no remote relationship, macro, OLE object, or SVG script executes.
  */
 export async function importPptx(
   data: ArrayBuffer | Uint8Array,
@@ -1515,7 +1519,7 @@ export async function importPptx(
   const { zip, partSizes, readBytes, readXml } = sourcePackage;
   const warnings = new Set<string>();
   const warn = (text: string) => warnings.add(text);
-  const imageCache = new Map<string, string>();
+  const imageCache = new Map<string, string | undefined>();
   const videoCache = new Map<string, string | null>();
   let embeddedAssetBytes = 0;
   const relationships = async (path: string): Promise<Relationship[]> => {
@@ -1590,6 +1594,33 @@ export async function importPptx(
     warn("매크로, ActiveX, OLE 첨부 개체는 가져오지 않습니다.");
   const preservationId = uid();
   let needsSource = preservationRequired(presentation) || ["embeddedFontLst","custShowLst","photoAlbum","kinsoku"].some(name=>!!first(presentation,name)) || presentationRels.some(r=>r.type.endsWith("/commentAuthors"));
+  const readImagePart = async (path: string) => {
+    if (imageCache.has(path)) return imageCache.get(path);
+    let source: string | undefined;
+    try {
+      const raw = await readBytes(path, MAX_IMAGE);
+      if (raw) {
+        needsSource ||= !!vectorKind(raw);
+        source = await decodeEmbeddedImage(raw);
+      }
+    } catch { /* Try the Office raster fallback, while retaining native bytes. */ }
+    imageCache.set(path, source);
+    return source;
+  };
+  const readPicture = async (blip: Element | undefined, imageRels: Relationship[]) => {
+    const candidates = [first(blip, "svgBlip"), blip];
+    let triedVector = false;
+    for (const candidate of candidates) {
+      const rel = imageRels.find(r => r.id === relId(candidate, "embed") && r.type.endsWith("/image"));
+      if (!rel?.path || rel.external) continue;
+      const source = await readImagePart(rel.path);
+      if (source) {
+        if (triedVector) warn("일부 벡터 그림은 변환할 수 없어 PPTX에 포함된 대체 그림으로 표시합니다.");
+        return source;
+      }
+      if (candidate !== blip) triedVector = true;
+    }
+  };
   let count = 0;
   const tableStyles = await readXml(
     presentationRels.find((r) => r.type.endsWith("/tableStyles"))?.path ??
@@ -1687,21 +1718,10 @@ export async function importPptx(
     const backgroundFill = child(child(backgroundNode, "bgPr"), "blipFill");
     if (backgroundFill) {
       const blip = child(backgroundFill, "blip");
-      const imageRel = backgroundRels.find((r) => r.id === relId(blip, "embed") && r.type.endsWith("/image"));
       const fillRect = child(child(backgroundFill, "stretch"), "fillRect");
       const supportedPlacement = !child(backgroundFill, "tile") && !["t", "r", "b", "l"].some((key) => attrNumber(fillRect, key) !== 0);
-      if (imageRel?.path && !imageRel.external && supportedPlacement) {
-        let src = imageCache.get(imageRel.path);
-        if (!src) {
-          const raw = await readBytes(imageRel.path, MAX_IMAGE);
-          const mime = raw && rasterMime(raw);
-          if (raw && mime) {
-            let binary = "";
-            for (let i = 0; i < raw.length; i += 32768) binary += String.fromCharCode(...raw.subarray(i, i + 32768));
-            src = `data:${mime};base64,${btoa(binary)}`;
-            imageCache.set(imageRel.path, src);
-          }
-        }
+      if (supportedPlacement) {
+        const src = await readPicture(blip, backgroundRels);
         if (src) {
           const crop = ["t", "r", "b", "l"].map((key) => attrNumber(child(backgroundFill, "srcRect"), key) / 100000) as [number, number, number, number];
           backgroundImage = validateBackgroundImage({ src,
@@ -2269,21 +2289,7 @@ export async function importPptx(
             videoCache.set(relationship.path, src);
           }
           if (src) {
-            const posterRel = pictureRelationships.find(
-              (r) =>
-                r.id === relId(first(child(node, "blipFill"), "blip"), "embed"),
-            );
-            let poster = posterRel?.path
-              ? imageCache.get(posterRel.path)
-              : undefined;
-            if (!poster && posterRel?.path && !posterRel.external) {
-              const raw = await readBytes(posterRel.path, MAX_IMAGE),
-                mime = raw && rasterMime(raw);
-              if (raw && mime) {
-                poster = bytesDataUrl(raw, mime);
-                imageCache.set(posterRel.path, poster);
-              }
-            }
+            let poster = await readPicture(first(child(node, "blipFill"), "blip"), pictureRelationships);
             poster ??= EMPTY_POSTER;
             if (
               embeddedAssetBytes + (src.length + poster.length) * 0.75 <=
@@ -2317,79 +2323,10 @@ export async function importPptx(
         );
       }
       const blip = first(child(node, "blipFill"), "blip");
-      const imageRel = pictureRelationships.find(
-        (r) => r.id === relId(blip, "embed"),
-      );
-      if (!imageRel?.path || imageRel.external) {
-        warn("내장 데이터가 없는 연결 이미지를 제외했습니다.");
-        return;
-      }
-      let src = imageCache.get(imageRel.path);
+      const src = await readPicture(blip, pictureRelationships);
       if (!src) {
-        let raw = await readBytes(imageRel.path, MAX_IMAGE);
-        let mime = raw && rasterMime(raw);
-        if (
-          raw &&
-          !mime &&
-          ((raw[0] === 0x49 &&
-            raw[1] === 0x49 &&
-            raw[2] === 42 &&
-            raw[3] === 0) ||
-            (raw[0] === 0x4d &&
-              raw[1] === 0x4d &&
-              raw[2] === 0 &&
-              raw[3] === 42))
-        ) {
-          try {
-            const { default: UTIF } = await import("utif");
-            const buffer = new Uint8Array(raw).buffer;
-            const pages = UTIF.decode(buffer),
-              page = pages[0];
-            const w = page?.t256?.[0],
-              h = page?.t257?.[0];
-            if (
-              !Number.isInteger(w) ||
-              !Number.isInteger(h) ||
-              w <= 0 ||
-              h <= 0 ||
-              w * h > 16000000
-            )
-              throw Error("TIFF dimensions");
-            UTIF.decodeImage(buffer, page);
-            const rgba = UTIF.toRGBA8(page);
-            const canvas = document.createElement("canvas");
-            canvas.width = w;
-            canvas.height = h;
-            const context = canvas.getContext("2d")!;
-            context.putImageData(
-              new ImageData(new Uint8ClampedArray(rgba), w, h),
-              0,
-              0,
-            );
-            src = canvas.toDataURL("image/png");
-            canvas.width = canvas.height = 0;
-            if (src.length * 0.75 > MAX_IMAGE) throw Error("TIFF output size");
-            imageCache.set(imageRel.path, src);
-          } catch {
-            warn(
-              "TIFF 이미지의 크기 또는 압축 방식을 처리할 수 없어 해당 이미지를 제외했습니다.",
-            );
-            return;
-          }
-        }
-        if (!src && (!raw || !mime)) {
-          warn(
-            "SVG·EMF·WMF 등 지원하지 않는 이미지 형식은 제외했습니다. PNG/JPEG/GIF/WebP/TIFF 이미지를 지원합니다.",
-          );
-          return;
-        }
-        if (!src) {
-          let binary = "";
-          for (let i = 0; i < raw!.length; i += 32768)
-            binary += String.fromCharCode(...raw!.subarray(i, i + 32768));
-          src = `data:${mime};base64,${btoa(binary)}`;
-          imageCache.set(imageRel.path, src);
-        }
+        warn("변환할 수 없는 그림이나 내장 데이터가 없는 연결 이미지를 제외했습니다. PNG/JPEG/GIF/WebP/TIFF 및 지원하는 SVG/EMF/WMF 그림을 표시합니다.");
+        return;
       }
       const cropNode = first(node, "srcRect");
       const crop: [number, number, number, number] = ["t", "r", "b", "l"].map(

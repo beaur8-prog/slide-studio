@@ -197,8 +197,8 @@ test("Home font size also keeps small leading digits until the number is complet
   await open(page);
   const text = page.locator('[data-element-id="text-c"]');
   await text.click();
-  const size = await typeNumber(page, "글자 크기", "24");
-  await expect(size).toHaveValue("24");
+  const size = await typeNumber(page, "글자 크기", "18");
+  await expect(size).toHaveValue("18");
   await expect(text.locator(".element-text")).toHaveCSS("font-size", "32px");
   await size.press("Enter");
   await expect(text.locator(".element-text")).toHaveCSS("font-size", "24px");
@@ -285,8 +285,8 @@ for (const kind of ["text", "shape", "image"] as const) {
       "rotate(-15deg)",
     );
     if (kind === "text") {
-      const size = await typeNumber(page, "글자 크기", "24");
-      await expect(size).toHaveValue("24");
+      const size = await typeNumber(page, "글자 크기", "18");
+      await expect(size).toHaveValue("18");
       await size.press("Enter");
       await expect(target.locator(".element-text")).toHaveCSS(
         "font-size",

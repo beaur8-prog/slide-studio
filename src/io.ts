@@ -13,6 +13,9 @@ import {
   EMPTY_POSTER,
 } from "./video";
 import { readVideoPlayback, writeVideoPlayback } from "./pptx-video";
+import { readAudioPlayback } from "./pptx-video";
+import { audioMime, audioExtension, safeAudio, MAX_AUDIO_BYTES } from "./audio";
+import { AUDIO_ICON } from "./audio-icon";
 import { drawingTextFrame } from "./drawing-guides";
 import { normalizeObjectAlpha, rgbToHsl, hslToRgb } from "./colors";
 import {
@@ -251,7 +254,7 @@ export function validateDeck(input: unknown): Deck {
             id: stringValue(source.id, `${elLabel} ID`, 160, false),
             type: enumValue(
               source.type,
-              ["text", "shape", "image", "table", "video", "chart"],
+              ["text", "shape", "image", "table", "video", "audio", "chart"],
               `${elLabel} 종류`,
             ),
             x: numberValue(source.x, `${elLabel} X`, -100000, 100000),
@@ -609,6 +612,20 @@ export function validateDeck(input: unknown): Deck {
             imageBytes += (el.src.length + el.poster.length) * 0.75;
             if (imageBytes > MAX_EXPANDED / 2)
               fail("내장 이미지·동영상의 합계가 100 MB를 초과합니다.");
+          }
+          if (el.type === "audio") {
+            el.src = safeAudio(source.src);
+            el.poster = source.poster === undefined ? AUDIO_ICON : safeImage(source.poster, elLabel);
+            el.autoPlay = source.autoPlay === undefined ? true : booleanValue(source.autoPlay, elLabel);
+            for (const key of ["loop", "muted", "playAcrossSlides", "hideDuringShow"] as const)
+              el[key] = source[key] === undefined ? false : booleanValue(source[key], elLabel);
+            el.volume = source.volume === undefined ? 1 : numberValue(source.volume, elLabel, 0, 1);
+            if (source.audioSlideCount !== undefined) {
+              el.audioSlideCount = numberValue(source.audioSlideCount, elLabel, 1, 999);
+              if (!Number.isInteger(el.audioSlideCount)) fail(`${elLabel}: 재생할 슬라이드 수는 정수여야 합니다.`);
+            }
+            imageBytes += (el.src.length + el.poster.length) * 0.75;
+            if (imageBytes > MAX_EXPANDED / 2) fail("내장 그림·오디오·동영상·차트의 합계가 100 MB를 초과합니다.");
           }
           // DrawingML permits collapsed shapes (for example a stroked custom
           // path with cy=0). Keep their exact bounds instead of rejecting the
@@ -1002,13 +1019,13 @@ export async function exportPptx(input: Deck, options: {onWarning?: (message:str
             },
           },
         );
-      } else if (el.type === "video") {
+      } else if (el.type === "video" || el.type === "audio") {
         slide.addMedia({
           ...box,
-          type: "video",
+          type: el.type,
           data: el.src!,
-          cover: el.poster ?? EMPTY_POSTER,
-          extn: el.src!.startsWith("data:video/webm") ? "webm" : "mp4",
+          cover: el.poster ?? (el.type === "audio" ? AUDIO_ICON : EMPTY_POSTER),
+          extn: el.type === "audio" ? audioExtension(el.src!) : el.src!.startsWith("data:video/webm") ? "webm" : "mp4",
           objectName: el.id,
         });
       } else if (el.type === "image") {
@@ -1437,7 +1454,7 @@ function transformGroupedElement(
     x: cx + dx * Math.cos(angle) - dy * Math.sin(angle) - element.width / 2,
     y: cy + dx * Math.sin(angle) + dy * Math.cos(angle) - element.height / 2,
     rotation: orientation,
-    ...(["image", "video", "chart"].includes(element.type) ||
+    ...(["image", "video", "audio", "chart"].includes(element.type) ||
     (element.type === "shape" && !line)
       ? {
           flipH: Boolean(element.flipH) !== flipH,
@@ -1521,6 +1538,7 @@ export async function importPptx(
   const warn = (text: string) => warnings.add(text);
   const imageCache = new Map<string, string | undefined>();
   const videoCache = new Map<string, string | null>();
+  const audioCache = new Map<string, string | null>();
   let embeddedAssetBytes = 0;
   const relationships = async (path: string): Promise<Relationship[]> => {
     const bits = path.split("/");
@@ -1776,11 +1794,10 @@ export async function importPptx(
         "animScale",
         "set",
         "cmd",
-        "audio",
       ].some((name) => first(first(doc, "timing"), name))
     )
       warn(
-        "개체 애니메이션·오디오와 복잡한 미디어 타이밍은 가져오지 않습니다. 동영상의 자동 시작·반복·음소거는 보존합니다.",
+        "개체 애니메이션과 복잡한 미디어 타이밍은 편집·발표에서 지원하지 않습니다. 내장 오디오·동영상의 기본 재생 설정은 가져오며, 지원하지 않는 원본 요소도 PPTX로 저장할 때 보존합니다.",
       );
     if (rels.some((r) => r.external && !r.type.endsWith("/hyperlink")))
       warn("외부 링크 이미지·미디어는 불러오거나 실행하지 않습니다.");
@@ -1808,7 +1825,7 @@ export async function importPptx(
       if (++count > MAX_ELEMENTS || slide.elements.length >= 1000)
         fail("PPTX 개체 수가 지원 한도를 초과합니다.");
       normalizeObjectAlpha(el);
-      if (el.type === "image" || el.type === "video")
+      if (el.type === "image" || el.type === "video" || el.type === "audio")
         embeddedAssetBytes +=
           ((el.src?.length ?? 0) + (el.poster?.length ?? 0)) * 0.75;
       slide.elements.push(el);
@@ -2268,7 +2285,37 @@ export async function importPptx(
       }
       const media = first(node, "media"),
         legacyVideo = first(node, "videoFile");
-      if (media || legacyVideo) {
+      const legacyAudio = first(node, "audioFile") ?? first(node, "wavAudioFile");
+      const mediaId = relId(media, "embed") || relId(legacyAudio, "link") || relId(legacyAudio, "embed") || relId(legacyVideo, "link");
+      const mediaRelationship = pictureRelationships.find(r=>r.id === mediaId);
+      const isAudio = !!legacyAudio || !!mediaRelationship?.type.endsWith("/audio") || /\.(?:mp3|wav|m4a)$/i.test(mediaRelationship?.path ?? "");
+      if (isAudio) {
+        const relationship = mediaRelationship;
+        const declaredSize = relationship?.path ? partSizes.get(relationship.path) : undefined;
+        if (relationship?.path && !relationship.external && declaredSize !== undefined && declaredSize <= MAX_AUDIO_BYTES &&
+          embeddedAssetBytes + declaredSize + 512 < MAX_EXPANDED / 2) {
+          let src = audioCache.get(relationship.path);
+          if (src === undefined) {
+            const raw = await readBytes(relationship.path, MAX_AUDIO_BYTES), mime = raw && audioMime(raw);
+            src = raw && mime ? bytesDataUrl(raw,mime) : null;
+            audioCache.set(relationship.path,src);
+          }
+          if (src) {
+            const poster = (await readPicture(first(child(node,"blipFill"),"blip"),pictureRelationships)) ?? AUDIO_ICON;
+            if (embeddedAssetBytes + (src.length + poster.length) * 0.75 <= MAX_EXPANDED / 2) {
+              addElement({ id:uid(), type:"audio", ...geometry, opacity:1, src, poster,
+                ...readAudioPlayback(doc,node),
+                flipH:["1","true"].includes(xfrm?.getAttribute("flipH")??""),
+                flipV:["1","true"].includes(xfrm?.getAttribute("flipV")??""),
+                alt:first(node,"cNvPr")?.getAttribute("descr") || first(node,"cNvPr")?.getAttribute("name") || "오디오",
+              });
+              return;
+            }
+          }
+        }
+        warn("외부 연결·지원하지 않는 오디오 또는 크기 제한을 넘는 소리는 아이콘으로만 가져옵니다. 내장 MP3·WAV·M4A는 한 개당 20 MiB까지 지원합니다.");
+      }
+      if (!isAudio && (media || legacyVideo)) {
         const id = relId(media, "embed") || relId(legacyVideo, "link");
         const relationship = pictureRelationships.find((r) => r.id === id);
         const declaredSize = relationship?.path
@@ -2332,8 +2379,6 @@ export async function importPptx(
       const crop: [number, number, number, number] = ["t", "r", "b", "l"].map(
         (k) => attrNumber(cropNode, k, 0) / 100000,
       ) as [number, number, number, number];
-      if (first(node, "audioFile"))
-        warn("오디오는 재생 가능한 미디어로 가져오지 않습니다.");
       const opacity = clamp(
         attrNumber(child(blip, "alphaModFix"), "amt", 100000) / 100000,
         0,
@@ -3107,6 +3152,7 @@ export async function importPptx(
             if (state.name) slide.elements[i].name = state.name;
             if (state.hidden) slide.elements[i].hidden = true;
             if (state.locked) slide.elements[i].locked = true;
+            if (state.hideAudioIcon && slide.elements[i].type === "audio") slide.elements[i].hideDuringShow = true;
             if (state.borders && slide.elements[i].type === "text")
               slide.elements[i].borders = state.borders;
             if (hyperlink) slide.elements[i].hyperlink = hyperlink;
@@ -3129,6 +3175,9 @@ export async function importPptx(
       await walk(first(layout, "spTree"), IDENTITY, 0, layoutRels, true, layoutPath!);
     }
     await walk(first(doc, "spTree"), IDENTITY);
+    const audioShapes = new Set(slide.elements.filter(e=>e.type==="audio").map(e=>e.pptxRef?.shape));
+    if (all(doc,"audio").some(audio=>!all(audio,"spTgt").some(target=>audioShapes.has(target.getAttribute("spid")??""))))
+      warn("개체 효과음·녹음 타이밍 등 아이콘에 연결되지 않은 오디오는 앱에서 재생하지 않으며 원본 PPTX에 보존합니다.");
     const notesDoc = await readXml(
       rels.find((r) => r.type.endsWith("/notesSlide"))?.path,
     );
@@ -3152,7 +3201,7 @@ export async function importPptx(
       s.elements.reduce(
         (n, e) =>
           n +
-          (["image", "video"].includes(e.type)
+          (["image", "video", "audio"].includes(e.type)
             ? ((e.src?.length ?? 0) + (e.poster?.length ?? 0)) * 0.75
             : 0),
         0,
@@ -3166,12 +3215,12 @@ export async function importPptx(
       i--
     ) {
       const e = s.elements[i];
-      if (e.type !== "video") continue;
-      const { src, poster, autoPlay, loop, muted, type, ...rest } = e;
+      if (e.type !== "video" && e.type !== "audio") continue;
+      const { src, poster, autoPlay, loop, muted, volume, playAcrossSlides, audioSlideCount, hideDuringShow, type, ...rest } = e;
       assetBytes -= (src?.length ?? 0) * 0.75;
       s.elements[i] = { ...rest, type: "image", src: poster ?? EMPTY_POSTER };
       warn(
-        "이미지·동영상 합계 100 MiB 제한을 넘는 영상은 정지 미리보기로 가져왔습니다.",
+        "내장 미디어 합계 100 MiB 제한을 넘는 오디오·동영상은 아이콘 또는 정지 미리보기로 가져왔습니다.",
       );
     }
   }

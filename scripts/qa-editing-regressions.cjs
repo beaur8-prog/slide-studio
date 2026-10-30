@@ -81,8 +81,8 @@ module.exports = async function verifyEditing(page, output) {
     if (kind === 'text') {
       await field('글자 크기').focus();
       await field('글자 크기').press('ControlOrMeta+a');
-      await field('글자 크기').pressSequentially('24');
-      await expect(field('글자 크기')).toHaveValue('24');
+      await field('글자 크기').pressSequentially('18');
+      await expect(field('글자 크기')).toHaveValue('18');
       await field('글자 크기').press('Enter');
       await expect(text.locator('.element-text')).toHaveCSS('font-size', '24px');
     }

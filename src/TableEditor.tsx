@@ -1,4 +1,5 @@
 import { alphaColor } from "./colors";
+import { pixelsToPoints, pointsToPixels } from "./font-units";
 import { useEffect, useRef, useState } from "react";
 import type {
   ClipboardEvent as ReactClipboardEvent,
@@ -1020,15 +1021,18 @@ export default function TableEditor({
               ] as const
             ).map(([key, label, min, max]) => (
               <label key={key}>
-                {label}
+                {label}{key === "fontSize" ? " (pt)" : ""}
                 <NumberInput
                   aria-label={label}
-                  min={min}
-                  max={max}
+                  min={key === "fontSize" ? pixelsToPoints(min) : min}
+                  max={key === "fontSize" ? pixelsToPoints(max) : max}
+                  step={key === "fontSize" ? 0.1 : 1}
                   value={
-                    formatTarget === "selection" ? format[key] : draft[key]
+                    key === "fontSize" ? pixelsToPoints(formatTarget === "selection" ? format[key] : draft[key])
+                    : formatTarget === "selection" ? format[key] : draft[key]
                   }
-                  onChange={(value) => {
+                  onChange={(input) => {
+                    const value = key === "fontSize" ? pointsToPixels(input) : input;
                     if (
                       Number.isFinite(value) &&
                       value >= min &&

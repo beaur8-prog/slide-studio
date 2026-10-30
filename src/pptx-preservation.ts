@@ -165,6 +165,7 @@ const playback = (e: SlideElement) => ({
   autoPlay: e.autoPlay,
   loop: e.loop,
   muted: e.muted,
+  ...(e.type === "audio" ? {volume:e.volume,playAcrossSlides:e.playAcrossSlides,audioSlideCount:e.audioSlideCount,hideDuringShow:e.hideDuringShow} : {}),
 });
 const content = (e: SlideElement) => ({
   type: e.type,
@@ -1800,7 +1801,7 @@ export async function writePreservedPptx(
     const timing = child(generated.documentElement, "timing");
     const changedVideos = new Set<string>();
     const generatedVideos = new Set<string>();
-    for (const e of slide.elements.filter((e) => e.type === "video")) {
+    for (const e of slide.elements.filter((e) => e.type === "video" || e.type === "audio")) {
       const ref = e.pptxRef;
       if (
         !ref ||
@@ -1813,7 +1814,7 @@ export async function writePreservedPptx(
       }
     }
     if (timing) {
-      for (const action of [...all(timing, "video"), ...all(timing, "cmd")])
+      for (const action of [...all(timing, "video"), ...all(timing, "audio"), ...all(timing, "cmd")])
         if (
           all(action, "spTgt").some((t) =>
             changedVideos.has(t.getAttribute("spid")!),
@@ -1827,10 +1828,10 @@ export async function writePreservedPptx(
       // changed playback values replace their old per-video timing action.
       const keep = generatedVideos;
       pruneTiming(generatedTiming, generatedIds, () => {});
-      for (const video of all(generatedTiming, "video"))
+      for (const video of [...all(generatedTiming, "video"), ...all(generatedTiming, "audio")])
         if (!all(video, "spTgt").some((t) => keep.has(t.getAttribute("spid")!)))
           video.remove();
-      if (all(generatedTiming, "video").length) {
+      if (all(generatedTiming, "video").length || all(generatedTiming, "audio").length) {
         const max = Math.max(
           0,
           ...all(timing, "cTn").map((n) => Number(n.getAttribute("id")) || 0),

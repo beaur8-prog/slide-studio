@@ -3,6 +3,49 @@ import { editableText } from "./text-layout";
 export type InlineFormat = "bold" | "italic" | "underline";
 type TextFormat = InlineFormat | "color" | "fontFamily" | "fontSize";
 type RunStyle = Pick<TextRun, TextFormat | "fontFamilyEastAsian">;
+const pendingSizes = new WeakMap<
+  HTMLElement,
+  { pixels: number; node: Node; offset: number }
+>();
+function clearPendingSize(host: HTMLElement) {
+  pendingSizes.delete(host);
+  delete host.dataset.pendingFontSize;
+}
+function rememberPendingSize(host: HTMLElement, pixels: number) {
+  const selection = getSelection();
+  if (
+    selection?.isCollapsed &&
+    selection.anchorNode &&
+    host.contains(selection.anchorNode)
+  )
+    pendingSizes.set(host, {
+      pixels,
+      node: selection.anchorNode,
+      offset: selection.anchorOffset,
+    });
+}
+/** Native collapsed font commands affect the next glyph without adding DOM.
+ * Keep that pending value until the caret moves, so repeated commands and the
+ * ribbon preview use the same size without changing existing text. */
+export function pendingFontPixels(host: HTMLElement) {
+  const pending = pendingSizes.get(host),
+    selection = getSelection();
+  if (
+    !pending ||
+    !selection?.anchorNode ||
+    !host.contains(selection.anchorNode)
+  )
+    return;
+  if (
+    !selection.isCollapsed ||
+    selection.anchorNode !== pending.node ||
+    selection.anchorOffset !== pending.offset
+  ) {
+    clearPendingSize(host);
+    return;
+  }
+  return pending.pixels;
+}
 export type TextFormatRange = {
   start: number;
   end: number;
@@ -245,23 +288,69 @@ export function applyTextFormatRanges(
 
 // insertHTML is one native undoable edit. Wrapping the selected fragment leaves
 // its existing inline styles in place and accepts arbitrary pixel sizes.
-export function setSelectedFontSize(host: HTMLElement, size: number) {
+export function setSelectedFontSize(
+  host: HTMLElement,
+  size: number | ((current: number) => number),
+) {
   const selection = getSelection();
   if (!selection?.rangeCount) return;
   const range = selection.getRangeAt(0);
+  const pending = pendingFontPixels(host);
   if (range.collapsed) {
-    host.dataset.pendingFontSize = String(size);
+    let at =
+      selection.anchorNode instanceof HTMLElement
+        ? selection.anchorNode
+        : (selection.anchorNode?.parentElement ?? host);
+    while (at !== host && getComputedStyle(at).fontSize === "0px")
+      at = at.parentElement ?? host;
+    const value =
+      typeof size === "number"
+        ? size
+        : size(pending ?? (parseFloat(getComputedStyle(at).fontSize) || 32));
+    host.dataset.pendingFontSize = String(value);
     document.execCommand("styleWithCSS", false, "false");
     document.execCommand("fontSize", false, "7");
     applyPendingFontSize(host);
+    rememberPendingSize(host, value);
     return;
   }
   const span = document.createElement("span"),
     marker = crypto.randomUUID();
   const length = range.toString().length;
   span.dataset.textSize = marker;
-  span.style.fontSize = `${size}px`;
-  span.appendChild(range.cloneContents());
+  const fragment = range.cloneContents();
+  if (typeof size === "number") span.style.fontSize = `${size}px`;
+  else {
+    const styles: number[] = [];
+    const original = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    let node: Node | null;
+    while ((node = original.nextNode())) {
+      if (!node.textContent || !range.intersectsNode(node)) continue;
+      // intersectsNode also includes a text node that only touches the start
+      // or end boundary. cloneContents omits its empty slice, so including it
+      // here would shift every subsequent run's size by one.
+      const overlap = range.cloneRange();
+      if (range.comparePoint(node, 0) >= 0) overlap.setStart(node, 0);
+      if (range.comparePoint(node, node.textContent.length) <= 0)
+        overlap.setEnd(node, node.textContent.length);
+      if (!overlap.toString()) continue;
+      const pixels = parseFloat(getComputedStyle(node.parentElement!).fontSize);
+      styles.push(pixels === 0 ? 0 : size(pixels || 32));
+    }
+    const copied = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+    const nodes: Text[] = [];
+    while ((node = copied.nextNode()))
+      if (node.textContent) nodes.push(node as Text);
+    nodes.forEach((text, index) => {
+      const pixels = styles[index];
+      if (!pixels) return; // Keep invisible list separators invisible.
+      const styled = document.createElement("span");
+      styled.style.fontSize = `${pixels}px`;
+      text.replaceWith(styled);
+      styled.append(text);
+    });
+  }
+  span.appendChild(fragment);
   document.execCommand("insertHTML", false, span.outerHTML);
   const inserted = host.querySelectorAll(`[data-text-size="${marker}"]`);
   if (inserted.length) {
@@ -298,11 +387,16 @@ export function setSelectedFontSize(host: HTMLElement, size: number) {
   }
 }
 
-export function applyPendingFontSize(host: HTMLElement) {
+export function applyPendingFontSize(host: HTMLElement, inputType = "") {
+  if (inputType.startsWith("history")) {
+    clearPendingSize(host);
+    return;
+  }
   const size = Number(host.dataset.pendingFontSize);
   if (!Number.isFinite(size) || size < 1) return;
   for (const font of host.querySelectorAll<HTMLElement>('font[size="7"]')) {
     font.style.fontSize = `${size}px`;
     font.removeAttribute("size");
   }
+  rememberPendingSize(host, size);
 }

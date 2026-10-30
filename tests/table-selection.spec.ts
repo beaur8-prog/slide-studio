@@ -400,7 +400,7 @@ test("range formatting leaves other cells unchanged and round-trips through proj
   await expect(dialog.getByLabel("서식 적용 대상")).toHaveValue("selection");
   await dialog.getByLabel("셀 배경", { exact: true }).fill("#2157ac");
   await dialog.getByLabel("셀 글자색", { exact: true }).fill("#ffee44");
-  await dialog.getByLabel("표 글자 크기", { exact: true }).fill("18");
+  await dialog.getByLabel("표 글자 크기", { exact: true }).fill("13.5");
   await dialog.getByLabel("테두리 색", { exact: true }).fill("#cc2200");
   await dialog.getByLabel("테두리 두께", { exact: true }).fill("4");
   await dialog
@@ -563,7 +563,7 @@ test("new tables default to table formatting and canvas cells use an explicit se
   await dialog.getByLabel("서식 적용 대상").selectOption("table");
   await expect(dialog.getByLabel("서식 적용 대상")).toHaveValue("table");
   await dialog.getByLabel("셀 배경", { exact: true }).fill("#e0e1e2");
-  await dialog.getByLabel("표 글자 크기", { exact: true }).fill("22");
+  await dialog.getByLabel("표 글자 크기", { exact: true }).fill("16.5");
   await dialog.getByRole("button", { name: "표 적용", exact: true }).click();
   await expect
     .poll(async () => {

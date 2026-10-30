@@ -56,20 +56,33 @@ export function resizeElements(
     localY = -dx * Math.sin(angle) + dy * Math.cos(angle);
   const horizontal = handle.includes("e") ? 1 : handle.includes("w") ? -1 : 0,
     vertical = handle.includes("s") ? 1 : handle.includes("n") ? -1 : 0;
-  let sx = horizontal ? 1 + (horizontal * localX) / box.width : 1,
-    sy = vertical ? 1 + (vertical * localY) / box.height : 1;
-  const minX = Math.max(...moving.map((e) => 16 / e.width)),
+  let sx =
+      horizontal && box.width > 0 ? 1 + (horizontal * localX) / box.width : 1,
+    sy = vertical && box.height > 0 ? 1 + (vertical * localY) / box.height : 1;
+  // Imported zero-area markers are valid. They must stay zero-area and cannot
+  // introduce Infinity into the scale of the other selected objects. Respect
+  // already-small source artwork instead of enlarging it on an unrelated drag.
+  const minX = Math.max(
+      0,
+      ...moving.map((e) => (e.width > 0 ? Math.min(1, 16 / e.width) : 0)),
+    ),
     minY = Math.max(
-      ...moving.map(
-        (e) =>
-          (e.type === "shape" && (e.shape === "line" || e.shape === "arrow")
-            ? 0.01
-            : 8) / Math.max(e.height, 0.01),
+      0,
+      ...moving.map((e) =>
+        e.height > 0
+          ? Math.min(
+              1,
+              (e.type === "shape" && (e.shape === "line" || e.shape === "arrow")
+                ? 0.01
+                : 8) / e.height,
+            )
+          : 0,
       ),
     );
   const keep =
     handle.length === 2 &&
-    (shift || (moving.length === 1 && ["image", "video"].includes(moving[0].type)));
+    (shift ||
+      (moving.length === 1 && ["image", "video", "audio"].includes(moving[0].type)));
   if (keep) {
     const ratio = Math.abs(sx - 1) > Math.abs(sy - 1) ? sx : sy;
     sx = sy = Math.max(minX, minY, ratio);

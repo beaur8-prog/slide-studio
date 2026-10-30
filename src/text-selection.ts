@@ -40,6 +40,35 @@ export function captureTextSelection(
       selection.anchorOffset === range.endOffset,
   };
 }
+
+// execCommand can leave a selection boundary on the parent of a newly styled
+// span. Read the first selected glyph, not the parent's inherited font size.
+export function selectedTextElement(
+  host: HTMLElement,
+): HTMLElement | undefined {
+  const selection = getSelection();
+  if (
+    !selection?.rangeCount ||
+    !host.contains(selection.anchorNode) ||
+    !host.contains(selection.focusNode)
+  )
+    return;
+  const range = selection.getRangeAt(0);
+  if (!range.collapsed) {
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      if (!node.textContent || !range.intersectsNode(node)) continue;
+      const overlap = range.cloneRange();
+      if (range.comparePoint(node, 0) >= 0) overlap.setStart(node, 0);
+      if (range.comparePoint(node, node.textContent.length) <= 0)
+        overlap.setEnd(node, node.textContent.length);
+      if (overlap.toString()) return node.parentElement ?? host;
+    }
+  }
+  const node = range.startContainer;
+  return node instanceof HTMLElement ? node : (node?.parentElement ?? host);
+}
 import { editableText } from "./text-layout";
 
 export function textPointOffset(
@@ -106,7 +135,11 @@ export function textRangeAtOffsets(
   return range;
 }
 
-export function restoreTextOffsets(host: HTMLElement, start: number, end: number) {
+export function restoreTextOffsets(
+  host: HTMLElement,
+  start: number,
+  end: number,
+) {
   const range = textRangeAtOffsets(host, start, end);
   host.focus({ preventScroll: true });
   const selection = getSelection();

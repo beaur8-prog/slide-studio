@@ -135,8 +135,8 @@ export function arrangeElements(
     const x = action === "horizontal" ? "x" : "y",
       size = action === "horizontal" ? "width" : "height";
     const sorted = [...units].sort((a, b) => a[x] - b[x]);
-    const first = sorted[0][x],
-      last = sorted.at(-1)![x] + sorted.at(-1)![size];
+    const first = scope === "slide" ? 0 : sorted[0][x],
+      last = scope === "slide" ? (x === "x" ? width : height) : sorted.at(-1)![x] + sorted.at(-1)![size];
     const gap =
       (last - first - sorted.reduce((sum, u) => sum + u[size], 0)) /
       (units.length - 1);

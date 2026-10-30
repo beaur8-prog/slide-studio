@@ -80,16 +80,26 @@
 .shape-format-controls input:disabled { opacity: .45; cursor: default; }
 .office-shell .group-label { font-size: 10px; color: var(--chrome-secondary); }
 .office-shell .tool { border-radius: 2px; color: var(--chrome-text); min-width: 48px; font-size: 11px; gap: 5px; }
+.office-shell .tool.small { min-width: 29px; width: 29px; }
 .office-shell .tool:not(:disabled):hover, .office-shell .tools-stack > button:hover { background: var(--chrome-hover); }
 .office-shell .tool.active, .office-shell .tool.small.active { background: var(--chrome-hover); color: var(--chrome-text); outline: 1px solid var(--accent); }
 .office-shell .tools-stack > button { font-size: 11px; border-radius: 2px; }
 .office-shell .tools-stack label { font-size: 11px; }
-.office-shell .font-group { width: 212px; }
+.office-shell .font-group { width: 226px; }
+.office-shell .format-row { gap: 4px; }
 .office-shell .font-row input, .office-shell .font-row select { border-radius: 2px; background: var(--chrome-field); border-color: var(--chrome-border); color: var(--chrome-text); color-scheme: dark; }
+.office-shell .font-unit { align-self: center; font-size: 10px; color: var(--chrome-secondary); flex: 0 0 auto; }
 :root[data-chrome="light"] .office-shell .font-row input, :root[data-chrome="light"] .office-shell .font-row select { color-scheme: light; }
 .office-shell .ribbon-text-action, .office-shell .ribbon-hint { color: var(--chrome-secondary); }
 .office-shell .ribbon-hint { padding-left: 20px; }
 .office-shell .arrange-group { min-width: 105px; }
+.arrange-group .menu-anchor > button { display: flex; align-items: center; gap: 6px; padding: 4px; font-size: 10px; }
+.align-popover { width: 248px; padding: 5px; }
+.align-popover > button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 9px; text-align: left; font-size: 12px; border-radius: 2px; color: var(--chrome-text); }
+.align-popover > button:hover:not(:disabled), .align-popover > button:focus-visible { background: var(--chrome-hover); }
+.office-shell .align-popover > button > span { margin-left: 0; color: inherit; font-size: inherit; }
+.align-popover [role="separator"], .align-popover .menu-section-start { border-top: 1px solid var(--chrome-border); margin-top: 4px; padding-top: 8px; }
+.align-popover small { display: block; font-size: 10px; color: var(--chrome-secondary); padding: 8px; line-height: 1.4; }
 .office-shell .theme-choice.chosen { background: var(--accent-light); }
 .office-shell .theme-choice small { color: var(--chrome-secondary); }
 .office-shell .slide-sidebar { width: 238px; background: var(--chrome-surface); border-color: var(--chrome-border); }
@@ -193,7 +203,8 @@
 @media (max-width: 1150px) {
   .office-shell .home-ribbon > .ribbon-group { padding-left: 6px; padding-right: 6px; }
   .office-shell .home-ribbon > .ribbon-group:first-child { padding-left: 0; }
-  .office-shell .home-ribbon .font-group { width: 175px; }
+  .office-shell .home-ribbon .font-group { width: 186px; }
+  .office-shell .home-ribbon .format-row { gap: 3px; }
   .office-shell .home-ribbon .font-row select { width: 109px; }
   .office-shell .home-ribbon .font-row input { width: 43px; }
   .office-shell .home-ribbon .font-row, .office-shell .home-ribbon .tools-row { gap: 3px; }
@@ -208,6 +219,12 @@
   .office-shell .document-title { max-width: 200px; }
   .office-shell .local-badge { display: none; }
   .command-trigger kbd { display: none; }
+}
+@media (max-width: 1000px) {
+  .office-shell .home-ribbon .font-group { width: 174px; }
+  .office-shell .home-ribbon .font-row select { width: 102px; }
+  .office-shell .home-ribbon .tool.small { width: 24px; min-width: 24px; }
+  .office-shell .home-ribbon .toolbar-color { width: 25px; min-width: 25px; }
 }
 
 /* Reserve label width independently of platform font metrics and flex sizing. */

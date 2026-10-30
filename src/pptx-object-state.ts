@@ -41,6 +41,7 @@ export function writeObjectState(doc: Document, elements: SlideElement[]) {
     const state = extension(props, "state");
     state.setAttribute("key", el.id);
     if (el.name !== undefined) state.setAttribute("named", "1");
+    if (el.type === "audio" && el.hideDuringShow) state.setAttribute("hideAudioIcon", "1");
     if (el.type === "text") {
       state.setAttribute("textBox", "1");
       if (el.borders) {
@@ -68,7 +69,7 @@ export function writeObjectState(doc: Document, elements: SlideElement[]) {
         );
       if (specific) {
         const name =
-          el.type === "image" || el.type === "video"
+          el.type === "image" || el.type === "video" || el.type === "audio"
             ? "picLocks"
             : el.type === "table" || el.type === "chart"
               ? "graphicFrameLocks"
@@ -94,6 +95,7 @@ export function readObjectState(node: Element): {
   hidden?: boolean;
   borders?: SlideElement["borders"];
   locked?: boolean;
+  hideAudioIcon?: boolean;
 } {
   const props = properties(node);
   const state = props?.getElementsByTagNameNS(SS, "state")[0];
@@ -134,6 +136,7 @@ export function readObjectState(node: Element): {
   ].flatMap((name) => Array.from(node.getElementsByTagNameNS(A, name)));
   return {
     preserveBox: state?.getAttribute("textBox") === "1",
+    ...(state?.getAttribute("hideAudioIcon") === "1" ? {hideAudioIcon:true} : {}),
     ...(key ? { key } : {}),
     ...(named && rawName?.trim() ? { name: rawName } : {}),
     ...(["1", "true"].includes(props?.getAttribute("hidden") ?? "") ? { hidden: true } : {}),

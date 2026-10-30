@@ -251,7 +251,7 @@ test("canvas cells support Korean input, Tab, partial italic and whole-cell font
   const size = page
     .getByRole("spinbutton", { name: "글자 크기", exact: true })
     .first();
-  await size.fill("28");
+  await size.fill("21");
   await size.press("Enter");
   await expect(page.locator(".save-indicator")).toHaveText("저장됨");
   await expect
@@ -283,7 +283,7 @@ test("clicking Apply commits the focused numeric draft even when row count recen
   const dialog = page.getByRole("dialog", { name: "표 삽입", exact: true });
   await dialog
     .getByRole("spinbutton", { name: "표 글자 크기", exact: true })
-    .fill("31");
+    .fill("23.25");
   await dialog.getByRole("button", { name: "표 삽입", exact: true }).click();
   const table = page.locator('.editable-slide [data-type="table"]');
   await expect(table.locator('[data-row="0"][data-column="0"]')).toHaveCSS(

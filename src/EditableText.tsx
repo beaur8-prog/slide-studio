@@ -214,7 +214,7 @@ export default function EditableText({
       onInput={(e) => {
         const host = e.currentTarget;
         const type = (e.nativeEvent as InputEvent).inputType || "";
-        applyPendingFontSize(host);
+        applyPendingFontSize(host, type);
         trackTextFormat(host, type);
         let edit = inputEdit.current;
         inputEdit.current = undefined;

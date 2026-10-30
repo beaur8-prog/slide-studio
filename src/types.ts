@@ -189,7 +189,7 @@ export interface SlideElement {
   groups?: string[];
   groupNames?: string[];
   groupHidden?: boolean[];
-  type: "text" | "shape" | "image" | "table" | "video" | "chart";
+  type: "text" | "shape" | "image" | "table" | "video" | "audio" | "chart";
   table?: TableData;
   chart?: ChartData;
   hyperlink?: ElementLink;
@@ -248,6 +248,10 @@ export interface SlideElement {
   autoPlay?: boolean;
   loop?: boolean;
   muted?: boolean;
+  volume?: number;
+  playAcrossSlides?: boolean;
+  audioSlideCount?: number;
+  hideDuringShow?: boolean;
   alt?: string;
 }
 export interface Slide {

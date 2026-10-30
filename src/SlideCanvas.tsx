@@ -79,6 +79,7 @@ import {
 import { selectionRange, type TableCellSelection } from "./table-selection";
 
 import { TextContent } from "./TextContent";
+import { AudioVisual } from "./AudioVisual";
 export { TextContent } from "./TextContent";
 
 function StaticText({
@@ -143,6 +144,8 @@ export function ElementVisual({
 }) {
   if (element.type === "video")
     return <VideoVisual element={element} playing={playMedia} />;
+  if (element.type === "audio")
+    return <AudioVisual element={element} playing={playMedia} />;
   if (element.type === "image")
     return <ImageVisual element={element} playing={playMedia} />;
   if (element.type === "chart") return <ChartVisual element={element} />;
@@ -434,6 +437,8 @@ interface Props {
   resizeText: (id: string, height: number) => void;
   showGuides: boolean;
   grid: boolean;
+  gridVisible: boolean;
+  smartGuides: boolean;
 }
 export default function SlideCanvas({
   contextMenu,
@@ -461,6 +466,8 @@ export default function SlideCanvas({
   resizeText,
   showGuides,
   grid,
+  gridVisible,
+  smartGuides,
 }: Props) {
   const editPoint = useRef<{ id: string; x: number; y: number } | null>(null);
   const pointerSelecting = useRef(false);
@@ -845,8 +852,9 @@ export default function SlideCanvas({
       preview(rotateElements(d.elements, d.ids, angle));
       return;
     }
-    if (ev.shiftKey && !d.handle) {
-      if (Math.abs(dx) > Math.abs(dy)) dy = 0;
+    const constrainedAxis = ev.shiftKey && !d.handle ? (Math.abs(dx) > Math.abs(dy) ? "x" : "y") : undefined;
+    if (constrainedAxis) {
+      if (constrainedAxis === "x") dy = 0;
       else dx = 0;
     }
     if (!d.handle) {
@@ -858,25 +866,25 @@ export default function SlideCanvas({
       const right = Math.max(...moving.map((e) => e.x + e.width)),
         bottom = Math.max(...moving.map((e) => e.y + e.height));
       // Snap the shared translation, preserving every relative position.
-      if (grid) {
-        dx = Math.round((left + dx) / 10) * 10 - left;
-        dy = Math.round((top + dy) / 10) * 10 - top;
+      if (grid && !ev.altKey) {
+        if (constrainedAxis !== "y") dx = Math.round((left + dx) / 10) * 10 - left;
+        if (constrainedAxis !== "x") dy = Math.round((top + dy) / 10) * 10 - top;
       }
-      if (showGuides) {
+      if (smartGuides && !ev.altKey) {
         const snap = snapMovement(
           d.elements,
-          d.ids,
+          moving.map(e => e.id),
           dx,
           dy,
           deck.width,
           deck.height,
           7 / scale,
-          ev.shiftKey ? (Math.abs(dx) > Math.abs(dy) ? "x" : "y") : undefined,
+          constrainedAxis,
         );
         dx = snap.dx;
         dy = snap.dy;
         setSnapLines(snap.guides);
-      }
+      } else setSnapLines([]);
     }
     if (d.handle) {
       preview(resizeElements(d.elements, d.ids, d.handle, dx, dy, ev.shiftKey));
@@ -920,7 +928,7 @@ export default function SlideCanvas({
       style={{ width: deck.width * scale, height: deck.height * scale }}
     >
       <div
-        className={`editable-slide ${grid ? "grid-visible" : ""}`}
+        className={`editable-slide ${gridVisible ? "grid-visible" : ""}`}
         data-testid="slide-canvas"
         style={{
           width: deck.width,
@@ -1362,6 +1370,7 @@ export default function SlideCanvas({
                         : e.type === "chart" ? "차트"
                         : e.type === "video"
                           ? "동영상"
+                          : e.type === "audio" ? "오디오"
                           : e.type === "table"
                             ? "표 · 셀을 드래그하여 선택"
                             : "도형"}

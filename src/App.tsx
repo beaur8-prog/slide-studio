@@ -4,6 +4,10 @@ import {
   type TextUndoSession,
 } from "./text-undo";
 import { isVideoFile, readVideo, VIDEO_ACCEPT } from "./video";
+import { isAudioFile, readAudio, AUDIO_ACCEPT } from "./audio";
+import { AUDIO_ICON } from "./audio-icon";
+import { PresentationAudio } from "./PresentationAudio";
+import { AudioPreview } from "./AudioPreview";
 import { usePresenterView } from "./PresenterView";
 import { duplicateSlides, moveSlides } from "./slide-operations";
 import { documentCapacityError, type DocumentAddition } from "./document-limits";
@@ -11,6 +15,9 @@ import type { InkStroke } from "./presentation-ink";
 import { fitTableRows } from "./table-layout";
 import { sameDocument, sameValue } from "./document-changes";
 import { arrangeElements, selectionUnits } from "./object-arrange";
+import ObjectAlignMenu from "./ObjectAlignMenu";
+import { pixelsToPoints, pointsToPixels, FONT_POINT_MIN, FONT_POINT_MAX } from "./font-units";
+import { stepFontPixels, stepTextFontSizes } from "./text-font-size";
 import { isElementHidden } from "./layers";
 import { LayerPanel } from "./LayerPanel";
 import { applyObjectFormat, captureInlineFormat, captureObjectFormat, PAINT_TEXT_EVENT, type FormatSample, type PaintTextDetail } from "./format-painter";
@@ -26,6 +33,8 @@ import {
 } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
+  AArrowUp,
+  AArrowDown,
   AlignCenter,
   AlignLeft,
   AlignRight,
@@ -99,6 +108,7 @@ import {
   Omega,
   Camera,
   Paintbrush,
+  Volume2,
 } from "lucide-react";
 import FontManager from "./FontManager";
 import CommandSearch from "./CommandSearch";
@@ -123,9 +133,10 @@ import {
   cssColorHex,
   trackTextFormat,
   setSelectedFontSize,
+  pendingFontPixels,
   type InlineFormat,
 } from "./text-formatting";
-import { captureTextSelection, restoreTextSelection, textRangeAtOffsets } from "./text-selection";
+import { captureTextSelection, restoreTextSelection, selectedTextElement, textRangeAtOffsets } from "./text-selection";
 import TextContextMenu from "./TextContextMenu";
 import type { TextMenuSelection } from "./text-selection";
 import ObjectContextMenu, { type ObjectMenuAction } from "./ObjectContextMenu";
@@ -279,6 +290,7 @@ function NumberField({
   min = -10000,
   max = 10000,
   step = 1,
+  disabled,
 }: {
   label: string;
   value: number;
@@ -286,6 +298,7 @@ function NumberField({
   min?: number;
   max?: number;
   step?: number;
+  disabled?: boolean;
 }) {
   return (
     <label className="number-field">
@@ -296,6 +309,7 @@ function NumberField({
         min={min}
         max={max}
         step={step}
+        disabled={disabled}
         onChange={onChange}
       />
     </label>
@@ -460,11 +474,7 @@ export default function App() {
     const read = () => {
       const host = document.querySelector<HTMLElement>(".editing-text");
       if (!host || !captureTextSelection(host)) return;
-      const selection = getSelection();
-      let parent =
-        selection?.anchorNode instanceof Element
-          ? selection.anchorNode
-          : selection?.anchorNode?.parentElement;
+      let parent = selectedTextElement(host);
       if (parent) {
         // Imported list separators use a zero-size span for a logical space.
         // Show the surrounding marker's font rather than a meaningless 0.
@@ -476,7 +486,7 @@ export default function App() {
             .split(",")[0]
             .replace(/^["']|["']$/g, "")
             .trim(),
-          fontSize: parseFloat(css.fontSize),
+          fontSize: pendingFontPixels(host) ?? parseFloat(css.fontSize),
           color: cssColorHex(css.color) ?? "#233D35",
           align: css.textAlign,
         });
@@ -496,6 +506,16 @@ export default function App() {
     };
   }, [editing]);
   const selectedElement = slide.elements.find((e) => e.id === selected[0]);
+  useEffect(() => {
+    // Undoing an alignment/format change should leave the surviving objects
+    // selected so the user can immediately adjust them again. Drop only IDs
+    // removed by the restored document; hidden layers remain selectable.
+    setSelected(current => {
+      const ids = new Set(slide.elements.map(element => element.id));
+      const next = current.filter(id => ids.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [slide.id, slide.elements]);
   const selectedShapes = slide.elements.filter(
     (element) => element.type === "shape" && selected.includes(element.id),
   );
@@ -623,7 +643,7 @@ export default function App() {
     "footer" | "date" | "number"
   >("footer");
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [menu, setMenu] = useState<"file" | "layout" | "shape" | null>(null);
+  const [menu, setMenu] = useState<"file" | "layout" | "shape" | "align" | null>(null);
   const [objectMenu, setObjectMenu] = useState<{ x: number; y: number } | null>(
     null,
   );
@@ -649,6 +669,8 @@ export default function App() {
   const scale = zoom === null ? fitScale : zoom;
   const [notesVisible, setNotesVisible] = useState(true);
   const [grid, setGrid] = useState(false);
+  const [gridVisible, setGridVisible] = useState(false);
+  const [smartGuides, setSmartGuides] = useState(true);
   const [guides, setGuides] = useState(false);
   const [sorter, setSorter] = useState(false);
   const [inspectorVisible, setInspectorVisible] = useState(false);
@@ -717,6 +739,7 @@ export default function App() {
   const imageReplaceTarget = useRef<{ target: ImageTarget; version: number } | null>(null);
   const [cropImage, setCropImage] = useState<{ target: ImageTarget; element: SlideElement } | null>(null);
   const videoInput = useRef<HTMLInputElement>(null);
+  const audioInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const transaction = useRef<Deck | null>(null);
   const clipboard = useRef<{
@@ -847,7 +870,6 @@ export default function App() {
     setSlideInsertBefore(undefined);
     setEditing(null);
     transaction.current = null;
-    setSelected([]);
     setHistory((h) =>
       h.past.length
         ? {
@@ -862,7 +884,6 @@ export default function App() {
     setSlideInsertBefore(undefined);
     setEditing(null);
     transaction.current = null;
-    setSelected([]);
     setHistory((h) =>
       h.future.length
         ? {
@@ -1031,7 +1052,7 @@ export default function App() {
   };
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || presenting || busy || modal || pendingInk) return;
+      if (event.defaultPrevented || event.isComposing || presenting || busy || modal || pendingInk || menu || objectMenu) return;
       if (event.altKey && event.key === "F10") {
         event.preventDefault(); event.stopPropagation();
         finish(); setEditing(null); openInspector("layers");
@@ -1828,7 +1849,9 @@ export default function App() {
     if (!canAddElements(1)) return;
     try {
       const media = await readVideo(file);
+      if (activeIdRef.current !== slide.id) { notify("동영상을 읽는 동안 슬라이드가 바뀌어 삽입을 취소했습니다."); return; }
       if (!canAddElements(1)) return;
+      assertImageCapacity(documentRef.current, media.src + media.poster);
       const ratio = Math.min(1, deck.width * 0.7 / media.width, deck.height * 0.7 / media.height);
       const width = media.width * ratio, height = media.height * ratio;
       const next = element("video", { ...media, width, height, x: (deck.width - width) / 2, y: (deck.height - height) / 2,
@@ -1838,6 +1861,20 @@ export default function App() {
       openInspector();
       notify("동영상을 추가했습니다. 서식에서 자동 시작·반복·음소거를 설정하세요.");
     } catch (error) { notify(error instanceof Error ? error.message : "동영상을 열 수 없습니다."); }
+  };
+  const addAudio = async (file: File) => {
+    if (!canAddElements(1)) return;
+    try {
+      const media = await readAudio(file);
+      if (activeIdRef.current !== slide.id) { notify("오디오를 읽는 동안 슬라이드가 바뀌어 삽입을 취소했습니다."); return; }
+      if (!canAddElements(1)) return;
+      assertImageCapacity(documentRef.current, media.src + AUDIO_ICON);
+      const next = element("audio", {...media, poster:AUDIO_ICON, width:96, height:96,
+        x:(deck.width-96)/2,y:(deck.height-96)/2, alt:file.name, autoPlay:true,loop:false,muted:false,volume:1,playAcrossSlides:false,hideDuringShow:false});
+      changeSlide(s=>({...s,elements:[...s.elements,next]}));
+      setSelected([next.id]); openInspector();
+      notify("오디오를 추가했습니다. 서식에서 시작 방식·반복·볼륨을 설정하세요.");
+    } catch(error) { notify(error instanceof Error ? error.message : "오디오를 열 수 없습니다."); }
   };
   const addImage = async (file: File) => {
     if (!canAddElements(1)) return;
@@ -2381,7 +2418,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (presenting) {
-        if (e.key !== "Escape" && e.target instanceof Element && e.target.closest(".video-visual")) return;
+        if (e.key !== "Escape" && e.target instanceof Element && e.target.closest(".video-visual, .audio-visual")) return;
         if (presentationInk.current?.handleKey(e)) return;
         if (
           e.target instanceof Element &&
@@ -3124,7 +3161,7 @@ export default function App() {
   };
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || presenting || busy || modal || pendingInk) return;
+      if (event.defaultPrevented || event.isComposing || presenting || busy || modal || pendingInk || menu || objectMenu) return;
       if (event.key === "Escape" && painterMode) {
         event.preventDefault(); event.stopPropagation(); setPainterMode(null); return;
       }
@@ -3182,6 +3219,38 @@ export default function App() {
     );
     ribbonTextSelection.current = captureTextSelection(host);
   };
+  const adjustFontSize = (direction: 1 | -1) => {
+    if (!textCapable || selectedElement?.locked) return;
+    if (!editing) {
+      changeSlide(s => ({ ...s, elements: s.elements.map(element =>
+        selected.includes(element.id)
+          ? stepTextFontSizes(element, direction, activeTableSelection?.elementId === element.id ? tableRange : undefined)
+          : element) }));
+      return;
+    }
+    const host = document.querySelector<HTMLElement>(".editing-text");
+    const selection = host && (captureTextSelection(host) ?? ribbonTextSelection.current);
+    if (!selection || selection.host !== host || !host.isConnected) return;
+    restoreTextSelection(selection);
+    trackTextFormat(host, "formatFontSize");
+    setSelectedFontSize(host, size => stepFontPixels(size, direction));
+    host.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "formatFontSize" }));
+    ribbonTextSelection.current = captureTextSelection(host);
+  };
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || presenting || busy || modal || pendingInk || menu || objectMenu || colorPalette || textMenu) return;
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey || event.altKey) return;
+      const direction = [">", "."].includes(event.key) ? 1 : ["<", ","].includes(event.key) ? -1 : undefined;
+      if (!direction) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (editingTarget(target) && !target?.closest(".editing-text")) return;
+      event.preventDefault(); event.stopPropagation();
+      adjustFontSize(direction);
+    };
+    window.addEventListener("keydown", key, true);
+    return () => window.removeEventListener("keydown", key, true);
+  });
   const imageToolsDisabled = selected.length !== 1 || selectedElement?.type !== "image" || !!selectedElement.locked;
   const imageTools = <div className="image-format-tools" role="group" aria-label="그림 서식">
     <button aria-label="그림 자르기" disabled={imageToolsDisabled || !selectedElement?.width || !selectedElement.height} onClick={openImageCrop}><Crop size={15} />자르기</button>
@@ -3232,18 +3301,25 @@ export default function App() {
           data-text-selection-control
           onPointerDown={rememberTextRange}
           onFocus={rememberTextRange}
-          min={8}
-          max={240}
+          min={FONT_POINT_MIN}
+          max={FONT_POINT_MAX}
+          step={0.1}
+          title="글자 크기 (pt · 포인트)"
           value={
-            editing
+            pixelsToPoints(editing
               ? inlineTextStyle.fontSize
-              : selectedTextStyle?.fontSize || 32
+              : selectedTextStyle?.fontSize || 32)
           }
           disabled={!textCapable || selectedElement?.locked}
-          onChange={(fontSize) => setTextStyle("fontSize", fontSize)}
+          onChange={(fontSize) => setTextStyle("fontSize", pointsToPixels(fontSize))}
         />
+        <span className="font-unit" aria-hidden="true">pt</span>
       </div>
       <div className="format-row">
+        <Tool small icon={<AArrowUp size={17} />} title="글자 크게" preserveTextSelection
+          disabled={!textCapable || selectedElement?.locked} onClick={() => adjustFontSize(1)} />
+        <Tool small icon={<AArrowDown size={17} />} title="글자 작게" preserveTextSelection
+          disabled={!textCapable || selectedElement?.locked} onClick={() => adjustFontSize(-1)} />
         <Tool
           small
           icon={<Bold size={17} />}
@@ -3694,6 +3770,7 @@ export default function App() {
                 run: () => imageInput.current?.click(),
               },
               { id: "video", label: "동영상 삽입", run: () => videoInput.current?.click() },
+              { id: "audio", label: "오디오 삽입", keywords:"음악 소리 배경음 MP3 WAV M4A", run: () => audioInput.current?.click() },
               {
                 id: "table",
                 label: "표 삽입",
@@ -4188,6 +4265,16 @@ export default function App() {
                   >
                     <ArrowDownToLine size={15} />맨 뒤로
                   </button>
+                  <div className="menu-anchor">
+                    <button id="object-align-trigger" aria-haspopup="menu" aria-expanded={menu === "align"}
+                      disabled={!selected.length} onPointerDown={event=>event.stopPropagation()}
+                      onClick={()=>setMenu(menu === "align" ? null : "align")}>
+                      <AlignLeft size={15}/>개체 맞춤<ChevronDown size={12}/>
+                    </button>
+                    {menu === "align" && <ObjectAlignMenu count={selectionUnits(slide.elements, selected).filter(unit=>!unit.locked).length}
+                      scope={alignScope} onScope={setAlignScope} onAction={alignElements}
+                      onClose={()=>{setMenu(null); document.getElementById("object-align-trigger")?.focus({preventScroll:true});}}/>}
+                  </div>
                 </div>
                 <span className="group-label">정렬</span>
               </div>
@@ -4235,6 +4322,7 @@ export default function App() {
                     그림 삽입
                   </Tool>
                   <Tool icon={<Play size={25} />} onClick={() => videoInput.current?.click()}>동영상</Tool>
+                  <Tool icon={<Volume2 size={25} />} onClick={() => audioInput.current?.click()}>오디오</Tool>
                   <div className="tools-stack">
                     <button onClick={() => setModal("screenshot")}>
                       <Camera size={16} />
@@ -4246,7 +4334,7 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-                <span className="group-label">이미지</span>
+                <span className="group-label">이미지·미디어</span>
               </div>
               <div className="ribbon-group">
                 <div className="tools-row">
@@ -4485,6 +4573,12 @@ export default function App() {
                     />
                     가운데 안내선
                   </label>
+                  <label><input type="checkbox" checked={gridVisible} onChange={e=>setGridVisible(e.target.checked)}/>눈금 표시</label>
+                </div>
+                <span className="group-label">표시</span>
+              </div>
+              <div className="ribbon-group">
+                <div className="tools-stack">
                   <label>
                     <input
                       type="checkbox"
@@ -4493,6 +4587,8 @@ export default function App() {
                     />
                     눈금에 맞추기
                   </label>
+                  <label><input type="checkbox" checked={smartGuides} onChange={e=>setSmartGuides(e.target.checked)}/>개체에 맞추기</label>
+                  <small title="Alt 키를 누르고 끌면 눈금과 개체 맞춤을 잠시 해제합니다.">Alt + 끌기: 자유 이동</small>
                 </div>
                 <span className="group-label">정렬 도구</span>
               </div>
@@ -4778,7 +4874,7 @@ export default function App() {
                   onDrop={(e) => {
                     e.preventDefault();
                     const file = e.dataTransfer.files[0];
-                    if (file) void (isVideoFile(file) ? addVideo(file) : addImage(file));
+                    if (file) void (isAudioFile(file) ? addAudio(file) : isVideoFile(file) ? addVideo(file) : addImage(file));
                   }}
                 >
                   <div className="canvas-scaler">
@@ -5054,6 +5150,8 @@ export default function App() {
                       }
                       showGuides={guides}
                       grid={grid}
+                      gridVisible={gridVisible}
+                      smartGuides={smartGuides}
                     />
                   </div>
                 </div>
@@ -5129,7 +5227,7 @@ export default function App() {
                             : selectedElement.type === "image"
                               ? "이미지"
                               : selectedElement.type === "chart" ? "차트"
-                              : selectedElement.type === "video" ? "동영상" : "도형"}
+                              : selectedElement.type === "video" ? "동영상" : selectedElement.type === "audio" ? "오디오" : "도형"}
                       </span>
                     </h4>
                     <div className="number-grid" key={selected.join(",")}>
@@ -5187,6 +5285,24 @@ export default function App() {
                         onChange={event => updateSelected({ [key]: event.target.checked })} />{label}</label>)}
                     <button className="text-button full" onClick={() => startPresent()}>현재 슬라이드에서 재생<Play size={14} /></button>
                     <p>MP4·WebM, 한 개당 20 MiB까지 지원합니다.</p>
+                  </div>}
+                  {selectedElement.type === "audio" && <div className="inspector-section">
+                    <h4>오디오 재생</h4>
+                    <label className="check-field"><input type="checkbox" checked={selectedElement.autoPlay!==false} disabled={selectedElement.locked}
+                      onChange={event=>updateSelected({autoPlay:event.target.checked})}/>슬라이드 쇼에서 자동 시작</label>
+                    {([["loop","반복 재생"],["muted","음소거"]] as const).map(([key,label])=><label className="check-field" key={key}>
+                      <input type="checkbox" checked={selectedElement[key]===true} disabled={selectedElement.locked} onChange={event=>updateSelected({[key]:event.target.checked})}/>{label}</label>)}
+                    <NumberField label="오디오 볼륨 (%)" value={Math.round((selectedElement.volume??1)*100)} min={0} max={100}
+                      disabled={selectedElement.locked} onChange={value=>updateSelected({volume:value/100})}/>
+                    <label className="check-field"><input type="checkbox" checked={selectedElement.playAcrossSlides===true} disabled={selectedElement.locked}
+                      onChange={event=>updateSelected({playAcrossSlides:event.target.checked,audioSlideCount:event.target.checked?Math.max(2,selectedElement.audioSlideCount??999):selectedElement.audioSlideCount})}/>다음 슬라이드에서도 계속 재생</label>
+                    {selectedElement.playAcrossSlides && <NumberField label="재생할 슬라이드 수" value={selectedElement.audioSlideCount??999} min={2} max={999}
+                      disabled={selectedElement.locked} onChange={value=>updateSelected({audioSlideCount:Math.round(value)})}/>}
+                    <label className="check-field"><input type="checkbox" checked={selectedElement.hideDuringShow===true} disabled={selectedElement.locked||selectedElement.autoPlay===false}
+                      onChange={event=>updateSelected({hideDuringShow:event.target.checked})}/>아이콘 숨김 (앱 발표)</label>
+                    <AudioPreview key={selectedElement.id} element={selectedElement} suspended={presenting}/>
+                    <button className="text-button full" onClick={()=>startPresent()}>현재 슬라이드에서 재생<Play size={14}/></button>
+                    <p>MP3·PCM WAV·AAC M4A, 한 개당 20 MiB. 자동 시작을 끄면 발표 중 아이콘을 눌러 재생합니다.</p>
                   </div>}
                   {selectedElement.type === "image" && <div className="inspector-section"><h4>그림</h4>{imageTools}</div>}
                   {selectedElement.type === "text" && (
@@ -5631,6 +5747,8 @@ export default function App() {
       </div>
       <input ref={videoInput} type="file" hidden accept={VIDEO_ACCEPT}
         onChange={event => { if (event.target.files?.[0]) void addVideo(event.target.files[0]); event.target.value = ""; }} />
+      <input ref={audioInput} type="file" hidden accept={AUDIO_ACCEPT} aria-label="오디오 삽입 파일"
+        onChange={event=>{if(event.target.files?.[0])void addAudio(event.target.files[0]);event.target.value="";}}/>
       <input ref={imageReplaceInput} type="file" hidden aria-label="그림 교체 파일" accept={IMAGE_ACCEPT}
         onChange={event => {
           const request = imageReplaceTarget.current, file = event.target.files?.[0];
@@ -5916,6 +6034,8 @@ export default function App() {
                     ["복사 / 붙여넣기", "⌘ / Ctrl + C / V"],
                     ["개체 미세 이동", "방향키 (Shift: 10px)"],
                     ["텍스트 편집", "더블클릭 / Enter"],
+                    ["글자 크게 / 작게", "⌘ / Ctrl + Shift + > / <"],
+                    ["맞춤 잠시 해제", "Alt + 끌기"],
                     ["처음부터 / 현재부터 발표", "F5 / Shift + F5"],
                     ["발표 중 이동 / 종료", "방향키 / Esc"],
                     ["발표 중 검은 화면", "B"],
@@ -5983,6 +6103,7 @@ export default function App() {
               슬라이드 쇼가 끝났습니다. 클릭하거나 Esc 키를 눌러 종료하세요.
             </p>
           )}
+          <PresentationAudio slide={deck.slides[presentIndex]} index={presentIndex} paused={blackout||whiteout} ended={presentEnded}>
           <PresentationInk
             ref={presentationInk}
             slide={deck.slides[presentIndex]}
@@ -5999,6 +6120,7 @@ export default function App() {
               if (index >= 0) showPresentationSlide(index);
             }}
           />
+          </PresentationAudio>
           {presentNotes && !presentEnded && (
             <div className="present-notes" onClick={(e) => e.stopPropagation()}>
               <strong>발표자 노트</strong>

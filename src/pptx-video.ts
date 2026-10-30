@@ -5,9 +5,13 @@ const child = (n: Element | undefined, name: string) =>
 const all = (n: Document | Element, name: string) =>
   Array.from(n.getElementsByTagNameNS("*", name));
 
-export function readVideoPlayback(doc: Document, picture: Element) {
+function readPlayback(
+  doc: Document,
+  picture: Element,
+  kind: "audio" | "video",
+) {
   const id = all(picture, "cNvPr")[0]?.getAttribute("id");
-  const media = all(doc, "video")
+  const media = all(doc, kind)
     .map((n) => child(n, "cMediaNode"))
     .find(
       (n) => n && all(n, "spTgt").some((t) => t.getAttribute("spid") === id),
@@ -47,7 +51,7 @@ export function readVideoPlayback(doc: Document, picture: Element) {
     }
     return immediate;
   });
-  return {
+  const result = {
     autoPlay:
       conditions.some(
         (n) => !n.hasAttribute("evt") && n.getAttribute("delay") === "0",
@@ -57,11 +61,37 @@ export function readVideoPlayback(doc: Document, picture: Element) {
       ["1", "true"].includes(media?.getAttribute("mute") ?? "") ||
       media?.getAttribute("vol") === "0",
   };
+  if (kind === "video") return result;
+  const rawVolume = media?.getAttribute("vol");
+  const volume =
+    rawVolume === null || rawVolume === undefined
+      ? 0.5
+      : rawVolume.endsWith("%")
+        ? Number.parseFloat(rawVolume) / 100
+        : Number(rawVolume) / 100000;
+  const slides = Number(media?.getAttribute("numSld") ?? 1);
+  return {
+    ...result,
+    volume: Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 0.5,
+    playAcrossSlides: slides > 1,
+    audioSlideCount: Math.min(
+      999,
+      Math.max(1, Number.isFinite(slides) ? Math.floor(slides) : 1),
+    ),
+  };
+}
+export function readVideoPlayback(doc: Document, picture: Element) {
+  return readPlayback(doc, picture, "video");
+}
+export function readAudioPlayback(doc: Document, picture: Element) {
+  return readPlayback(doc, picture, "audio");
 }
 
 /** Standard media timing, independent of Slide Studio metadata. */
 export function writeVideoPlayback(doc: Document, elements: SlideElement[]) {
-  const videos = elements.filter((e) => e.type === "video");
+  const videos = elements.filter(
+    (e) => e.type === "video" || e.type === "audio",
+  );
   if (!videos.length) return;
   // PptxGenJS numbers media by relationships and shapes by array index, which
   // can collide in a mixed slide. All references below use these unique IDs.
@@ -91,7 +121,10 @@ export function writeVideoPlayback(doc: Document, elements: SlideElement[]) {
       (n) => n.getAttribute("name") === e.id,
     );
     if (!props) continue;
-    props.setAttribute("descr", e.alt ?? "동영상");
+    props.setAttribute(
+      "descr",
+      e.alt ?? (e.type === "audio" ? "오디오" : "동영상"),
+    );
     const picture = props.parentElement?.parentElement;
     const transform = picture && child(child(picture, "spPr"), "xfrm");
     if (transform) {
@@ -99,16 +132,41 @@ export function writeVideoPlayback(doc: Document, elements: SlideElement[]) {
       transform.setAttribute("flipH", e.flipH ? "1" : "0");
       transform.setAttribute("flipV", e.flipV ? "1" : "0");
     }
-    const media = make(make(list, "video"), "cMediaNode", {
-      vol: e.muted === false ? 100000 : 0,
-      mute: e.muted === false ? 0 : 1,
+    // PptxGenJS 4 emits videoFile even for type:audio. Fix the standard
+    // nonvisual media declaration; both audio and media relationships already
+    // point to the untouched embedded source bytes.
+    if (e.type === "audio" && picture) {
+      for (const old of all(picture, "videoFile")) {
+        const audio = doc.createElementNS(old.namespaceURI, "a:audioFile");
+        for (const attribute of Array.from(old.attributes))
+          audio.setAttributeNS(
+            attribute.namespaceURI,
+            attribute.name,
+            attribute.value,
+          );
+        old.replaceWith(audio);
+      }
+    }
+    const media = make(make(list, e.type), "cMediaNode", {
+      vol:
+        e.type === "audio"
+          ? Math.round((e.volume ?? 1) * 100000)
+          : e.muted === false
+            ? 100000
+            : 0,
+      mute: e.type === "audio" ? (e.muted ? 1 : 0) : e.muted === false ? 0 : 1,
       showWhenStopped: 1,
+      ...(e.type === "audio"
+        ? { numSld: e.playAcrossSlides ? (e.audioSlideCount ?? 999) : 1 }
+        : {}),
     });
     const time = make(media, "cTn", {
       id: nextId++,
       fill: "hold",
       display: 0,
-      ...(e.loop !== false ? { repeatCount: "indefinite" } : {}),
+      ...((e.type === "audio" ? e.loop === true : e.loop !== false)
+        ? { repeatCount: "indefinite" }
+        : {}),
     });
     const condition = make(make(time, "stCondLst"), "cond", {
       delay: 0,

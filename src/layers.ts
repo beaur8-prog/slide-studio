@@ -23,7 +23,7 @@ export function elementName(element: SlideElement, index: number) {
   if (element.name) return element.name;
   if (element.type === "text" && element.text?.trim())
     return element.text.split("\n")[0].slice(0, 80);
-  if ((element.type === "image" || element.type === "video") && element.alt)
+  if ((element.type === "image" || element.type === "video" || element.type === "audio") && element.alt)
     return element.alt.slice(0, 80);
   const shape = (
     {
@@ -36,7 +36,7 @@ export function elementName(element: SlideElement, index: number) {
       custom: "도형",
     } as const
   )[element.shape ?? "custom"];
-  return `${({ text: "텍스트", image: "그림", video: "동영상", chart: "차트", table: "표", shape } as const)[element.type]} ${index + 1}`;
+  return `${({ text: "텍스트", image: "그림", video: "동영상", audio: "오디오", chart: "차트", table: "표", shape } as const)[element.type]} ${index + 1}`;
 }
 export function layerTree(elements: SlideElement[]): LayerNode[] {
   const roots: LayerNode[] = [],

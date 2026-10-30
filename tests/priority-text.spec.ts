@@ -65,7 +65,7 @@ test("Home font family and size retain Beta selection, affect only Beta, undo/re
     )
     .toEqual(Array(4).fill("Courier New"));
   const size = page.getByRole("spinbutton", { name: "글자 크기", exact: true });
-  await size.fill("24");
+  await size.fill("18");
   await size.press("Enter");
   await expect(editor(page)).toBeFocused();
   expect(await page.evaluate(() => getSelection()?.toString())).toBe("Beta");

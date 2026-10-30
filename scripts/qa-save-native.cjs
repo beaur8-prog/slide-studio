@@ -42,15 +42,13 @@ const geometry = async (file) => {
     recovered = path.join(output, "외부 변경 보존.pptx");
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE";
-  pptx
-    .addSlide()
-    .addShape(pptx.ShapeType.rect, {
-      x: 1,
-      y: 1,
-      w: 260 / 96,
-      h: 100 / 96,
-      fill: { color: "4472C4" },
-    });
+  pptx.addSlide().addShape(pptx.ShapeType.rect, {
+    x: 1,
+    y: 1,
+    w: 260 / 96,
+    h: 100 / 96,
+    fill: { color: "4472C4" },
+  });
   await pptx.writeFile({ fileName: original });
   for (const name of [copy, recovered]) await fs.rm(name, { force: true });
   let app;
@@ -69,7 +67,9 @@ const geometry = async (file) => {
     const page = await app.firstWindow();
     page.setDefaultTimeout(20000);
     page.on("pageerror", (e) => errors.push(e.message));
-    page.on("dialog", (d) => { void d.accept().catch(()=>{}); });
+    page.on("dialog", (d) => {
+      void d.accept().catch(() => {});
+    });
     await expect(page.locator(".save-indicator")).toHaveText("저장됨");
     await app.evaluate(({ dialog }) => {
       global.__saveQA = { open: [], save: [], messages: [], seen: [] };
@@ -121,7 +121,7 @@ const geometry = async (file) => {
     const changeWidth = async (value, commit = true) => {
       await shape().click();
       const field = page.getByRole("spinbutton", { name: "너비", exact: true });
-      if (!await field.isVisible())
+      if (!(await field.isVisible()))
         await page.getByRole("button", { name: "서식", exact: true }).click();
       await field.fill(String(value));
       if (commit) await field.press("Enter");
@@ -182,7 +182,9 @@ const geometry = async (file) => {
     const saveCountBeforeCancel = (await seen("save")).length;
     await queue("save", { canceled: true });
     await menu("Save PowerPoint As…");
-    await expect.poll(async () => (await seen("save")).length).toBe(saveCountBeforeCancel + 1);
+    await expect
+      .poll(async () => (await seen("save")).length)
+      .toBe(saveCountBeforeCancel + 1);
     await idle();
     await expect.poll(dirty).toBe("true");
     assert.equal(await geometry(recovered), 220);
@@ -253,7 +255,9 @@ const geometry = async (file) => {
     await fs.rm(path.join(output, "failure.json"), { force: true });
     console.log(JSON.stringify({ status: "passed", results }, null, 2));
   } catch (error) {
-    await (await app?.firstWindow())?.screenshot({path:path.join(output,"failure.png")}).catch(()=>{});
+    await (await app?.firstWindow())
+      ?.screenshot({ path: path.join(output, "failure.png") })
+      .catch(() => {});
     await fs.writeFile(
       path.join(output, "failure.json"),
       JSON.stringify(
@@ -267,8 +271,8 @@ const geometry = async (file) => {
     // This profile and every file are disposable test data. A deliberately
     // dirty final document must not leave QA waiting on the OS close prompt.
     if (app) {
-      await app.evaluate(({app})=>app.exit(0)).catch(()=>{});
-      await app.close().catch(()=>{});
+      await app.evaluate(({ app }) => app.exit(0)).catch(() => {});
+      await app.close().catch(() => {});
     }
     await fs.rm(profile, { recursive: true, force: true });
   }

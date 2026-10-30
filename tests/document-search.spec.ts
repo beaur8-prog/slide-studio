@@ -340,17 +340,23 @@ test("large result sets paginate completely and overflow disables partial replac
     limit: limited.limit,
   });
   await panel(page).getByRole("button", { name: "찾기 닫기" }).click();
-  await page.evaluate(async () => {
+  const overflowFixture = await page.evaluate(async () => {
     const { blankDeck, element } = await import("/src/model.ts");
     const { MAX_SEARCH_RESULTS } = await import("/src/document-search.ts");
-    const { saveAutosave } = await import("/src/storage.ts");
     const d = blankDeck();
     d.slides[0].elements = [
       element("text", { text: "a".repeat(MAX_SEARCH_RESULTS + 10) }),
     ];
-    await saveAutosave(d);
+    return JSON.stringify(d);
   });
-  await page.reload();
+  // Load through the real import flow. Writing IndexedDB behind a live editor
+  // can race its pending layout/recovery write and restore the preceding deck.
+  await page.locator('input[accept*=".pptx"]').setInputFiles({
+    name: "search-overflow.slide",
+    mimeType: "application/json",
+    buffer: Buffer.from(overflowFixture),
+  });
+  await expect(page.locator(".editable-slide")).toContainText("a".repeat(100));
   await page.getByRole("button", { name: "바꾸기", exact: true }).click();
   await panel(page)
     .getByRole("textbox", { name: "찾을 내용", exact: true })

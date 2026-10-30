@@ -165,7 +165,14 @@ const playback = (e: SlideElement) => ({
   autoPlay: e.autoPlay,
   loop: e.loop,
   muted: e.muted,
-  ...(e.type === "audio" ? {volume:e.volume,playAcrossSlides:e.playAcrossSlides,audioSlideCount:e.audioSlideCount,hideDuringShow:e.hideDuringShow} : {}),
+  ...(e.type === "audio"
+    ? {
+        volume: e.volume,
+        playAcrossSlides: e.playAcrossSlides,
+        audioSlideCount: e.audioSlideCount,
+        hideDuringShow: e.hideDuringShow,
+      }
+    : {}),
 });
 const content = (e: SlideElement) => ({
   type: e.type,
@@ -174,6 +181,23 @@ const content = (e: SlideElement) => ({
   table: e.table,
   poster: e.poster,
 });
+function visibleTextOutline(line: Element | undefined) {
+  if (!line || child(line, "noFill")) return false;
+  const solid = child(line, "solidFill"),
+    color = solid?.children[0];
+  if (color && solid?.children.length === 1) {
+    const transforms = Array.from(color.children).filter((n) =>
+      n.localName.startsWith("alpha"),
+    );
+    if (
+      transforms.length === 1 &&
+      transforms[0].localName === "alpha" &&
+      transforms[0].getAttribute("val") === "0"
+    )
+      return false;
+  }
+  return true;
+}
 function unmodeledText(root: Element | Document) {
   return (
     all(root, "buBlip").length > 0 ||
@@ -197,12 +221,13 @@ function unmodeledText(root: Element | Document) {
             "gradFill",
             "blipFill",
             "pattFill",
-            "ln",
-            "effectLst",
-            "effectDag",
             "uLn",
             "uFill",
-          ].some((name) => !!child(n, name)),
+          ].some((name) => !!child(n, name)) ||
+          visibleTextOutline(child(n, "ln")) ||
+          ["effectLst", "effectDag"].some(
+            (name) => !!child(n, name)?.children.length,
+          ),
       ),
     )
   );
@@ -995,6 +1020,92 @@ export async function writePreservedPptx(
         registerMaster(target);
       return target;
     };
+    const appendRelationship = (
+      destination: Document,
+      original: Element,
+      target: string,
+    ) => {
+      let newId: string;
+      do {
+        newId = "rIdPreserved" + ++relIndex;
+      } while (
+        all(destination, "Relationship").some(
+          (r) => r.getAttribute("Id") === newId,
+        )
+      );
+      const rel = destination.importNode(original, true);
+      rel.setAttribute("Id", newId);
+      rel.setAttribute("Target", target);
+      destination.documentElement.append(rel);
+      return newId;
+    };
+    // Office can keep a diagram drawing relationship on the slide, while its
+    // ID lives in dataModelExt@relId inside another part. It is not an r:id
+    // attribute and is invisible to the ordinary relationship-copy walk.
+    const copyDiagramDrawing = async (
+      id: string,
+      dataPath: string,
+      dataTarget: string,
+      ownerPath: string,
+      ownerRels: Element[],
+      destinationRels: Document,
+    ) => {
+      const source = sourceAt(id),
+        data = await source.pkg.readXml(dataPath);
+      const localRels = all(
+        await source.pkg.readXml(relsPath(dataPath)),
+        "Relationship",
+      );
+      let copiedData: Document | undefined;
+      for (const [index, extension] of all(data, "dataModelExt").entries()) {
+        const rid = extension.getAttribute("relId");
+        if (
+          !rid ||
+          localRels.some(
+            (r) =>
+              r.getAttribute("Id") === rid &&
+              r.getAttribute("Type")?.endsWith("/diagramDrawing"),
+          )
+        )
+          continue;
+        const original = ownerRels.find(
+          (r) =>
+            r.getAttribute("Id") === rid &&
+            r.getAttribute("Type")?.endsWith("/diagramDrawing"),
+        );
+        if (!original) continue;
+        if (original.getAttribute("TargetMode") === "External") {
+          warn("외부 연결 SmartArt 도형 배치는 저장 파일에 포함하지 않습니다.");
+          continue;
+        }
+        const resolved = resolvePart(
+          ownerPath,
+          original.getAttribute("Target") ?? "",
+        );
+        const drawingTarget = resolved && (await clonePart(id, resolved));
+        if (!drawingTarget) continue;
+        if (!copiedData)
+          copiedData = xmlDocument(
+            await zip.file(dataTarget)!.async("string"),
+            dataTarget,
+          );
+        const copiedExtension = all(copiedData, "dataModelExt")[index];
+        if (!copiedExtension) continue;
+        const cacheKey =
+          id +
+          ":" +
+          ownerPath +
+          ":" +
+          rid +
+          (destinationRels === presentationRels ? ":presentation" : "");
+        const newId =
+          relationshipIds.get(cacheKey) ??
+          appendRelationship(destinationRels, original, "/" + drawingTarget);
+        relationshipIds.set(cacheKey, newId);
+        copiedExtension.setAttribute("relId", newId);
+      }
+      if (copiedData) zip.file(dataTarget, serial(copiedData));
+    };
     const copyRelationships = async (
       root: Element,
       id: string,
@@ -1071,7 +1182,7 @@ export async function writePreservedPptx(
             target = raw;
           } else {
             const resolved = resolvePart(part, raw);
-            if (resolved)
+            if (resolved) {
               target = type.endsWith("/slide")
                 ? nativeSlideTarget(
                     source,
@@ -1079,6 +1190,16 @@ export async function writePreservedPptx(
                     destinationRels !== presentationRels,
                   )
                 : await clonePart(id, resolved);
+              if (target && type.endsWith("/diagramData"))
+                await copyDiagramDrawing(
+                  id,
+                  resolved,
+                  target,
+                  part,
+                  rels,
+                  destinationRels,
+                );
+            }
             if (target) target = "/" + target;
           }
           if (!target) {
@@ -1091,19 +1212,7 @@ export async function writePreservedPptx(
               warn("대상을 보존할 수 없는 원본 첨부 관계를 제외했습니다.");
             continue;
           }
-          let newId: string;
-          do {
-            newId = "rIdPreserved" + ++relIndex;
-          } while (
-            all(destinationRels, "Relationship").some(
-              (r) => r.getAttribute("Id") === newId,
-            )
-          );
-          rel.setAttribute("Id", newId);
-          rel.setAttribute("Target", target);
-          destinationRels.documentElement.append(
-            destinationRels.importNode(rel, true),
-          );
+          const newId = appendRelationship(destinationRels, rel, target);
           relationshipIds.set(cacheKey, newId);
           node.setAttributeNS(REL_NS, attribute.name, newId);
         }
@@ -1801,7 +1910,9 @@ export async function writePreservedPptx(
     const timing = child(generated.documentElement, "timing");
     const changedVideos = new Set<string>();
     const generatedVideos = new Set<string>();
-    for (const e of slide.elements.filter((e) => e.type === "video" || e.type === "audio")) {
+    for (const e of slide.elements.filter(
+      (e) => e.type === "video" || e.type === "audio",
+    )) {
       const ref = e.pptxRef;
       if (
         !ref ||
@@ -1814,7 +1925,11 @@ export async function writePreservedPptx(
       }
     }
     if (timing) {
-      for (const action of [...all(timing, "video"), ...all(timing, "audio"), ...all(timing, "cmd")])
+      for (const action of [
+        ...all(timing, "video"),
+        ...all(timing, "audio"),
+        ...all(timing, "cmd"),
+      ])
         if (
           all(action, "spTgt").some((t) =>
             changedVideos.has(t.getAttribute("spid")!),
@@ -1828,10 +1943,16 @@ export async function writePreservedPptx(
       // changed playback values replace their old per-video timing action.
       const keep = generatedVideos;
       pruneTiming(generatedTiming, generatedIds, () => {});
-      for (const video of [...all(generatedTiming, "video"), ...all(generatedTiming, "audio")])
+      for (const video of [
+        ...all(generatedTiming, "video"),
+        ...all(generatedTiming, "audio"),
+      ])
         if (!all(video, "spTgt").some((t) => keep.has(t.getAttribute("spid")!)))
           video.remove();
-      if (all(generatedTiming, "video").length || all(generatedTiming, "audio").length) {
+      if (
+        all(generatedTiming, "video").length ||
+        all(generatedTiming, "audio").length
+      ) {
         const max = Math.max(
           0,
           ...all(timing, "cTn").map((n) => Number(n.getAttribute("id")) || 0),

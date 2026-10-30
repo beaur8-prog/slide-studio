@@ -21,6 +21,9 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      # Electron 42 ships an explicit installer rather than an npm postinstall.
+      - name: Install checksum-verified native Electron runtime
+        run: node node_modules/electron/install.js
       - run: npx playwright install --with-deps chromium
       - name: Install isolated Linux desktop
         if: runner.os == 'Linux'

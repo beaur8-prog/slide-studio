@@ -129,12 +129,17 @@ try {
         await page
           .locator('input[type=file][accept*=".pptx"]')
           .setInputFiles(path.join(root, "qa", "samples", filename));
-        await page.waitForFunction(slides =>
-          document.querySelectorAll(".thumbnail-row").length === slides,
+        await page.waitForFunction(
+          (slides) =>
+            document.querySelectorAll(".thumbnail-row").length === slides,
           stats.slides,
         );
-        await page.waitForFunction(() => !document.querySelector(".busy-backdrop"));
-        const message = (await page.locator(".toast").allTextContents()).join("\n");
+        await page.waitForFunction(
+          () => !document.querySelector(".busy-backdrop"),
+        );
+        const message = (await page.locator(".toast").allTextContents()).join(
+          "\n",
+        );
         if (message.includes("파일 열기 실패")) throw new Error(message);
         item.open_to_ui_ms = performance.now() - start;
         await page.waitForFunction(() =>
@@ -161,6 +166,14 @@ try {
         const cdp = await context.newCDPSession(page);
         item.heap_before_layout = await cdp.send("Runtime.getHeapUsage");
         if (item.repetition === 1) {
+          await page.evaluate(() =>
+            window.dispatchEvent(new Event("beforeprint")),
+          );
+          await page.waitForFunction(
+            (count) =>
+              document.querySelectorAll(".print-slide").length === count,
+            stats.slides,
+          );
           await page.emulateMedia({ media: "print" });
           await page.evaluate(() => document.fonts.ready);
           await page.evaluate(() =>
@@ -354,6 +367,12 @@ try {
           // of scrolling through the long print-deck. The print DOM above
           // remains useful for layout measurements.
           await page.emulateMedia({ media: "screen" });
+          await page.evaluate(() =>
+            window.dispatchEvent(new Event("afterprint")),
+          );
+          await page.waitForFunction(
+            () => !document.querySelector(".print-slide"),
+          );
           await page.setViewportSize({
             width: Math.max(1440, Math.ceil(stats.width)),
             height: Math.max(1000, Math.ceil(stats.height)),

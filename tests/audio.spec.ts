@@ -32,10 +32,9 @@ async function open(page: Page) {
 }
 async function seed(page: Page, settings: Record<string, unknown> = {}) {
   await open(page);
-  await page.evaluate(
+  const deck = await page.evaluate(
     async ({ source, settings }) => {
       const { blankDeck, newSlide, element } = await import("/src/model.ts"),
-        { saveAutosave } = await import("/src/storage.ts"),
         { AUDIO_ICON } = await import("/src/audio-icon.ts");
       const d = blankDeck();
       d.slides = [newSlide(), newSlide(), newSlide()];
@@ -56,11 +55,31 @@ async function seed(page: Page, settings: Record<string, unknown> = {}) {
           ...settings,
         }),
       ];
-      await saveAutosave(d);
+      return d;
     },
     { source, settings },
   );
-  await page.reload();
+  // Use the actual import path. Writing recovery storage behind a live app
+  // races its pending autosave, and an immediate F5 after reload can precede
+  // the asynchronous document load.
+  await page.locator('input[type="file"][accept*=".pptx"]').setInputFiles({
+    name: "audio-fixture.slide",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(deck)),
+  });
+  await expect(page.locator(".thumbnail-row")).toHaveCount(3);
+  await expect(page.locator('.editable-slide [data-type="audio"]')).toHaveCount(
+    1,
+  );
+  await expect(page.locator(".busy-backdrop")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const { loadAutosave } = await import("/src/storage.ts");
+        return (await loadAutosave())?.id;
+      }),
+    )
+    .toBe(deck.id);
 }
 const show = (page: Page) => page.getByTestId("presentation-view");
 const track = (page: Page) =>
@@ -82,13 +101,11 @@ test("audio insertion and playback settings support undo, reload and native PPTX
   await expect(
     page.getByRole("button", { name: "오디오", exact: true }),
   ).toBeVisible();
-  await page
-    .getByLabel("오디오 삽입 파일", { exact: true })
-    .setInputFiles({
-      name: "테스트 녹음.wav",
-      mimeType: "audio/wav",
-      buffer: wave,
-    });
+  await page.getByLabel("오디오 삽입 파일", { exact: true }).setInputFiles({
+    name: "테스트 녹음.wav",
+    mimeType: "audio/wav",
+    buffer: wave,
+  });
   const icon = page.locator('.editable-slide [data-type="audio"]');
   await expect(icon).toBeVisible();
   const preview = page.getByLabel("선택한 오디오 미리 듣기", { exact: true });

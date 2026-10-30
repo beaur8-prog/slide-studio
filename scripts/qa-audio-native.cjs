@@ -9,6 +9,7 @@ const fs = require("node:fs/promises"),
   JSZip = require("jszip");
 const { _electron } = require("playwright"),
   { expect } = require("@playwright/test");
+const waitDocumentOpen = require("./qa-wait-document-open.cjs");
 const [executable, source, directory] = process.argv.slice(2);
 if (!executable || !source)
   throw Error(
@@ -54,7 +55,7 @@ async function mediaHashes(file) {
     });
     page.on("dialog", (dialog) => dialog.accept());
     await expect(page.locator(".save-indicator")).toHaveText("저장됨");
-    const open = async (file) => {
+    const open = async (file, expectedTitle = "오디오와 한글 제목") => {
       await app.evaluate(({ dialog }, file) => {
         dialog.showOpenDialog = async () => ({
           canceled: false,
@@ -62,14 +63,15 @@ async function mediaHashes(file) {
         });
       }, path.resolve(file));
       await page.getByRole("button", { name: "파일", exact: true }).click();
-      await page
-        .locator(".file-popover button")
-        .filter({ hasText: "파일 열기" })
-        .click();
-      await expect(page.locator(".busy-backdrop")).toHaveCount(0);
+      await waitDocumentOpen(page, () =>
+        page
+          .locator(".file-popover button")
+          .filter({ hasText: "파일 열기" })
+          .click(),
+      );
       await expect(page.locator(".thumbnail-button")).toHaveCount(5);
       await expect(page.locator(".editable-slide")).toContainText(
-        "오디오와 한글 제목",
+        expectedTitle,
       );
     };
     await open(source);
@@ -95,7 +97,10 @@ async function mediaHashes(file) {
       dialog.showSaveDialog = async () => ({ canceled: false, filePath });
     }, saved);
     await page.getByRole("button", { name: "파일", exact: true }).click();
-    await page.locator(".file-popover").getByRole("button", {name:/^다른 이름으로 저장/}).click();
+    await page
+      .locator(".file-popover")
+      .getByRole("button", { name: /^다른 이름으로 저장/ })
+      .click();
     await expect(page.locator(".toast")).toContainText(
       "PPTX 파일을 저장했습니다",
     );
@@ -153,17 +158,7 @@ async function mediaHashes(file) {
     await expect(page.locator("audio[data-audio-id]")).toHaveCount(0);
     results.push("native-show-exit-releases-players");
     // Reopen the exact disk output, rather than relying on the window buffer.
-    await app.evaluate(({ dialog }, file) => {
-      dialog.showOpenDialog = async () => ({
-        canceled: false,
-        filePaths: [file],
-      });
-    }, saved);
-    await page.getByRole("button", { name: "파일", exact: true }).click();
-    await page
-      .locator(".file-popover button")
-      .filter({ hasText: "파일 열기" })
-      .click();
+    await open(saved, "설치형 오디오·한글 검증");
     await expect(page.locator(".editable-slide")).toContainText(
       "설치형 오디오·한글 검증",
     );
@@ -192,7 +187,7 @@ async function mediaHashes(file) {
       saved,
       pdf,
     };
-    await fs.rm(path.join(output,"failure.json"),{force:true});
+    await fs.rm(path.join(output, "failure.json"), { force: true });
     await fs.writeFile(
       path.join(output, "results.json"),
       JSON.stringify(report, null, 2) + "\n",
@@ -209,7 +204,10 @@ async function mediaHashes(file) {
     );
     throw error;
   } finally {
-    if (app) await app.close();
+    if (app) {
+      await app.evaluate(({ app }) => app.exit(0)).catch(() => {});
+      await app.close().catch(() => {});
+    }
     await fs.rm(profile, { recursive: true, force: true });
   }
 })().catch((error) => {

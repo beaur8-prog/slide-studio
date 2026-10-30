@@ -9,6 +9,7 @@ const crypto = require("node:crypto");
 const JSZip = require("jszip");
 const { _electron } = require("playwright");
 const { expect } = require("@playwright/test");
+const waitDocumentOpen = require("./qa-wait-document-open.cjs");
 const [executable, source, directory] = process.argv.slice(2);
 if (!executable || !source)
   throw Error(
@@ -65,11 +66,12 @@ async function vectorHashes(file) {
         });
       }, path.resolve(filename));
       await page.getByRole("button", { name: "파일", exact: true }).click();
-      await page
-        .locator(".file-popover button")
-        .filter({ hasText: "파일 열기" })
-        .click();
-      await expect(page.locator(".busy-backdrop")).toHaveCount(0);
+      await waitDocumentOpen(page, () =>
+        page
+          .locator(".file-popover button")
+          .filter({ hasText: "파일 열기" })
+          .click(),
+      );
       await expect(
         page.locator('.editable-slide [data-type="image"] img'),
       ).toHaveCount(4);
@@ -109,7 +111,10 @@ async function vectorHashes(file) {
       dialog.showSaveDialog = async () => ({ canceled: false, filePath });
     }, saved);
     await page.getByRole("button", { name: "파일", exact: true }).click();
-    await page.locator(".file-popover").getByRole("button", {name:/^다른 이름으로 저장/}).click();
+    await page
+      .locator(".file-popover")
+      .getByRole("button", { name: /^다른 이름으로 저장/ })
+      .click();
     await expect(page.locator(".toast")).toContainText(
       "PPTX 파일을 저장했습니다",
     );
@@ -162,7 +167,10 @@ async function vectorHashes(file) {
     );
     throw error;
   } finally {
-    if (app) await app.close();
+    if (app) {
+      await app.evaluate(({ app }) => app.exit(0)).catch(() => {});
+      await app.close().catch(() => {});
+    }
     await fs.rm(profile, { recursive: true, force: true });
   }
 })().catch((error) => {

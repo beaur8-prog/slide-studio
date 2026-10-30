@@ -1,0 +1,156 @@
+.find-replace-panel {
+  flex: 0 0 310px;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--chrome-surface);
+  color: var(--chrome-text);
+  border-right: 1px solid var(--chrome-border);
+  font-size: 12px;
+}
+.find-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--chrome-border);
+}
+.find-heading h3 {
+  margin: 0;
+  font-size: 13px;
+  flex: 1;
+}
+.find-heading button,
+.find-navigation button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+}
+.find-heading button:hover,
+.find-navigation button:not(:disabled):hover {
+  background: var(--chrome-hover);
+}
+.find-fields {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.find-fields > label:not(.find-check) {
+  display: grid;
+  gap: 6px;
+  color: var(--chrome-secondary);
+}
+.find-fields input:not([type="checkbox"]) {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--chrome-border);
+  border-radius: 3px;
+  padding: 8px;
+  background: var(--chrome-field);
+  color: var(--chrome-text);
+  font-size: 13px;
+}
+.find-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.find-check input {
+  accent-color: var(--accent);
+  margin: 0;
+}
+.find-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  font-size: 11px;
+  color: var(--chrome-secondary);
+}
+.find-actions {
+  display: flex;
+  gap: 8px;
+}
+.find-actions button,
+.find-pagination button {
+  border: 1px solid var(--chrome-border);
+  padding: 7px 10px;
+  border-radius: 3px;
+}
+.find-actions button:not(:disabled):hover,
+.find-pagination button:not(:disabled):hover {
+  background: var(--chrome-hover);
+}
+.find-navigation {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.find-navigation span {
+  flex: 1;
+  font-size: 11px;
+}
+.find-results {
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+  padding: 0 6px 8px;
+}
+.find-results > button {
+  display: grid;
+  width: 100%;
+  gap: 7px;
+  padding: 12px 8px;
+  text-align: left;
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+  border: 1px solid transparent;
+}
+.find-results > button[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--chrome-hover);
+}
+.find-results > button:hover {
+  background: var(--chrome-hover);
+}
+.find-results small {
+  color: var(--chrome-secondary);
+  font-size: 10px;
+}
+.find-results mark {
+  background: #ffdc73;
+  color: #171717;
+  border-radius: 2px;
+}
+.find-results > p {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  color: var(--chrome-secondary);
+  padding: 20px 12px;
+}
+.find-notice {
+  margin: 0;
+  font-size: 11px;
+  color: var(--chrome-secondary);
+  line-height: 1.6;
+}
+.find-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px;
+  border-top: 1px solid var(--chrome-border);
+  font-size: 10px;
+}
+::highlight(studio-search-match) {
+  background: #ffdc73;
+  color: #171717;
+}

@@ -54,6 +54,8 @@ import {
   Plus,
   Redo2,
   Save,
+  Search,
+  Replace,
   Settings2,
   Shapes,
   Square,
@@ -94,6 +96,8 @@ import {
 } from "lucide-react";
 import FontManager from "./FontManager";
 import CommandSearch from "./CommandSearch";
+import FindReplacePanel from "./FindReplacePanel";
+import { DEFAULT_SEARCH_OPTIONS, findDocumentText, replaceDocumentMatches, slideSearchText } from "./document-search";
 import TextColorPalette from "./TextColorPalette";
 import NumberInput from "./NumberInput";
 import NotesPane from "./NotesPane";
@@ -110,7 +114,7 @@ import {
   setSelectedFontSize,
   type InlineFormat,
 } from "./text-formatting";
-import { captureTextSelection, restoreTextSelection } from "./text-selection";
+import { captureTextSelection, restoreTextSelection, textRangeAtOffsets } from "./text-selection";
 import TextContextMenu from "./TextContextMenu";
 import type { TextMenuSelection } from "./text-selection";
 import ObjectContextMenu, { type ObjectMenuAction } from "./ObjectContextMenu";
@@ -546,6 +550,19 @@ export default function App() {
       setTableSelection({ ...activeTableSelection, anchor, focus });
   }, [selected, selectedElement, activeId, tableSelection]);
   const [tab, setTab] = useState<Tab>("home");
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findReplacement, setFindReplacement] = useState("");
+  const [findOptions, setFindOptions] = useState(DEFAULT_SEARCH_OPTIONS);
+  const [findIndex, setFindIndex] = useState(0);
+  const [findNavigationVersion, setFindNavigationVersion] = useState(0);
+  const [findReplaceMode, setFindReplaceMode] = useState(false);
+  const [findFocusVersion, setFindFocusVersion] = useState(0);
+  const findResults = useMemo(() => findOpen
+    ? findDocumentText(deck, findQuery, findOptions)
+    : { matches: [], truncated: false }, [deck, findQuery, findOptions, findOpen]);
+  const activeFindIndex = Math.min(findIndex, Math.max(0, findResults.matches.length - 1));
+  const activeFindMatch = findResults.matches[activeFindIndex];
   const [ready, setReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">(
     "saving",
@@ -940,7 +957,88 @@ export default function App() {
     setSorter(false);
     setWarnings([]);
     setToast("");
+    setFindOpen(false);
+    setFindIndex(0);
   };
+
+  const openFind = (replace = false) => {
+    const host = document.querySelector<HTMLElement>(".editing-text");
+    const text = host ? captureTextSelection(host)?.range.toString() : undefined;
+    if (text && text.length <= 2000 && !/[\r\n]/.test(text)) { setFindQuery(text); setFindIndex(0); }
+    finish();
+    setEditing(null);
+    setFindOpen(true);
+    setFindReplaceMode(replace);
+    setFindFocusVersion(value => value + 1);
+    setMenu(null);
+    setObjectMenu(null);
+    setTextMenu(null);
+    setColorPalette(null);
+  };
+  const closeFind = () => {
+    setFindOpen(false);
+    requestAnimationFrame(() => {
+      const target = selected[0]
+        ? `.editable-slide [data-element-id="${CSS.escape(selected[0])}"]`
+        : '.thumbnail-button[aria-current="true"]';
+      document.querySelector<HTMLElement>(target)?.focus({ preventScroll: true });
+    });
+  };
+  const replaceFoundText = (all: boolean) => {
+    if (findResults.truncated) return;
+    const matches = all ? findResults.matches : activeFindMatch ? [activeFindMatch] : [];
+    try {
+      const result = replaceDocumentMatches(history.present, matches, findReplacement);
+      if (result.count) commit(() => result.deck);
+      notify(result.count
+        ? `${result.count}곳을 바꿨습니다.${result.skipped ? ` 잠긴 개체·자동 필드 ${result.skipped}곳은 유지했습니다.` : ""}`
+        : result.skipped ? "잠긴 개체와 자동 필드는 바꿀 수 없습니다." : "바꿀 내용이 기존 내용과 같습니다.");
+    } catch (error) { notify(error instanceof Error ? error.message : "텍스트를 바꾸지 못했습니다."); }
+  };
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || presenting || busy || modal || pendingInk) return;
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const value = event.key.toLowerCase();
+      if (value !== "f" && !(value === "h" && (!isMac || event.shiftKey))) return;
+      event.preventDefault(); event.stopPropagation();
+      openFind(value === "h");
+    };
+    window.addEventListener("keydown", key, true);
+    return () => window.removeEventListener("keydown", key, true);
+  });
+  useEffect(() => {
+    if (!findOpen || !activeFindMatch) return;
+    finish();
+    setEditing(null);
+    setSorter(false);
+    if (activeId !== activeFindMatch.slideId) selectSlide(activeFindMatch.slideId);
+    setSelected(activeFindMatch.elementId ? [activeFindMatch.elementId] : []);
+    if (activeFindMatch.elementId && activeFindMatch.row !== undefined) {
+      const cell = { row: activeFindMatch.row, column: activeFindMatch.column! };
+      setTableSelection({ elementId: activeFindMatch.elementId, anchor: cell, focus: cell });
+    } else setTableSelection(null);
+    if (!activeFindMatch.elementId) setNotesVisible(true);
+    // A result change is navigation. Unrelated selection changes must not be
+    // overwritten merely because a sidebar remains open.
+  }, [findOpen, activeFindMatch?.id, findNavigationVersion]);
+  useLayoutEffect(() => {
+    const registry = (CSS as unknown as { highlights?: { set: (name: string, value: unknown) => void; delete: (name: string) => void } }).highlights;
+    const HighlightType = (window as unknown as { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
+    registry?.delete("studio-search-match");
+    if (!findOpen || !activeFindMatch?.elementId || editing || !HighlightType || !registry) return;
+    const root = document.querySelector<HTMLElement>(`.editable-slide [data-element-id="${CSS.escape(activeFindMatch.elementId)}"]`);
+    const host = activeFindMatch.row === undefined ? root?.querySelector<HTMLElement>(".element-text")
+      : root?.querySelector<HTMLElement>(`[data-row="${activeFindMatch.row}"][data-column="${activeFindMatch.column}"] .table-cell-text`);
+    if (host) {
+      try {
+        const range = textRangeAtOffsets(host, activeFindMatch.start, activeFindMatch.end);
+        registry.set("studio-search-match", new HighlightType(range));
+        host.scrollIntoView({ block: "nearest", inline: "nearest" });
+      } catch { /* Object selection still identifies nonstandard imported text. */ }
+    }
+    return () => { registry.delete("studio-search-match"); };
+  }, [findOpen, activeFindMatch?.id, deck, editing, activeId]);
 
   useEffect(() => {
     const list = thumbnailList.current;
@@ -3457,6 +3555,8 @@ export default function App() {
                 keywords: "배경 위치 크기 회전",
                 run: () => setInspectorVisible(true),
               },
+              { id: "find", label: "찾기", keywords: "검색 문서 내용", hint: shortcut("F"), run: () => openFind() },
+              { id: "replace", label: "바꾸기", keywords: "찾기 텍스트 일괄 변경", run: () => openFind(true) },
               {
                 id: "show",
                 label: "처음부터 슬라이드 쇼",
@@ -3479,7 +3579,7 @@ export default function App() {
                 id: item.id,
                 label: `${index + 1}. ${slideTitle(item)}`,
                 hint: "슬라이드로 이동",
-                keywords: item.elements.map((el) => el.text || "").join(" "),
+                keywords: slideSearchText(item),
                 run: () => {
                   selectSlide(item.id);
                   setSorter(false);
@@ -3875,6 +3975,13 @@ export default function App() {
                   </button>
                 </div>
                 <span className="group-label">정렬</span>
+              </div>
+              <div className="ribbon-group">
+                <div className="tools-stack">
+                  <button title={`찾기 ${shortcut("F")}`} onClick={() => openFind()}><Search size={15} />찾기</button>
+                  <button title={`바꾸기 ${isMac ? "⇧⌘H" : "Ctrl+H"}`} onClick={() => openFind(true)}><Replace size={15} />바꾸기</button>
+                </div>
+                <span className="group-label">편집</span>
               </div>
             </>
           )}
@@ -4274,7 +4381,13 @@ export default function App() {
           )}
         </div>
         <main className="workspace">
-          <aside className="slide-sidebar">
+          {findOpen ? <FindReplacePanel query={findQuery} replacement={findReplacement}
+            options={findOptions} results={findResults} index={activeFindIndex}
+            replaceMode={findReplaceMode} focusVersion={findFocusVersion}
+            onQuery={value => { setFindQuery(value); setFindIndex(0); }}
+            onReplacement={setFindReplacement} onOptions={value => { setFindOptions(value); setFindIndex(0); }}
+            onIndex={value => { setFindIndex(value); setFindNavigationVersion(version => version + 1); }} onMode={setFindReplaceMode} onReplace={replaceFoundText} onClose={closeFind}
+          /> : <aside className="slide-sidebar">
             <div className="sidebar-heading">
               <span>
                 슬라이드 <small>{deck.slides.length}</small>
@@ -4356,7 +4469,7 @@ export default function App() {
               <Plus size={16} />
               슬라이드 추가
             </button>
-          </aside>
+          </aside>}
           <section className="editor-column">
             <div className="canvas-topline">
               <span>{sorter ? "모든 슬라이드" : slideTitle(slide)}</span>

@@ -17,10 +17,15 @@ export default function CommandSearch({ commands, enabled = true }: { commands: 
   const container = useRef<HTMLDivElement>(null);
   const results = commands.filter((command) =>
     `${command.label} ${command.keywords || ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
-  ).slice(0, 10);
+  );
   const activeIndex = Math.min(index, Math.max(0, results.length - 1));
   const close = () => { setOpen(false); trigger.current?.focus(); };
   const run = (command: EditorCommand) => { close(); command.run(); };
+
+  useEffect(() => {
+    if (!open || !results[activeIndex]) return;
+    document.getElementById(`command-${results[activeIndex].id}`)?.scrollIntoView({ block: "nearest" });
+  }, [open, activeIndex, query]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -86,7 +91,7 @@ export default function CommandSearch({ commands, enabled = true }: { commands: 
           </button>)}
           {!results.length && <p>일치하는 명령이나 슬라이드가 없습니다.</p>}
         </div>
-        <div className="command-footer">↑ ↓ 선택 · Enter 실행 · Esc 닫기</div>
+        <div className="command-footer">{results.length}개 결과 · ↑ ↓ 선택 · Enter 실행 · Esc 닫기</div>
       </div>}
     </div>
   );

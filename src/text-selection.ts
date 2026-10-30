@@ -64,7 +64,7 @@ export function textPointOffset(
   return editableText(clone).indexOf(marker);
 }
 
-export function restoreTextOffsets(
+export function textRangeAtOffsets(
   host: HTMLElement,
   start: number,
   end: number,
@@ -100,10 +100,15 @@ export function restoreTextOffsets(
         return [nodes[i], Math.max(0, at - positions[i])];
     return nodes.length ? [nodes.at(-1)!, nodes.at(-1)!.length] : [host, 0];
   };
-  host.focus({ preventScroll: true });
   const range = document.createRange();
   range.setStart(...point(start));
   range.setEnd(...point(end));
+  return range;
+}
+
+export function restoreTextOffsets(host: HTMLElement, start: number, end: number) {
+  const range = textRangeAtOffsets(host, start, end);
+  host.focus({ preventScroll: true });
   const selection = getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);

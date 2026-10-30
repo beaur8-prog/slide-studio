@@ -43,6 +43,7 @@ jobs:
           tests/browser-output.spec.ts
           tests/recovery-storage.spec.ts
           tests/audio.spec.ts
+          tests/native-menu-history.spec.ts
           tests/presentation-start-input.spec.ts
           tests/presentation-fullscreen.spec.ts
           tests/windows-ui.spec.ts
@@ -52,6 +53,9 @@ jobs:
         env:
           QA_APP_ROOT: ${{ github.workspace }}
         run: node scripts/qa-save-native.cjs node_modules/electron/dist/electron.exe qa/results/editor-core-native
+      - name: Verify Linux native menu Undo and Redo
+        if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npx playwright test tests/native-menu-history.spec.ts --reporter=line --output=qa/results/editor-core-native-history
       - name: Exercise real Linux production app with disposable files
         if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
         env:

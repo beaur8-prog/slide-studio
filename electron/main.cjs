@@ -241,7 +241,9 @@ function installMenu() {
       ],
     },
     { label: 'Edit', submenu: [
-      { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
+      { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => sendMenuAction('undo') },
+      { label: 'Redo', accelerator: process.platform === 'darwin' ? 'Shift+CmdOrCtrl+Z' : 'CmdOrCtrl+Y', click: () => sendMenuAction('redo') },
+      { type: 'separator' },
       { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' },
     ] },
     { label: 'View', submenu: [

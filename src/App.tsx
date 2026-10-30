@@ -3007,10 +3007,22 @@ export default function App() {
   useEffect(() =>
     window.desktop?.onMenu((action) => {
       if (presentationActive.current) {
+        if (action === "undo" || action === "redo") presentationInk.current?.command(action);
         if (action === "present") movePresent(1);
         if (action === "print") presentationInk.current?.command("pen");
         if (action.startsWith("presentation-"))
           presentationInk.current?.command(action.slice(13));
+        return;
+      }
+      if (action === "undo" || action === "redo") {
+        if (busy || savingPptx.current || printing.current) return;
+        const focused = document.activeElement;
+        if (focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement) {
+          document.execCommand(action);
+          return;
+        }
+        if (modal || pendingInk) return;
+        runToolbarHistory(action);
         return;
       }
       if (action === "new") setModal("new");

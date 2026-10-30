@@ -144,7 +144,10 @@ const output = path.resolve('qa/results/linux-native');
     await page.getByRole('button', { name: '삽입', exact: true }).click();
     await page.getByRole('button', { name: '차트', exact: true }).click();
     const chart = page.getByRole('dialog', { name: '차트 삽입', exact: true });
-    await expect(chart).toContainText('데이터 연동 안 됨');
+    if (process.env.EXPECTED_APP_VERSION.localeCompare('1.6.16', undefined, { numeric: true }) >= 0) {
+      await expect(chart).toContainText('숫자를 바꾸면 차트가 갱신됩니다');
+      await expect(chart).toContainText('외부 Excel 파일과 실시간 연동되지는 않습니다');
+    } else await expect(chart).toContainText('데이터 연동 안 됨');
     await chart.getByRole('button', { name: '취소', exact: true }).click();
     await page.screenshot({ path: path.join(output, 'long-text.png') });
     if (process.env.EXPECTED_APP_VERSION.localeCompare('1.5.8', undefined, { numeric: true }) >= 0) {

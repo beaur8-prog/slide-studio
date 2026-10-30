@@ -69,7 +69,7 @@ async function packageSetup() {
     }
     const appAsar = path.join(payload, 'resources/app.asar');
     if (JSON.parse(asar.extractFile(appAsar, 'package.json')).version !== manifest.version) throw new Error('ASAR version mismatch');
-    asar.extractFile(appAsar, 'electron/assets/SlideStudio.png');
+    asar.extractFile(appAsar, path.join('electron', 'assets', 'SlideStudio.png'));
     const install = path.join(work, 'install-files.nsh');
     const uninstall = path.join(work, 'remove-files.nsh');
     const qTarget = name => '"$INSTDIR\\' + name.replaceAll('/', '\\').replace(/\$/g, '$$$$').replace(/"/g, '$\\"') + '"';

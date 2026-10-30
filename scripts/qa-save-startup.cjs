@@ -89,7 +89,9 @@ module.exports = async function verifySaveStartup(page, output, { app }) {
     await expect(page.locator('.thumbnail-button')).toHaveCount(legacy.slides.length);
     await page.screenshot({ path: path.join(output, 'pptx-save.png') });
     const nativeMenu = await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items.find(x => x.label === 'File').submenu.items.map(x => x.label));
-    expect(nativeMenu.filter(x => x.startsWith('Save'))).toEqual(['Save PowerPoint…']);
+    const appVersion = await app.evaluate(({ app }) => app.getVersion());
+    const explicitSaveAs = appVersion.localeCompare('1.6.17', undefined, { numeric: true }) >= 0;
+    expect(nativeMenu.filter(x => x.startsWith('Save'))).toEqual(explicitSaveAs ? ['Save PowerPoint', 'Save PowerPoint As…'] : ['Save PowerPoint…']);
     expect(nativeMenu).not.toContain('Export PowerPoint…');
     const result = {
       version: await app.evaluate(({ app }) => app.getVersion()), platform: process.platform,

@@ -7,6 +7,7 @@ const os = require('node:os');
 const pptxgen = require('pptxgenjs');
 const JSZip = require('jszip');
 const sharp = require('sharp');
+const waitDocumentOpen = require('./qa-wait-document-open.cjs');
 module.exports = async function verifyCurrentRelease(page, output, { app }) {
   await fs.mkdir(output, { recursive: true });
   const work = await fs.mkdtemp(path.join(os.tmpdir(), 'slide-current-release-'));
@@ -42,8 +43,18 @@ module.exports = async function verifyCurrentRelease(page, output, { app }) {
     request.onerror = () => reject(request.error);
   }));
   const idle = async () => { await expect(page.locator('.busy-backdrop')).toHaveCount(0); await expect(page.locator('.save-indicator')).toHaveText('저장됨'); };
+  const saveCopy = async () => {
+    // This check creates a distinct output, rather than overwriting its input.
+    // Keep older release verification compatible with its chooser-only Save.
+    const invoked = await app.evaluate(({ Menu }) => {
+      const item = Menu.getApplicationMenu().items.find(x => x.label === 'File').submenu.items.find(x => x.label === 'Save PowerPoint As…');
+      if (item) item.click();
+      return !!item;
+    });
+    if (!invoked) await page.getByRole('button', { name: 'PPTX 저장', exact: true }).click();
+  };
   async function open(file) {
-    await app.evaluate(({ dialog, Menu }, file) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] }); Menu.getApplicationMenu().items.find(x => x.label === 'File').submenu.items.find(x => x.label === 'Open…').click(); }, file);
+    await waitDocumentOpen(page, () => app.evaluate(({ dialog, Menu }, file) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] }); Menu.getApplicationMenu().items.find(x => x.label === 'File').submenu.items.find(x => x.label === 'Open…').click(); }, file));
     await expect(page.locator('.editable-slide .slide-background-image img')).toBeVisible(); await idle();
   }
   try {
@@ -71,7 +82,7 @@ module.exports = async function verifyCurrentRelease(page, output, { app }) {
     await idle();
     await page.screenshot({ path: path.join(output, 'picture-background.png') });
     await app.evaluate(({ dialog }, file) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: file }); }, saved);
-    await page.getByRole('button', { name: 'PPTX 저장', exact: true }).click();
+    await saveCopy();
     await expect.poll(() => fs.stat(saved).then(() => true, () => false)).toBe(true); await idle();
     const savedZip = await JSZip.loadAsync(await fs.readFile(saved), { checkCRC32: true });
     const savedXML = await savedZip.file(local).async('string');
@@ -136,12 +147,12 @@ module.exports = async function verifyCurrentRelease(page, output, { app }) {
     expect(arrows.every(item => item.paths?.length === 1 && item.paths[0].d.endsWith('Z'))).toBe(true);
     const arrowFile = path.join(work, '블록 화살표.pptx');
     await app.evaluate(({ dialog }, file) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: file }); }, arrowFile);
-    await page.getByRole('button', { name: 'PPTX 저장', exact: true }).click();
+    await saveCopy();
     await expect.poll(() => fs.stat(arrowFile).then(() => true, () => false)).toBe(true); await idle();
-    await app.evaluate(({ dialog, Menu }, file) => {
+    await waitDocumentOpen(page, () => app.evaluate(({ dialog, Menu }, file) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] });
       Menu.getApplicationMenu().items.find(x => x.label === 'File').submenu.items.find(x => x.label === 'Open…').click();
-    }, arrowFile);
+    }, arrowFile));
     await expect(page.locator('.editable-slide [data-element-id]')).toHaveCount(5); await idle();
     const restoredArrows = (await readDeck()).slides[0].elements.slice(-2);
     // OOXML reconstruction can insert whitespace between commands and numbers.

@@ -1,0 +1,68 @@
+name: Verify source installers without publishing
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package-install-run-remove:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install Windows package tools
+        if: runner.os == 'Windows'
+        run: choco install nsis --no-progress -y
+      - name: Install isolated Linux desktop tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb openbox dbus-x11 desktop-file-utils
+      - name: Build production renderer
+        run: npm run build
+      - name: Build private Windows payload
+        if: runner.os == 'Windows'
+        run: node scripts/package-win.cjs
+      - name: Build private Windows Setup
+        if: runner.os == 'Windows'
+        run: node scripts/package-win-setup.cjs
+      - name: Install, exercise, reinstall and remove Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setupMeta = Get-Content release/BUILD-win-setup-x64.json -Raw | ConvertFrom-Json
+          $portableMeta = Get-Content release/BUILD-win-x64.json -Raw | ConvertFrom-Json
+          ./scripts/qa-windows-setup.ps1 -Setup (Join-Path $PWD 'release/Slide-Studio-Setup-x64.exe') -Portable (Join-Path $PWD 'release/Slide-Studio-win-x64.zip') -ExpectedSetupSHA256 $setupMeta.installerSHA256 -ExpectedPortableSHA256 $portableMeta.archiveSHA256 -Version $setupMeta.version
+      - name: Build private Linux package
+        if: runner.os == 'Linux'
+        run: node scripts/package-linux.cjs
+      - name: Install, exercise, reinstall and remove sandboxed Linux package
+        if: runner.os == 'Linux'
+        env:
+          XDG_CONFIG_HOME: ${{ runner.temp }}/slide-source-installer-config
+        run: |
+          export EXPECTED_DEB_SHA256="$(node -p 'require("./release/BUILD-linux-amd64.json").archiveSHA256')"
+          export EXPECTED_APP_VERSION="$(node -p 'require("./package.json").version')"
+          bash scripts/qa-linux-package.sh release/Slide-Studio-linux-amd64.deb
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: source-installer-verification-${{ matrix.os }}
+          retention-days: 7
+          if-no-files-found: ignore
+          # Verification data only. Never upload installers or app archives.
+          path: |
+            qa/results/windows-setup-native/**/*.json
+            qa/results/windows-setup-native/**/*.png
+            qa/results/windows-setup-native/**/*.txt
+            qa/results/windows-setup-native/**/*.log
+            qa/results/linux-native/**/*.json
+            qa/results/linux-native/**/*.png
+            qa/results/linux-native/**/*.txt
+            qa/results/linux-native/**/*.log

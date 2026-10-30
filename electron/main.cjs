@@ -513,7 +513,7 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1540,
     height: 1000,
-    minWidth: 1080,
+    minWidth: 970,
     minHeight: 720,
     title: PRODUCT_NAME,
     icon: APP_ICON,

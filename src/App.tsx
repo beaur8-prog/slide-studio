@@ -2194,8 +2194,9 @@ export default function App() {
     presentationNumber.current = "";
   };
   const startPresent = (fromBeginning = false) => {
-    if (presentationActive.current || modal || busy) return;
-    finish();
+    if (!ready || presentationActive.current || modal || busy || printing.current || savingPptx.current) return;
+    commitPendingInputs();
+    const current = deckRef.current;
     setEditing(null);
     presentationWheel.current = {
       delta: 0,
@@ -2207,11 +2208,15 @@ export default function App() {
     // Starting from the selected slide is an explicit request, including a
     // hidden slide. A normal show starts at the first visible slide.
     const first = fromBeginning
-      ? deck.slides.findIndex((s) => !s.hidden)
-      : activeIndex;
+      ? current.slides.findIndex((s) => !s.hidden)
+      : Math.max(0,current.slides.findIndex(s=>s.id===activeId));
     showPresentationSlide(Math.max(0, first), first < 0);
     setPresenting(true);
     setMenu(null);
+    setObjectMenu(null);
+    setTextMenu(null);
+    setColorPalette(null);
+    setSlideMenu(null);
     presentationActive.current = true;
     enterPresentationFullscreen();
   };
@@ -2751,9 +2756,6 @@ export default function App() {
         )
           removeSlide();
         else removeSelected();
-      } else if (e.key === "F5") {
-        e.preventDefault();
-        startPresent(!e.shiftKey);
       } else if (
         e.key === "Enter" &&
         (selectedElement?.type === "text" ||
@@ -3016,6 +3018,22 @@ export default function App() {
       if (action === "present") startPresent();
     }),
   );
+
+  useEffect(() => {
+    // F5 belongs to the presentation even while a text/numeric editor has
+    // focus. Capture it before those editors stop propagation (and before a
+    // browser can reload the document). Dialogs/composition keep their state.
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== "F5" || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.defaultPrevented) return;
+      event.preventDefault();event.stopPropagation();
+      if (event.isComposing || event.repeat || !ready || presentationActive.current || modal || busy ||
+          pendingInk || menu || objectMenu || colorPalette || textMenu || slideMenu) return;
+      startPresent(!event.shiftKey);
+    };
+    window.addEventListener("keydown",key,true);
+    return ()=>window.removeEventListener("keydown",key,true);
+  });
 
   useEffect(() => {
     // Desktop shortcuts are handled by the native menu. Capture the browser

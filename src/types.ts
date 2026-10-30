@@ -129,7 +129,12 @@ export interface ChartPart {
   path: string;
   contentType: string;
   data: string;
-  relationships: { id: string; type: string; target: string; external?: boolean }[];
+  relationships: {
+    id: string;
+    type: string;
+    target: string;
+    external?: boolean;
+  }[];
 }
 export interface ChartData {
   root: string;
@@ -137,8 +142,47 @@ export interface ChartData {
   colors: Record<string, string>;
   fontFamily: string;
 }
+// Opaque source data is never rendered or executed. It is used only to carry
+// unsupported native Office content through a subsequent PPTX save.
+export interface PptxSourcePackage {
+  id: string;
+  deckId?: string;
+  data: string;
+  slides: { path: string; id: string }[];
+  nodes: PptxSourceNode[];
+}
+export interface PptxSourceNode {
+  part: string;
+  index: number;
+  count: number;
+  signature: string;
+  shapes?: string[];
+  derived?: boolean;
+}
+export interface PptxSlideSource {
+  source: string;
+  path: string;
+  nodes: PptxSourceNode[];
+  background: string;
+  transition: string;
+  notes: string;
+  nativeTransition?: boolean;
+  transitionEdited?: boolean;
+}
 export interface SlideElement {
   id: string;
+  pptxRef?: {
+    source: string;
+    part: string;
+    index: number;
+    shape: string;
+    instance?: string;
+    paint?: string;
+    content?: string;
+    playback?: string;
+    text?: string;
+    geometry?: [number, number, number, number];
+  };
   name?: string;
   hidden?: boolean;
   // Outer group first. Coordinates remain in slide space for fast editing.
@@ -208,6 +252,7 @@ export interface SlideElement {
 }
 export interface Slide {
   id: string;
+  pptxSource?: PptxSlideSource;
   hidden?: boolean;
   background: string;
   backgroundGradient?: GradientFill;
@@ -222,6 +267,8 @@ export interface Slide {
 }
 export interface Deck {
   version: 1;
+  pptxSources?: PptxSourcePackage[];
+  pptxLosses?: string[];
   id: string;
   name: string;
   width: number;

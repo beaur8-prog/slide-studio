@@ -1,3 +1,8 @@
+import {
+  finalizeSource, preservationRequired, validatePptxRef, validateSlideSource,
+  validateSources, writePreservedPptx,
+} from "./pptx-preservation";
+import { openPptxPackage, xmlDocument, resolvePart, checkZip } from "./pptx-package";
 import { readGradient, writeGradient, validateGradient } from "./gradient";
 import { presetGeometry } from "./drawing-presets";
 import {
@@ -69,12 +74,8 @@ import { readChartPackage, writeCharts } from "./pptx-chart";
 // uses inches/points; keeping these conversions in one place avoids drift.
 const EMU_PER_PX = 9525;
 const PX_PER_INCH = 96;
-const MAX_ARCHIVE = 256 * 1024 * 1024;
 const MAX_EXPANDED = 200 * 1024 * 1024;
-const MAX_PART = 24 * 1024 * 1024;
-const MAX_XML = 8 * 1024 * 1024;
 const MAX_IMAGE = 16 * 1024 * 1024;
-const MAX_ZIP_FILES = 5000;
 const REL_NS =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const TABLE_NS = "urn:slide-studio:table:v1";
@@ -190,6 +191,13 @@ export function validateDeck(input: unknown): Deck {
   const slideIds = new Set<string>();
   const deck: Deck = {
     version: 1,
+    ...(root.pptxSources !== undefined
+      ? {pptxSources: validateSources(root.pptxSources)} : {}),
+    ...(root.pptxLosses !== undefined ? {pptxLosses: (() => {
+      if (!Array.isArray(root.pptxLosses) || root.pptxLosses.length > 100)
+        fail("잘못된 PPTX 저장 안내입니다.");
+      return root.pptxLosses.map(v => stringValue(v, "PPTX 저장 안내", 2000, false));
+    })()} : {}),
     id: stringValue(root.id, "프로젝트 ID", 160, false),
     name: stringValue(root.name, "프로젝트 이름", 500, false),
     width: numberValue(root.width, "슬라이드 너비", 100, 10000),
@@ -217,6 +225,7 @@ export function validateDeck(input: unknown): Deck {
       }
       return {
         id,
+        ...(slide.pptxSource !== undefined ? {pptxSource:validateSlideSource(slide.pptxSource)} : {}),
         ...(slide.hidden !== undefined
           ? { hidden: booleanValue(slide.hidden, `${label} 숨김`) }
           : {}),
@@ -253,6 +262,7 @@ export function validateDeck(input: unknown): Deck {
             ),
             opacity: numberValue(source.opacity, `${elLabel} 불투명도`, 0, 1),
           };
+          if (source.pptxRef !== undefined) el.pptxRef = validatePptxRef(source.pptxRef);
           if (elementIds.has(el.id))
             fail(`${label}: 개체 ID가 중복되어 있습니다.`);
           elementIds.add(el.id);
@@ -606,6 +616,17 @@ export function validateDeck(input: unknown): Deck {
       };
     }),
   };
+  const usedSources = new Set<string>();
+  for (const slide of deck.slides) {
+    if (slide.pptxSource) usedSources.add(slide.pptxSource.source);
+    for (const e of slide.elements) if (e.pptxRef) usedSources.add(e.pptxRef.source);
+  }
+  if (usedSources.size) {
+    const available = new Set(deck.pptxSources?.map(s => s.id));
+    for (const id of usedSources)
+      if (!available.has(id)) fail("원본 PPTX 보존 데이터가 누락되었습니다.");
+    deck.pptxSources = deck.pptxSources!.filter(s => usedSources.has(s.id));
+  } else delete deck.pptxSources;
   if (jsonLength(deck, MAX_EXPANDED) > MAX_EXPANDED)
     fail("프로젝트 파일이 너무 큽니다 (최대 200 MB).");
   return deck;
@@ -813,7 +834,7 @@ function restoreTableXml(doc: Document, elements: SlideElement[]) {
 }
 
 /** Produce actual editable DrawingML objects, not screenshots of the slide. */
-export async function exportPptx(input: Deck): Promise<Uint8Array> {
+export async function exportPptx(input: Deck, options: {onWarning?: (message:string) => void} = {}): Promise<Uint8Array> {
   const deck = validateDeck(resolveDeckFields(input));
   const pptx = new PptxGenJS();
   pptx.defineLayout({
@@ -1148,82 +1169,12 @@ export async function exportPptx(input: Deck): Promise<Uint8Array> {
     xml = new XMLSerializer().serializeToString(doc);
     zip.file(path, xml);
   }
-  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+  await writePreservedPptx(zip,deck,message => options.onWarning?.(message));
+  const output = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+  checkZip(output);
+  return output;
 }
 
-/** Reject oversized/ambiguous ZIPs before JSZip allocates decompressed data. */
-function checkZip(bytes: Uint8Array): Map<string, number> {
-  if (bytes.length > MAX_ARCHIVE) fail("PPTX 파일은 256 MiB 이하여야 합니다.");
-  if (bytes.length < 22) fail("올바른 PPTX ZIP 파일이 아닙니다.");
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let end = -1;
-  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
-    if (
-      view.getUint32(i, true) === 0x06054b50 &&
-      i + 22 + view.getUint16(i + 20, true) === bytes.length
-    ) {
-      end = i;
-      break;
-    }
-  }
-  if (end < 0) fail("PPTX ZIP 디렉터리를 찾을 수 없습니다.");
-  const count = view.getUint16(end + 10, true);
-  const centralSize = view.getUint32(end + 12, true);
-  const start = view.getUint32(end + 16, true);
-  if (
-    view.getUint16(end + 4, true) !== 0 ||
-    view.getUint16(end + 6, true) !== 0 ||
-    view.getUint16(end + 8, true) !== count
-  )
-    fail("분할 ZIP은 지원하지 않습니다.");
-  if (count === 65535 || start === 0xffffffff || centralSize === 0xffffffff)
-    fail("ZIP64 PPTX는 지원하지 않습니다.");
-  if (count > MAX_ZIP_FILES || start + centralSize > end)
-    fail("PPTX 파일 수 또는 디렉터리 크기가 제한을 초과합니다.");
-  const names = new Set<string>();
-  const sizes = new Map<string, number>();
-  const decoder = new TextDecoder();
-  let at = start;
-  let expanded = 0;
-  for (let i = 0; i < count; i++) {
-    if (at + 46 > end || view.getUint32(at, true) !== 0x02014b50)
-      fail("손상된 PPTX ZIP 디렉터리입니다.");
-    const flags = view.getUint16(at + 8, true);
-    const method = view.getUint16(at + 10, true);
-    const size = view.getUint32(at + 24, true);
-    const nameLength = view.getUint16(at + 28, true);
-    const extraLength = view.getUint16(at + 30, true);
-    const commentLength = view.getUint16(at + 32, true);
-    if (flags & 1 || (method !== 0 && method !== 8))
-      fail("암호화되었거나 지원하지 않는 압축 형식의 PPTX입니다.");
-    if (
-      at + 46 + nameLength + extraLength + commentLength >
-      start + centralSize
-    )
-      fail("손상된 PPTX ZIP 항목입니다.");
-    const name = decoder.decode(bytes.subarray(at + 46, at + 46 + nameLength));
-    if (
-      !name ||
-      name.includes("\\") ||
-      name.startsWith("/") ||
-      name.includes("\0") ||
-      name.split("/").some((p) => p === ".." || p === ".") ||
-      names.has(name)
-    )
-      fail("PPTX에 잘못되거나 중복된 파일 경로가 있습니다.");
-    names.add(name);
-    sizes.set(name, size);
-    expanded += size;
-    if (size > MAX_PART || expanded > MAX_EXPANDED)
-      fail("PPTX 압축 해제 크기가 제한을 초과합니다.");
-    if ((name.endsWith(".xml") || name.endsWith(".rels")) && size > MAX_XML)
-      fail("PPTX XML 항목이 너무 큽니다.");
-    at += 46 + nameLength + extraLength + commentLength;
-  }
-  if (at !== start + centralSize)
-    fail("PPTX ZIP 디렉터리 길이가 일치하지 않습니다.");
-  return sizes;
-}
 
 function child(
   node: Element | Document | undefined | null,
@@ -1267,41 +1218,7 @@ function relId(el: Element | undefined, name = "id"): string {
     el?.getAttributeNS(REL_NS, name) ?? el?.getAttribute(`r:${name}`) ?? ""
   );
 }
-function xmlDocument(text: string, path: string): Document {
-  if (/<!DOCTYPE|<!ENTITY/i.test(text))
-    fail(`${path}: DTD/ENTITY XML은 지원하지 않습니다.`);
-  const xml = new DOMParser().parseFromString(text, "application/xml");
-  if (
-    xml.getElementsByTagName("parsererror").length ||
-    xml.documentElement.localName === "parsererror"
-  )
-    fail(`${path}: XML이 손상되었습니다.`);
-  return xml;
-}
-function resolvePart(from: string, target: string): string | undefined {
-  if (
-    !target ||
-    /^[a-z][a-z0-9+.-]*:/i.test(target) ||
-    target.includes("\\") ||
-    target.startsWith("//")
-  )
-    return undefined;
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(target.split("#")[0]);
-  } catch {
-    return undefined;
-  }
-  if (decoded.includes("\0") || decoded.includes("\\")) return undefined;
-  const stack = decoded.startsWith("/") ? [] : from.split("/").slice(0, -1);
-  for (const item of decoded.split("/")) {
-    if (item === "..") {
-      if (!stack.length) return undefined;
-      stack.pop();
-    } else if (item && item !== ".") stack.push(item);
-  }
-  return stack.join("/");
-}
+
 interface Relationship {
   id: string;
   type: string;
@@ -1594,84 +1511,13 @@ export async function importPptx(
   data: ArrayBuffer | Uint8Array,
 ): Promise<ImportResult> {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  const partSizes = checkZip(bytes);
-  let zip: JSZip;
-  try {
-    zip = await JSZip.loadAsync(bytes, { createFolders: false });
-  } catch {
-    return fail(
-      "PPTX 압축 파일을 읽을 수 없습니다. 암호화 또는 파일 손상을 확인하세요.",
-    );
-  }
+  const sourcePackage = await openPptxPackage(bytes);
+  const { zip, partSizes, readBytes, readXml } = sourcePackage;
   const warnings = new Set<string>();
   const warn = (text: string) => warnings.add(text);
-  let readTotal = 0;
-  const xmlCache = new Map<string, Document>();
   const imageCache = new Map<string, string>();
   const videoCache = new Map<string, string | null>();
   let embeddedAssetBytes = 0;
-  const readBytes = async (
-    path: string,
-    limit = MAX_PART,
-  ): Promise<Uint8Array | undefined> => {
-    const file = zip.file(path);
-    if (!file) return undefined;
-    // Stream and count actual output as well as the declared ZIP sizes.
-    return new Promise<Uint8Array>((resolve, reject) => {
-      const pieces: Uint8Array[] = [];
-      let total = 0;
-      let settled = false;
-      // JSZip documents this API but its v3 declarations omit it on ZipObject.
-      const stream = (
-        file as JSZip.JSZipObject & {
-          internalStream(
-            type: "uint8array",
-          ): JSZip.JSZipStreamHelper<Uint8Array>;
-        }
-      ).internalStream("uint8array");
-      stream.on("data", (chunk) => {
-        if (settled) return;
-        total += chunk.length;
-        readTotal += chunk.length;
-        if (total > limit || readTotal > MAX_EXPANDED) {
-          settled = true;
-          stream.pause();
-          reject(new Error("PPTX 압축 해제 데이터가 허용 크기를 초과합니다."));
-          return;
-        }
-        pieces.push(chunk);
-      });
-      stream.on("error", (error) => {
-        if (!settled) {
-          settled = true;
-          reject(error);
-        }
-      });
-      stream.on("end", () => {
-        if (settled) return;
-        settled = true;
-        const result = new Uint8Array(total);
-        let offset = 0;
-        for (const piece of pieces) {
-          result.set(piece, offset);
-          offset += piece.length;
-        }
-        resolve(result);
-      });
-      stream.resume();
-    });
-  };
-  const readXml = async (
-    path: string | undefined,
-  ): Promise<Document | undefined> => {
-    if (!path) return undefined;
-    if (xmlCache.has(path)) return xmlCache.get(path)!;
-    const raw = await readBytes(path, MAX_XML);
-    if (!raw) return undefined;
-    const doc = xmlDocument(new TextDecoder().decode(raw), path);
-    xmlCache.set(path, doc);
-    return doc;
-  };
   const relationships = async (path: string): Promise<Relationship[]> => {
     const bits = path.split("/");
     const filename = bits.pop()!;
@@ -1738,10 +1584,12 @@ export async function importPptx(
   if (
     Object.entries(zip.files).some(
       ([path, entry]) =>
-        !entry.dir && /vbaProject|activeX|embeddings\//i.test(path),
+        !entry.dir && /vbaProject|activeX|embeddings\/.*\.(?:bin|exe|dll)$/i.test(path),
     )
   )
     warn("매크로, ActiveX, OLE 첨부 개체는 가져오지 않습니다.");
+  const preservationId = uid();
+  let needsSource = preservationRequired(presentation) || ["embeddedFontLst","custShowLst","photoAlbum","kinsoku"].some(name=>!!first(presentation,name)) || presentationRels.some(r=>r.type.endsWith("/commentAuthors"));
   let count = 0;
   const tableStyles = await readXml(
     presentationRels.find((r) => r.type.endsWith("/tableStyles"))?.path ??
@@ -1869,8 +1717,13 @@ export async function importPptx(
       warn(
         "일부 배경의 그라데이션·이미지·효과는 단색 배경으로 대체되었습니다.",
       );
+    needsSource ||= preservationRequired(doc) || preservationRequired(layout) || preservationRequired(master);
     const slide: Slide = {
       id: importedSlideIds[slideIndex],
+      pptxSource: {
+        source: preservationId, path: slidePath, nodes: [],
+        background: "0".repeat(64), transition: "0".repeat(64), notes: "0".repeat(64),
+      },
       ...(["0", "false"].includes(
         doc.documentElement.getAttribute("show") ?? "",
       )
@@ -1884,6 +1737,8 @@ export async function importPptx(
       elements: [],
     };
     const transition = first(doc, "transition");
+    slide.pptxSource!.nativeTransition = !!transition && (!child(transition, "fade") ||
+      transition.hasAttribute("advTm") || transition.getAttribute("spd") !== "med");
     if (transition) {
       if (child(transition, "fade")) slide.transition = "fade";
       else warn("페이드 이외의 슬라이드 전환은 가져오지 않습니다.");
@@ -3069,13 +2924,24 @@ export async function importPptx(
       depth = 0,
       sourceRelationships: Relationship[] = rels,
       decorationsOnly = false,
+      sourcePart: string = slidePath!,
+      sourceTop?: {part:string; index:number},
     ): Promise<void> => {
       if (!tree) return;
       if (depth > 30) fail("PPTX 그룹 중첩이 너무 깊습니다.");
-      for (const node of Array.from(tree.children)) {
-        if (generatedBorders.has(node)) continue;
+      for (const [sourceIndex, node] of Array.from(tree.children).entries()) {
+        if (generatedBorders.has(node)) {
+          if (!sourceTop) slide.pptxSource!.nodes.push({
+            part: sourcePart, index: sourceIndex, count: 0,
+            signature: "0".repeat(64), derived: true,
+          });
+          continue;
+        }
         if (decorationsOnly && placeholder(node)) continue;
         const elementStart = slide.elements.length;
+        const top = sourceTop ?? {part: sourcePart, index: sourceIndex};
+        if (!sourceTop && ["sp","cxnSp","pic","grpSp","graphicFrame","AlternateContent","contentPart"].includes(node.localName))
+          slide.pptxSource!.nodes.push({...top, count: 0, signature: "0".repeat(64)});
         if (node.localName === "sp" || node.localName === "cxnSp")
           parseShape(node, parent);
         else if (node.localName === "pic")
@@ -3122,6 +2988,8 @@ export async function importPptx(
             depth + 1,
             sourceRelationships,
             decorationsOnly,
+            sourcePart,
+            top,
           );
           const groupState = readObjectState(node);
           for (let i = firstElement; i < slide.elements.length; i++) {
@@ -3206,6 +3074,9 @@ export async function importPptx(
                 },
                 depth + 1,
                 await relationships(drawingRel.path),
+                false,
+                drawingRel.path,
+                top,
               );
               warn(
                 "SmartArt의 저장된 도형 배치를 개별 편집 개체로 가져왔습니다. 자동 재배치는 지원하지 않습니다.",
@@ -3222,6 +3093,8 @@ export async function importPptx(
               depth + 1,
               sourceRelationships,
               decorationsOnly,
+              sourcePart,
+              top,
             );
           else warn("대체 표시 데이터가 없는 확장 콘텐츠를 제외했습니다.");
         } else if (node.localName === "contentPart")
@@ -3304,12 +3177,19 @@ export async function importPptx(
               slide.elements[i].field = field;
           }
         }
+        for (let i = elementStart; i < slide.elements.length; i++) {
+          slide.elements[i].pptxRef ??= {
+            source: preservationId, part: top.part, index: top.index,
+            shape: first(node, "cNvPr")?.getAttribute("id") ?? "",
+            instance: slide.elements[i].id,
+          };
+        }
       }
     };
     if (doc.documentElement.getAttribute("showMasterSp") !== "0") {
       if (layout?.documentElement.getAttribute("showMasterSp") !== "0")
-        await walk(first(master, "spTree"), IDENTITY, 0, masterRels, true);
-      await walk(first(layout, "spTree"), IDENTITY, 0, layoutRels, true);
+        await walk(first(master, "spTree"), IDENTITY, 0, masterRels, true, masterPath!);
+      await walk(first(layout, "spTree"), IDENTITY, 0, layoutRels, true, layoutPath!);
     }
     await walk(first(doc, "spTree"), IDENTITY);
     const notesDoc = await readXml(
@@ -3319,6 +3199,7 @@ export async function importPptx(
       const notesShapes = all(notesDoc, "sp").filter(
         (sp) => placeholder(sp)?.type === "body",
       );
+      needsSource ||= notesShapes.some(sp => all(sp,"rPr").some(r => ["b","i","u"].some(a => r.hasAttribute(a)) || all(r,"solidFill").length > 0));
       slide.notes = notesShapes
         .map((sp) => bodyText(child(sp, "txBody")))
         .join("\n");
@@ -3356,6 +3237,21 @@ export async function importPptx(
         "이미지·동영상 합계 100 MiB 제한을 넘는 영상은 정지 미리보기로 가져왔습니다.",
       );
     }
+  }
+  await finalizeSource(deck, bytes, needsSource || warnings.size > 0,
+    MAX_EXPANDED - jsonLength(deck, MAX_EXPANDED) -
+      deck.slides.reduce((n, s) => n + s.elements.length * 250, 1024));
+  for (const loss of deck.pptxLosses ?? []) warn(loss);
+  if (deck.pptxSources && jsonLength(deck, MAX_EXPANDED) > MAX_EXPANDED) {
+    delete deck.pptxSources;
+    for (const slide of deck.slides) {
+      delete slide.pptxSource;
+      for (const e of slide.elements) delete e.pptxRef;
+    }
+    deck.pptxLosses = ["원본 보존 데이터가 200 MiB 문서 제한을 넘어, 편집기가 지원하지 않는 원본 요소를 저장할 수 없습니다."];
+    warn(deck.pptxLosses[0]);
+  } else if (deck.pptxSources && needsSource && warnings.size > 0) {
+    warn("편집·발표에서 지원하지 않는 요소도 원본 PPTX 데이터로 보관하며, 저장할 때 유지합니다. 매크로·ActiveX·OLE와 외부 연결에는 제한이 있습니다.");
   }
   return { deck: validateDeck(deck), warnings: [...warnings] };
 }

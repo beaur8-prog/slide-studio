@@ -216,7 +216,7 @@ test("native nondefault slide numbers preserve cached text even when app metadat
         field: s.elements[0].field,
       })),
       saved: saved.slides.map((s: any) => s.elements[0].text),
-      exportedAgain: exportedAgain.deck.slides.map((s) => s.elements[0].text),
+      exportedAgain: resolveDeckFields(exportedAgain.deck).slides.map((s) => s.elements[0].text),
       footer: resolved.slides[0].elements.find((e) => e.field === "footer")
         ?.text,
       warnings: imported.warnings,

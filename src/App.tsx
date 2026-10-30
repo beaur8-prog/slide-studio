@@ -156,6 +156,7 @@ import {
 } from "./model";
 import SlideCanvas, { SlideVisual } from "./SlideCanvas";
 import { exportPptx, importPptx, parseDeckJson, validateDeck } from "./io";
+import { mergePptxSources, replaceSlideTransition } from "./pptx-preservation";
 import { loadAutosave, saveAutosave } from "./storage";
 import { restoreWindowBuffer } from "./startup";
 import type { RecentPresentationFile } from "./types";
@@ -719,6 +720,7 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
   const transaction = useRef<Deck | null>(null);
   const clipboard = useRef<{
+    pptxSources?: Deck["pptxSources"];
     elements?: SlideElement[];
     slide?: Slide;
     slides?: Slide[];
@@ -1630,6 +1632,7 @@ export default function App() {
             deck.slides.filter((s) => selectedSlideIds.includes(s.id)),
           ),
         };
+    clipboard.current.pptxSources = deck.pptxSources;
     const elements =
       clipboard.current.elements ??
       clipboard.current.slides?.flatMap((s) => s.elements) ??
@@ -1749,7 +1752,17 @@ export default function App() {
       const copies = copyElements(clipboard.current.elements, 24, 24).map(
         (e) => ({ ...e, locked: false }),
       );
-      changeSlide((s) => ({ ...s, elements: [...s.elements, ...copies] }));
+      try {
+        const next = validateDeck(mergePptxSources({
+          ...deck,
+          slides: deck.slides.map(s => s.id === slide.id
+            ? {...s, elements: [...s.elements, ...copies]} : s),
+        }, clipboard.current.pptxSources));
+        commit(() => next);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "원본 데이터를 보존하며 붙여넣지 못했습니다.");
+        return;
+      }
       setSelected(copies.map((e) => e.id));
     } else if (clipboard.current.slides || clipboard.current.slide) {
       const source = clipboard.current.slides ?? [clipboard.current.slide!];
@@ -1758,11 +1771,17 @@ export default function App() {
         source.every((slide) => !deck.slides.some((current) => current.id === slide.id));
       const copies = moving ? clone(source) : duplicateSlides(source);
       const next = copies[0];
-      commit((d) => {
-        const slides = [...d.slides];
-        slides.splice(slideInsertIndex, 0, ...copies);
-        return { ...d, slides };
-      });
+      try {
+        const checked = validateDeck(mergePptxSources({
+          ...deck,
+          slides: [...deck.slides.slice(0, slideInsertIndex), ...copies,
+            ...deck.slides.slice(slideInsertIndex)],
+        }, clipboard.current.pptxSources));
+        commit(() => checked);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "원본 데이터를 보존하며 붙여넣지 못했습니다.");
+        return;
+      }
       selectSlide(next.id);
       setSlideSelection(copies.map((s) => s.id));
     }
@@ -1930,7 +1949,15 @@ export default function App() {
     const snapshot = history.present;
     setBusy("PowerPoint 파일을 만들고 있습니다");
     try {
-      const bytes = await exportPptx(deck);
+      const losses = new Set<string>();
+      const bytes = await exportPptx(deck, {
+        onWarning: message => losses.add(message),
+      });
+      if (losses.size && !window.confirm(
+        "다음 원본 요소를 완전히 보존하지 못합니다.\n\n" +
+        [...losses].map(message => "• " + message).join("\n") +
+        "\n\n원본을 유지하려면 취소하세요. 이 내용을 제외한 PPTX를 저장하시겠습니까?",
+      )) return;
       if (await saveBytes(`${deck.name}.pptx`, bytes)) {
         setFileSnapshot(snapshot);
         notify("PPTX 파일을 저장했습니다.");
@@ -4370,7 +4397,7 @@ export default function App() {
                     icon={<Square size={25} />}
                     active={slide.transition === "none"}
                     onClick={() =>
-                      changeSlide((s) => ({ ...s, transition: "none" }))
+                      changeSlide((s) => replaceSlideTransition(s, "none"))
                     }
                   >
                     없음
@@ -4379,7 +4406,7 @@ export default function App() {
                     icon={<Layers size={25} />}
                     active={slide.transition === "fade"}
                     onClick={() =>
-                      changeSlide((s) => ({ ...s, transition: "fade" }))
+                      changeSlide((s) => replaceSlideTransition(s, "fade"))
                     }
                   >
                     페이드
@@ -4394,8 +4421,7 @@ export default function App() {
                     commit((d) => ({
                       ...d,
                       slides: d.slides.map((s) => ({
-                        ...s,
-                        transition: slide.transition,
+                        ...replaceSlideTransition(s, slide.transition),
                       })),
                     }))
                   }

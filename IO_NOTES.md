@@ -227,11 +227,39 @@ Each chart package is limited to 128 parts / 16 MiB; previews to 64 series,
 10,000 points per series and 100,000 points total. Charts count toward the
 100 MiB embedded-asset budget.
 
-SmartArt without saved drawing geometry, object animations, embedded OLE/ActiveX/macros,
-and audio/external video are not imported. SVG/EMF/WMF images are excluded. Unsupported
-objects and alternative content without a usable fallback produce warnings.
-The JSON project is the format for lossless continuation in Slide Studio; PPTX
-interchange is a documented editable subset, not full PowerPoint compatibility.
+SmartArt without saved drawing geometry, object animations, audio and SVG/EMF/WMF
+artwork do not gain editable/playing representations in this app. Their native
+source data can nevertheless survive PPTX saving. Imports needing preservation
+retain one bounded source archive in the local model/autosave, with hashes and
+bindings to editable objects. This data is also retained by internal slide copy
+and undo/redo. An exported PPTX contains reachable standard Office parts, not the
+source archive or a hidden JSON project.
+
+Unchanged native objects retain their source XML. Changed supported objects are
+rebuilt with the original unmodeled paint, picture/vector sources and unchanged
+text bodies where possible. Source layout/master dependencies, rich unchanged
+notes, animation/audio timing, native transitions, font embeddings and custom
+shows are preserved. Relationship, shape, timing and global master/layout IDs are
+remapped; deleted-object animations and unreachable assets are removed. Changed
+video playback uses the new settings. Explicitly choosing None/Fade overrides a
+preserved unsupported transition. Presentation-level settings belong to their
+original document; copying a slide does not copy its custom show definitions.
+
+Some edits still require a compatibility decision: edited SmartArt/extension
+content may become individual objects; opaque members of a moved/resized group
+retain their original placement; edited text/table content may lose unmodeled
+rich formatting. Nondefault slide-number fields keep their visible fixed text.
+Macros, ActiveX, OLE and external media/package links are excluded. These actual
+exclusions are collected during export and the app asks before invoking file
+save; cancelling leaves the original file and unsaved-file protection intact.
+Unusable source data fails before writing. Source snapshots also count toward
+the 200 MiB model limit. When they cannot fit, import and save explicitly report
+that unsupported source content cannot be retained. Normal unsupported-free files
+do not need a snapshot. The app never renders/executes the opaque data or loads
+its external relationships. See [preservation QA](qa/PPTX-PRESERVATION-2026-10-30.md).
+
+PPTX interchange remains a documented editable subset with native passthrough,
+rather than a full PowerPoint rendering, animation or SmartArt engine.
 
 Imports never fetch relationships from the network or execute archive contents.
 Limits: 256 MiB archive (also enforced by the browser/native file dialog), 200 MiB total declared and actually read uncompressed data,

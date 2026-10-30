@@ -224,11 +224,22 @@ const { execFile } = require('node:child_process');
       await page.getByRole('button', { name: '삽입', exact: true }).click();
       await page.getByRole('button', { name: '차트', exact: true }).click();
       const chart = page.getByRole('dialog', { name: '차트 삽입', exact: true });
-      await expect(chart).toContainText('데이터 연동 안 됨');
-      await expect(chart).toContainText('자동 갱신되지 않습니다');
+      if (version.localeCompare('1.6.16', undefined, { numeric: true }) >= 0) {
+        await expect(chart).toContainText('숫자를 바꾸면 차트가 갱신됩니다');
+        await expect(chart).toContainText('외부 Excel 파일과 실시간 연동되지는 않습니다');
+        await chart.getByLabel('차트 제목', { exact: true }).fill('Windows 설치 검증 차트');
+        await chart.getByLabel('차트 데이터', { exact: true }).fill('항목,값\n설치,12\n업데이트,35');
+        const preview = chart.getByRole('img', { name: 'Windows 설치 검증 차트', exact: true });
+        await expect(preview).toBeVisible();
+        await expect(preview).toContainText('설치');
+        await expect(preview).toContainText('업데이트');
+      } else {
+        await expect(chart).toContainText('데이터 연동 안 됨');
+        await expect(chart).toContainText('자동 갱신되지 않습니다');
+      }
       await page.screenshot({ path: path.join(output, 'chart-notice.png') });
       await chart.getByRole('button', { name: '취소', exact: true }).click();
-      console.log('Native app: long Korean auto-height, persistence and chart notice verified');
+      console.log('Native app: long Korean auto-height, persistence and chart behavior verified');
     }
     if (version.localeCompare('1.5.8', undefined, { numeric: true }) >= 0) {
       await require('./qa-editing-regressions.cjs')(page, output);

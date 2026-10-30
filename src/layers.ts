@@ -23,7 +23,12 @@ export function elementName(element: SlideElement, index: number) {
   if (element.name) return element.name;
   if (element.type === "text" && element.text?.trim())
     return element.text.split("\n")[0].slice(0, 80);
-  if ((element.type === "image" || element.type === "video" || element.type === "audio") && element.alt)
+  if (
+    (element.type === "image" ||
+      element.type === "video" ||
+      element.type === "audio") &&
+    element.alt
+  )
     return element.alt.slice(0, 80);
   const shape = (
     {
@@ -236,13 +241,23 @@ export function reorderLayers(
 export function moveLayers(
   elements: SlideElement[],
   ids: string[],
-  direction: "up" | "down",
+  direction: "up" | "down" | "front" | "back",
 ) {
   const roots = layerTree(elements),
     nodes = movableNodes(roots, ids);
   if (!nodes.length) return elements;
   const siblings = parentItems(roots, nodes[0].parentKey),
     moving = new Set(nodes.map((node) => node.key));
+  if (direction === "front" || direction === "back") {
+    const chosen = siblings.filter((node) => moving.has(node.key));
+    const rest = siblings.filter((node) => !moving.has(node.key));
+    siblings.splice(
+      0,
+      siblings.length,
+      ...(direction === "front" ? [...rest, ...chosen] : [...chosen, ...rest]),
+    );
+    return flattenArtwork(roots, elements);
+  }
   const indices = siblings.flatMap((node, i) =>
     moving.has(node.key) ? [i] : [],
   );

@@ -9,7 +9,8 @@ import { AUDIO_ICON } from "./audio-icon";
 import { PresentationAudio } from "./PresentationAudio";
 import { AudioPreview } from "./AudioPreview";
 import { usePresenterView } from "./PresenterView";
-import { duplicateSlides, moveSlides } from "./slide-operations";
+import { duplicateSlides, moveSlides, stepSlides } from "./slide-operations";
+import { rotateElements } from "./canvas-resize";
 import { documentCapacityError, type DocumentAddition } from "./document-limits";
 import type { InkStroke } from "./presentation-ink";
 import { fitTableRows } from "./table-layout";
@@ -18,7 +19,7 @@ import { arrangeElements, selectionUnits } from "./object-arrange";
 import ObjectAlignMenu from "./ObjectAlignMenu";
 import { pixelsToPoints, pointsToPixels, FONT_POINT_MIN, FONT_POINT_MAX } from "./font-units";
 import { stepFontPixels, stepTextFontSizes } from "./text-font-size";
-import { isElementHidden } from "./layers";
+import { isElementHidden, moveLayers } from "./layers";
 import { LayerPanel } from "./LayerPanel";
 import { applyObjectFormat, captureInlineFormat, captureObjectFormat, PAINT_TEXT_EVENT, type FormatSample, type PaintTextDetail } from "./format-painter";
 import "./format-painter.css";
@@ -162,7 +163,6 @@ import {
   duplicateSlide,
   element,
   newSlide,
-  reorder,
   sampleDeck,
   slideTitle,
   THEMES,
@@ -1812,31 +1812,14 @@ export default function App() {
       setSlideSelection(copies.map((s) => s.id));
     }
   };
-  const layerSelected = (where: "front" | "back" | "up" | "down") =>
-    changeSlide((s) => {
-      let elements = [...s.elements];
-      if (where === "front" || where === "back") {
-        const chosen = elements.filter((e) => selected.includes(e.id));
-        const rest = elements.filter((e) => !selected.includes(e.id));
-        elements =
-          where === "front" ? [...rest, ...chosen] : [...chosen, ...rest];
-      } else {
-        const indices = elements
-          .map((e, i) => (selected.includes(e.id) ? i : -1))
-          .filter((i) => i >= 0);
-        if (where === "up") indices.reverse();
-        indices.forEach((i) => {
-          const next = i + (where === "up" ? 1 : -1);
-          if (
-            next >= 0 &&
-            next < elements.length &&
-            !selected.includes(elements[next].id)
-          )
-            elements = reorder(elements, i, next);
-        });
-      }
-      return { ...s, elements };
-    });
+  const layerSelected = (where: "front" | "back" | "up" | "down") => {
+    try {
+      const elements = moveLayers(documentRef.current.slides[activeIndex].elements, selected, where);
+      changeSlide(s => ({...s, elements}));
+    } catch(error) {
+      notify(error instanceof Error ? error.message : "개체 순서를 바꾸지 못했습니다.");
+    }
+  };
   const alignElements = (action: Parameters<typeof arrangeElements>[2]) =>
     changeSlide((s) => ({
       ...s,
@@ -2531,12 +2514,12 @@ export default function App() {
         setRibbonCollapsed((value) => !value);
         return;
       }
-      if (cmd && e.key.toLowerCase() === "s") {
+      if (cmd && !e.altKey && e.key.toLowerCase() === "s") {
         e.preventDefault();
         void savePptx(e.shiftKey);
         return;
       }
-      if (cmd && e.key.toLowerCase() === "o") {
+      if (cmd && !e.altKey && e.key.toLowerCase() === "o") {
         e.preventDefault();
         void openProject();
         return;
@@ -2555,6 +2538,29 @@ export default function App() {
         return;
       }
       if (editingTarget(e.target) || modal) return;
+      if (cmd && !e.altKey && ["ArrowUp", "ArrowDown"].includes(e.key) &&
+          e.target instanceof Element && e.target.closest(".thumbnail-list,.slide-sorter")) {
+        e.preventDefault();
+        const pane = e.target.closest(".thumbnail-list,.slide-sorter");
+        commit(d => ({...d, slides:stepSlides(d.slides,selectedSlideIds,e.key==="ArrowUp"?-1:1,e.shiftKey)}));
+        requestAnimationFrame(() => {
+          const target = pane?.querySelector<HTMLElement>(`[data-slide-id="${CSS.escape(activeId)}"]`);
+          target?.focus({preventScroll:true});target?.scrollIntoView({block:"nearest",inline:"nearest"});
+        });
+        return;
+      }
+      if (e.altKey && !cmd && !e.shiftKey && !activeTableSelection &&
+          ["ArrowLeft", "ArrowRight"].includes(e.key) && selected.length) {
+        e.preventDefault();
+        const direction = e.key === "ArrowRight" ? 15 : -15;
+        const update = (d: Deck) => ({...d, slides:d.slides.map(s=>s.id===slide.id
+          ? {...s,elements:rotateElements(s.elements,selected,direction)} : s)});
+        const key = `rotate:${slide.id}:${selected.join(",")}:${e.key}`;
+        if (e.repeat && nudgeKey.current === key) preview(update); else commit(update);
+        nudgeKey.current = key;
+        return;
+      }
+      if (e.altKey && !cmd) return;
       if (cmd && !e.altKey && !e.shiftKey && textCapable &&
           ["b", "i", "u"].includes(e.key.toLowerCase())) {
         e.preventDefault();
@@ -2706,7 +2712,7 @@ export default function App() {
         }));
       } else if (cmd && e.key.toLowerCase() === "d") {
         e.preventDefault();
-        duplicateSelected();
+        if (e.shiftKey) duplicateCurrentSlide(); else duplicateSelected();
       } else if (cmd && e.key.toLowerCase() === "a") {
         e.preventDefault();
         if (
@@ -3004,12 +3010,12 @@ export default function App() {
     // shortcut before a text editor stops bubbling the key event.
     if (window.desktop) return;
     const onPrintKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "s") {
         event.preventDefault(); event.stopPropagation();
         if (!event.repeat && !presentationActive.current) void savePptx(event.shiftKey);
         return;
       }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "p") {
         event.preventDefault();
         event.stopPropagation();
         if (!event.repeat) {
@@ -3270,6 +3276,20 @@ export default function App() {
     host.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "formatFontSize" }));
     ribbonTextSelection.current = captureTextSelection(host);
   };
+  useEffect(() => {
+    const alignKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || presenting || busy || modal ||
+          pendingInk || menu || objectMenu || colorPalette || textMenu || event.repeat) return;
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || !textCapable) return;
+      const align = ({l:"left",e:"center",r:"right"} as const)[event.key.toLowerCase() as "l"|"e"|"r"];
+      if (!align) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (editingTarget(target) && !target?.closest(".editing-text")) return;
+      event.preventDefault();event.stopPropagation();setTextStyle("align",align);
+    };
+    window.addEventListener("keydown",alignKey,true);
+    return ()=>window.removeEventListener("keydown",alignKey,true);
+  });
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || presenting || busy || modal || pendingInk || menu || objectMenu || colorPalette || textMenu) return;
@@ -4790,6 +4810,7 @@ export default function App() {
                     </span>
                     <button
                       className="thumbnail-button"
+                      data-slide-id={s.id}
                       aria-label={`슬라이드 ${i + 1}: ${slideTitle(s)}${s.hidden ? " (숨김)" : ""}`}
                       aria-current={s.id === slide.id ? "true" : undefined}
                       aria-pressed={selectedSlideIds.includes(s.id)}
@@ -4835,6 +4856,7 @@ export default function App() {
                 {deck.slides.map((s, i) => (
                   <button
                     key={s.id}
+                    data-slide-id={s.id}
                     className={`${selectedSlideIds.includes(s.id) ? "chosen" : ""} ${dropSlide === i ? "drop-before" : ""}`}
                     draggable
                     onDragStart={(e) => startSlideDrag(s.id, i, e)}
@@ -6066,6 +6088,8 @@ export default function App() {
                     ["인쇄", "⌘ / Ctrl + P"],
                     ["새 슬라이드", "⌘ / Ctrl + M"],
                     ["복제", "⌘ / Ctrl + D"],
+                    ["선택 슬라이드 복제", "⌘ / Ctrl + Shift + D"],
+                    ["슬라이드 순서 이동 (축소판)", "⌘ / Ctrl + ↑ / ↓ (Shift: 처음 / 끝)"],
                     ["실행 취소", "⌘ / Ctrl + Z"],
                     ["다시 실행", "⇧ + ⌘ / Ctrl + Z"],
                     ["전체 개체 선택", "⌘ / Ctrl + A"],
@@ -6073,6 +6097,8 @@ export default function App() {
                     ["개체 미세 이동", "방향키 (Shift: 10px)"],
                     ["텍스트 편집", "더블클릭 / Enter"],
                     ["글자 크게 / 작게", "⌘ / Ctrl + Shift + > / <"],
+                    ["왼쪽 / 가운데 / 오른쪽 정렬", "⌘ / Ctrl + L / E / R"],
+                    ["개체 15° 회전", "Alt + ← / →"],
                     ["맞춤 잠시 해제", "Alt + 끌기"],
                     ["처음부터 / 현재부터 발표", "F5 / Shift + F5"],
                     ["발표 중 이동 / 종료", "방향키 / Esc"],

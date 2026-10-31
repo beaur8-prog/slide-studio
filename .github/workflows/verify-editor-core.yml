@@ -54,6 +54,7 @@ jobs:
           tests/browser-output.spec.ts
           tests/recovery-storage.spec.ts
           tests/audio.spec.ts
+          tests/media-header-validation.spec.ts
           tests/native-menu-history.spec.ts
           tests/presentation-start-input.spec.ts
           tests/presentation-fullscreen.spec.ts

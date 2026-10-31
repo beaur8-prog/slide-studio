@@ -17,16 +17,40 @@ test("theme backgrounds resolve gradient and raster relationships, and preserve 
     const canvas = document.createElement("canvas");canvas.width=canvas.height=8;
     const context=canvas.getContext("2d")!;context.fillStyle="#FF0000";context.fillRect(0,0,8,8);context.fillStyle="#0000FF";context.fillRect(4,0,4,8);
     const source=canvas.toDataURL("image/png");zip.file("ppt/media/theme-texture.png",source.split(",")[1],{base64:true});
-    const themeName="ppt/theme/theme1.xml";
-    const theme=new DOMParser().parseFromString(await zip.file(themeName)!.async("string"),"application/xml");
-    const format=theme.getElementsByTagNameNS(A,"fmtScheme")[0];
-    let background=Array.from(format.children).find(e=>e.localName==="bgFillStyleLst");
-    if(!background){background=theme.createElementNS(A,"a:bgFillStyleLst");format.append(background);}
-    theme.documentElement.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:r", R);
-    background.innerHTML=`<a:gradFill><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"/></a:gs><a:gs pos="100000"><a:srgbClr val="000000"/></a:gs></a:gsLst><a:path path="circle"><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path></a:gradFill><a:blipFill dpi="96"><a:blip r:embed="rIdThemeTexture"/><a:srcRect/><a:tile sx="200000" sy="150000" tx="28575" ty="19050" algn="tl" flip="xy"/></a:blipFill><a:blipFill><a:blip r:embed="rIdThemeTexture"/><a:srcRect l="12500"/><a:stretch><a:fillRect l="10000" t="20000" r="10000" b="20000"/></a:stretch></a:blipFill>`;
-    theme.documentElement.setAttribute("xmlns:r",R);
-    zip.file(themeName,new XMLSerializer().serializeToString(theme));
-    zip.file("ppt/theme/_rels/theme1.xml.rels",`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdThemeTexture" Type="${R}/image" Target="../media/theme-texture.png"/></Relationships>`);
+    // A slide master's theme can be cloned independently of the notes theme.
+    // Resolve the owning chain instead of relying on a generator's filenames.
+    const relationshipPart = (part: string) => {
+      const slash = part.lastIndexOf("/");
+      return part.slice(0, slash + 1) + "_rels/" + part.slice(slash + 1) + ".rels";
+    };
+    const relatedPart = async (part: string, kind: string) => {
+      const rels = new DOMParser().parseFromString(await zip.file(relationshipPart(part))!.async("string"), "application/xml");
+      const relation = Array.from(rels.documentElement.children).find(node => node.getAttribute("Type")?.endsWith("/" + kind) && node.getAttribute("TargetMode") !== "External");
+      if (!relation) throw new Error(`Fixture missing ${kind} relationship from ${part}`);
+      const target = new URL(relation.getAttribute("Target")!, "https://fixture.invalid/" + part).pathname.slice(1);
+      if (!zip.file(target)) throw new Error(`Fixture relationship target is missing: ${target}`);
+      return target;
+    };
+    const themeNames = new Set<string>();
+    for (let i = 1; i <= 4; i++) {
+      const layout = await relatedPart(`ppt/slides/slide${i}.xml`, "slideLayout");
+      const master = await relatedPart(layout, "slideMaster");
+      themeNames.add(await relatedPart(master, "theme"));
+    }
+    for (const themeName of themeNames) {
+      const theme=new DOMParser().parseFromString(await zip.file(themeName)!.async("string"),"application/xml");
+      const format=theme.getElementsByTagNameNS(A,"fmtScheme")[0];
+      let background=Array.from(format.children).find(e=>e.localName==="bgFillStyleLst");
+      if(!background){background=theme.createElementNS(A,"a:bgFillStyleLst");format.append(background);}
+      theme.documentElement.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:r", R);
+      background.innerHTML=`<a:gradFill><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"/></a:gs><a:gs pos="100000"><a:srgbClr val="000000"/></a:gs></a:gsLst><a:path path="circle"><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path></a:gradFill><a:blipFill dpi="96"><a:blip r:embed="rIdThemeTexture"/><a:srcRect/><a:tile sx="200000" sy="150000" tx="28575" ty="19050" algn="tl" flip="xy"/></a:blipFill><a:blipFill><a:blip r:embed="rIdThemeTexture"/><a:srcRect l="12500"/><a:stretch><a:fillRect l="10000" t="20000" r="10000" b="20000"/></a:stretch></a:blipFill>`;
+      theme.documentElement.setAttribute("xmlns:r",R);
+      zip.file(themeName,new XMLSerializer().serializeToString(theme));
+      const from = themeName.split("/").slice(0, -1), to = ["ppt", "media", "theme-texture.png"];
+      while (from.length && to.length && from[0] === to[0]) { from.shift(); to.shift(); }
+      const imageTarget = "../".repeat(from.length) + to.join("/");
+      zip.file(relationshipPart(themeName),`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdThemeTexture" Type="${R}/image" Target="${imageTarget}"/></Relationships>`);
+    }
     for(let i=1;i<=4;i++){
       const part=`ppt/slides/slide${i}.xml`,doc=new DOMParser().parseFromString(await zip.file(part)!.async("string"),"application/xml");
       const cs=doc.getElementsByTagNameNS(P,"cSld")[0];for(const bg of Array.from(cs.children).filter(e=>e.localName==="bg"))bg.remove();
@@ -48,8 +72,9 @@ test("theme backgrounds resolve gradient and raster relationships, and preserve 
     const host=document.createElement("div");host.id="theme-background-test";Object.assign(host.style,{position:"fixed",left:"0",top:"0",width:"960px",height:"540px",zIndex:"999999",background:"white"});document.body.append(host);
     createRoot(host).render(React.createElement(SlideVisual,{slide:persisted.slides[1],width:persisted.width,height:persisted.height}));
     await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-    return {source,rounds,persisted:persisted.slides[1].backgroundImage,patterns:host.querySelectorAll("pattern").length};
+    return {source,themeNames:[...themeNames],rounds,persisted:persisted.slides[1].backgroundImage,patterns:host.querySelectorAll("pattern").length};
   });
+  await info.attach("owning-theme-parts", { body: JSON.stringify(result.themeNames), contentType: "application/json" });
   expect(result.patterns).toBe(1);
   for (const [i,r] of result.rounds.entries()) {
     expect(r.gradient?.kind).toBe("radial");expect(r.gradient?.stops.map(s=>s.color)).toEqual(["#44AA88","#000000"]);

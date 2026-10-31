@@ -35,9 +35,14 @@ export function safeVideo(value: unknown): string {
   const match =
     /^data:(video\/(?:mp4|webm));base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
   if (!match || match[2].length % 4) throw Error("잘못된 동영상 데이터입니다.");
-  const raw = atob(match[2]);
+  // The full payload alphabet/padding and quartet length were checked above.
+  // Preserve noncanonical pad bits accepted by atob; only the MIME header
+  // needs decoding. Exact decoded size follows from quartet count and padding.
+  const raw = atob(match[2].slice(0, 24));
   if (
-    raw.length > MAX_VIDEO_BYTES ||
+    (match[2].length / 4) * 3 -
+      (match[2].endsWith("==") ? 2 : match[2].endsWith("=") ? 1 : 0) >
+      MAX_VIDEO_BYTES ||
     videoMime(Uint8Array.from(raw.slice(0, 16), (c) => c.charCodeAt(0))) !==
       match[1]
   )

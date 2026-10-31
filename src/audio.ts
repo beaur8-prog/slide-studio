@@ -33,9 +33,14 @@ export function safeAudio(value: unknown): string {
       value,
     );
   if (!match || match[2].length % 4) throw Error("잘못된 오디오 데이터입니다.");
-  const raw = atob(match[2]);
+  // The full payload alphabet/padding and quartet length were checked above.
+  // Preserve noncanonical pad bits accepted by atob; only the MIME header
+  // needs decoding. Exact decoded size follows from quartet count and padding.
+  const raw = atob(match[2].slice(0, 24));
   if (
-    raw.length > MAX_AUDIO_BYTES ||
+    (match[2].length / 4) * 3 -
+      (match[2].endsWith("==") ? 2 : match[2].endsWith("=") ? 1 : 0) >
+      MAX_AUDIO_BYTES ||
     audioMime(Uint8Array.from(raw.slice(0, 16), (c) => c.charCodeAt(0))) !==
       match[1]
   )

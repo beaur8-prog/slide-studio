@@ -211,12 +211,27 @@ test("native shapes resolve matrix styles and partial placeholder lines through 
       );
     const load = async (path: string) =>
       parse(await zip.file(path)!.async("string"));
-    const paths = {
-      slide: "ppt/slides/slide1.xml",
-      layout: "ppt/slideLayouts/slideLayout1.xml",
-      master: "ppt/slideMasters/slideMaster1.xml",
-      theme: "ppt/theme/theme1.xml",
+    // Each slide master owns its actual theme; the notes master can retain a
+    // different theme even in this freshly generated, single-slide package.
+    const relatedPart = async (part: string, kind: string) => {
+      const slash = part.lastIndexOf("/");
+      const rels = await load(
+        part.slice(0, slash + 1) + "_rels/" + part.slice(slash + 1) + ".rels",
+      );
+      const relation = Array.from(rels.documentElement.children).find(
+        (node) => node.getAttribute("Type")?.endsWith("/" + kind) &&
+          node.getAttribute("TargetMode") !== "External",
+      );
+      if (!relation) throw new Error(`Fixture missing ${kind} relationship from ${part}`);
+      const target = new URL(relation.getAttribute("Target")!, "https://fixture.invalid/" + part).pathname.slice(1);
+      if (!zip.file(target)) throw new Error(`Fixture relationship target is missing: ${target}`);
+      return target;
     };
+    const slide = "ppt/slides/slide1.xml";
+    const layout = await relatedPart(slide, "slideLayout");
+    const master = await relatedPart(layout, "slideMaster");
+    const theme = await relatedPart(master, "theme");
+    const paths = { slide, layout, master, theme };
     const docs = {
       slide: await load(paths.slide),
       layout: await load(paths.layout),
@@ -360,12 +375,15 @@ test("native shapes resolve matrix styles and partial placeholder lines through 
       );
       imported = await importPptx(bytes);
     }
-    return { fixture, rounds, native, warnings, saved };
+    return { fixture, fixtureParts: paths, rounds, native, warnings, saved };
   });
   writeFileSync(
     info.outputPath("native-theme-style-fixture.pptx"),
     Buffer.from(result.fixture, "base64"),
   );
+  await info.attach("owning-theme-parts", {
+    body: JSON.stringify(result.fixtureParts), contentType: "application/json",
+  });
   result.saved.forEach((file, i) =>
     writeFileSync(
       info.outputPath(`edited-${i + 1}.pptx`),

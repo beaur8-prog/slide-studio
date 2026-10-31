@@ -120,14 +120,19 @@ function safeImage(value: unknown, label: string): string {
     );
   if (!match || !match[2] || match[2].length % 4 !== 0)
     fail(`${label}: PNG, JPEG, GIF, WebP, SVG 데이터 URL만 지원합니다.`);
+  // The full payload alphabet/padding and quartet length were checked above.
+  // Preserve noncanonical pad bits accepted by atob; only the MIME header
+  // needs decoding. Exact decoded size follows from quartet count and padding.
   let raw: string;
   try {
-    raw = atob(match![2]);
+    raw = atob(match![2].slice(0, 24));
   } catch {
     return fail(`${label}: 잘못된 이미지 데이터입니다.`);
   }
   if (
-    raw.length > MAX_IMAGE ||
+    (match![2].length / 4) * 3 -
+      (match![2].endsWith("==") ? 2 : match![2].endsWith("=") ? 1 : 0) >
+      MAX_IMAGE ||
     rasterMime(Uint8Array.from(raw.slice(0, 12), (c) => c.charCodeAt(0))) !==
       match![1].toLowerCase()
   )

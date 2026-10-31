@@ -96,7 +96,7 @@ test("native editor commands are ignored during a show and Ctrl+Enter advances i
     .toBe(1);
 });
 
-test("a file open that finishes during a show exits fullscreen before replacing the deck", async ({
+test("a pending native file chooser prevents a show from starting before replacing the deck", async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -104,11 +104,8 @@ test("a file open that finishes during a show exits fullscreen before replacing 
   await openDesktopEditor(page);
   await page.evaluate(() => (window as any).__desktopTest.menu("open"));
   await page.keyboard.press("F5");
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByTestId("presentation-view")).toHaveAttribute(
-    "aria-label",
-    /^발표 슬라이드 2 \//,
-  );
+  await expect(page.getByTestId("presentation-view")).toBeHidden();
+  await expect(page.locator(".busy-backdrop")).toContainText("파일 열기 선택창을 기다리고 있습니다");
   await page.evaluate(async () => {
     const { blankDeck } = await import("/src/model.ts");
     const { serializeDeck } = await import("/src/io.ts");
@@ -130,7 +127,7 @@ test("a file open that finishes during a show exits fullscreen before replacing 
   );
   expect(
     await page.evaluate(() => (window as any).__desktopTest.modes),
-  ).toEqual([true, false]);
+  ).toEqual([]);
   expect(errors).toEqual([]);
 });
 

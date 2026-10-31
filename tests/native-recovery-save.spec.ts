@@ -22,6 +22,7 @@ async function ipc(profile: string, platform: string) {
     require: (id: string) => id === "electron" ? {
       app: { isPackaged: true, setName() {}, setPath() {}, setAppUserModelId() {}, getPath: () => profile, requestSingleInstanceLock: () => false, quit() {} },
       ipcMain: { handle: (name: string, callback: any) => handlers.set(name, callback), on() {} },
+      systemPreferences: { setUserDefault() {} },
       dialog: { showSaveDialog: async (_window: unknown, options: any) => { dialogs.push(options); return replies.shift() ?? { canceled: true }; },
         showMessageBox: async () => replies.shift() ?? { response: 1 } },
     } : realRequire(id),

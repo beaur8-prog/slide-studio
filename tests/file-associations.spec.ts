@@ -25,6 +25,12 @@ async function desktop(platform: string, argv: string[] = []) {
   });
   let windowCount = 0, destroyed = false;
   let resolveDialog!: (value: any) => void;
+  let rejectDialog!: (error: Error) => void;
+  const panels: any[] = [], preferences: unknown[][] = [];
+  const panel = (kind: string, options: any) => {
+    panels.push({kind,options});
+    return new Promise((resolve,reject) => { resolveDialog = resolve; rejectDialog = reject; });
+  };
   const app = Object.assign(events, {
     isPackaged: true, setName() {}, setPath() {}, setAppUserModelId() {},
     getPath: () => profile, getVersion: () => 'test',
@@ -47,7 +53,9 @@ async function desktop(platform: string, argv: string[] = []) {
         async loadFile() {}
       },
       ipcMain: { handle: (name: string, fn: any) => handlers.set(name, fn), on() {} },
-      dialog: { showOpenDialog: () => new Promise(resolve => { resolveDialog = resolve; }) },
+      dialog: { showOpenDialog: (_window: unknown, options: any) => panel('open',options),
+        showSaveDialog: (_window: unknown, options: any) => panel('save',options) },
+      systemPreferences: { setUserDefault: (...args: unknown[]) => preferences.push(args) },
       Menu: { buildFromTemplate: (value: any) => value, setApplicationMenu() {} },
       session: { defaultSession: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {},
         on() {}, webRequest: { onBeforeRequest() {}, onHeadersReceived() {} } } },
@@ -58,11 +66,12 @@ async function desktop(platform: string, argv: string[] = []) {
   vm.runInNewContext(await fs.readFile(filename, 'utf8'), sandbox);
   const event = { sender: contents, senderFrame: frame };
   return {
-    profile, events, handlers, notices, event,
+    profile, events, handlers, notices, event, panels, preferences,
     count: () => windowCount,
     async ready() { ready = true; resolveReady(); await new Promise(resolve => setTimeout(resolve, 20)); },
     take: (...args: any[]) => handlers.get('slide-studio:take-requested-file')!(event, ...args),
     finishDialog: (value: any) => resolveDialog(value),
+    failDialog: (error: Error) => rejectDialog(error),
     destroy() { destroyed = true; },
   };
 }
@@ -139,6 +148,54 @@ test('an OS request waits for an existing native file dialog without being consu
     expect((await app.take()).name).toBe('after-dialog.pptx');
     expect(await app.take()).toBeNull();
   } finally { await fs.rm(app.profile, { recursive: true, force: true }); }
+});
+
+for (const kind of ['open','save']) test(`${kind} panels set an app-local path before creation and release the native guard after cancellation or error`, async () => {
+  const app = await desktop('darwin');
+  try {
+    await app.ready();
+    const handler = app.handlers.get('slide-studio:' + (kind === 'open' ? 'open-file' : 'save-file'))!;
+    const request = () => handler(app.event, ...(kind === 'save' ? [{name:'확인.pptx',data:new Uint8Array([80,75]),extensions:['pptx'],context:{saveAs:true}}] : []));
+    for (const outcome of ['cancel','error','cancel']) {
+      const count = app.panels.length;
+      const pending = request();
+      // Observe rejection before resolving the panel to catch even fast failures.
+      const completed = pending.then((value: unknown) => ({value}), (error: Error) => ({error:error.message}));
+      await expect.poll(() => app.panels.length).toBe(count + 1);
+      expect(app.preferences.at(-1)).toEqual(['NSOSPLastRootDirectory','string',app.profile]);
+      expect(app.panels.at(-1).options.defaultPath).toBe(kind === 'open' ? app.profile : path.join(app.profile,'확인.pptx'));
+      expect(await request().then(() => '',(error: unknown) => String(error))).toContain('Finish the open file');
+      expect(app.panels.length).toBe(count + 1);
+      if (outcome === 'error') app.failDialog(new Error('QA: native panel failed'));
+      else app.finishDialog({canceled:true});
+      expect(await completed).toEqual(outcome === 'error' ? {error:'QA: native panel failed'} : {value:null});
+    }
+  } finally { await fs.rm(app.profile,{recursive:true,force:true}); }
+});
+
+test('file panel preparation changes only the app-scoped key, preserves default paths and fails before panel creation', async () => {
+  const {createFileDialogs} = createRequire(import.meta.url)('../electron/file-dialogs.cjs');
+  const calls: any[] = [], options = {defaultPath:'/some/document/folder/name.pptx',filters:[{name:'Presentations',extensions:['pptx','slide']}]};
+  const macOptions = {...options,filters:[]};
+  const raw = {showOpenDialog: async (...args: any[]) => {calls.push(['open',...args]);return {canceled:true};},
+    showSaveDialog: async (...args: any[]) => {calls.push(['save',...args]);return {canceled:true};}};
+  const panels = createFileDialogs({dialog:raw,platform:'darwin',getHome:()=>'/Users/test',
+    systemPreferences:{setUserDefault:(...args: any[])=>calls.push(['app-default',...args])}});
+  await panels.showOpenDialog(null,options); await panels.showSaveDialog(null,options);
+  expect(calls).toEqual([
+    ['app-default','NSOSPLastRootDirectory','string','/Users/test'],['open',null,macOptions],
+    ['app-default','NSOSPLastRootDirectory','string','/Users/test'],['save',null,macOptions],
+  ]);
+  calls.length=0;
+  const failed = createFileDialogs({dialog:raw,platform:'darwin',getHome:()=>'/Users/test',
+    systemPreferences:{setUserDefault:()=>{throw Error('QA: defaults unavailable');}}});
+  await expect(failed.showOpenDialog(null,options)).rejects.toThrow('defaults unavailable');
+  expect(calls).toEqual([]);
+  for (const platform of ['win32','linux']) {
+    await createFileDialogs({dialog:raw,platform,getHome:()=>{throw Error('Must not touch macOS settings');}}).showOpenDialog(null,options);
+  }
+  expect(calls).toEqual([['open',null,options],['open',null,options]]);
+  expect(options.filters[0].extensions).toEqual(['pptx','slide']);
 });
 
 test('renderer waits for startup and protects unsaved edits for externally requested PPTX files', async ({ page }) => {

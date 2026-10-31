@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, session, shell, Notification, screen } = require('electron');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, session, shell, Notification, screen, systemPreferences } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
@@ -13,6 +13,7 @@ const { FileOpenRequests } = require('./file-open-requests.cjs');
 const { FileContexts } = require('./file-contexts.cjs');
 const { createPresentationSaver } = require('./presentation-save.cjs');
 const { createRecoverySaver } = require('./recovery-save.cjs');
+const { createFileDialogs } = require('./file-dialogs.cjs');
 const { atomicWrite } = require('./atomic-write.cjs');
 
 const PRODUCT_NAME = 'Slide Studio';
@@ -61,6 +62,7 @@ async function withCaptureOperation(event, task) {
 app.setName(PRODUCT_NAME);
 const customUserData=app.commandLine?.getSwitchValue?.('user-data-dir')||'';
 app.setPath('userData',customUserData&&path.isAbsolute(customUserData)?path.resolve(customUserData):path.join(app.getPath('appData'), PRODUCT_NAME));
+const fileDialogs = createFileDialogs({ dialog, systemPreferences, getHome: () => app.getPath('home'), platform: process.platform });
 const updates = createStudioUpdater({ app, dialog, shell, Notification, id: 'slide', getWindow: () => mainWindow, platform: process.platform, arch: process.arch,
   onOpen: () => {
     if (!mainWindow || mainWindow.isDestroyed()) return false;
@@ -437,7 +439,7 @@ function installIPC() {
   });
 
   const savePresentation = createPresentationSaver({
-    contexts: fileContexts, dialog, getWindow: () => mainWindow,
+    contexts: fileContexts, dialog: fileDialogs, getWindow: () => mainWindow,
     defaultPath: defaultDialogPath, atomicWrite,
     onSaved: async filename => {
       await rememberDocumentDirectory(filename);
@@ -447,12 +449,12 @@ function installIPC() {
   ipcMain.handle('slide-studio:save-file', (event, payload) => withNativeDialog(event, () =>
     savePresentation(decodeFilePayload(payload), payload.context)));
 
-  const saveRecovery = createRecoverySaver({ dialog, getWindow: () => mainWindow,
+  const saveRecovery = createRecoverySaver({ dialog: fileDialogs, getWindow: () => mainWindow,
     defaultPath: defaultDialogPath, atomicWrite, safeFilename });
   ipcMain.handle('slide-studio:save-recovery-data', (event, payload) => withNativeDialog(event, () => saveRecovery(payload)));
 
   ipcMain.handle('slide-studio:open-file', event => withNativeDialog(event, async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const result = await fileDialogs.showOpenDialog(mainWindow, {
       title: 'Open Presentation',
       defaultPath: await defaultDialogPath(),
       filters: [{ name: 'Presentations', extensions: ['slide', 'pptx'] }],
@@ -464,7 +466,7 @@ function installIPC() {
 
   ipcMain.handle('slide-studio:export-pdf', (event, name) => withNativeDialog(event, async () => {
     if (typeof name !== 'string') throw new Error('The PDF is missing a name.');
-    const result = await dialog.showSaveDialog(mainWindow, {
+    const result = await fileDialogs.showSaveDialog(mainWindow, {
       title: 'Export PDF',
       defaultPath: await defaultDialogPath(safeFilename(name, 'pdf')),
       filters: [{ name: 'PDF Document', extensions: ['pdf'] }],

@@ -638,6 +638,7 @@ export default function App() {
   const [busy, setBusy] = useState("");
   const printing = useRef(false);
   const savingPptx = useRef(false);
+  const openingFile = useRef(false);
   const [openRequestVersion, setOpenRequestVersion] = useState(0);
   const [requestedFile, setRequestedFile] = useState<OpenPresentationFile | null>(null);
   const takingRequestedFile = useRef(false);
@@ -2034,6 +2035,7 @@ export default function App() {
     documentId: string,
   ) => {
     if (window.desktop) {
+      setBusy(saveAs || !fileContext ? "파일 저장 위치 선택창을 기다리고 있습니다" : "PowerPoint 파일을 저장하고 있습니다");
       const result = await window.desktop.saveFile({
         name,
         data,
@@ -2063,7 +2065,7 @@ export default function App() {
     });
   };
   const savePptx = async (saveAs = false) => {
-    if (savingPptx.current || printing.current || busy || modal) return;
+    if (openingFile.current || savingPptx.current || printing.current || busy || modal) return;
     savingPptx.current = true;
     setMenu(null);
     commitPendingInputs();
@@ -2099,7 +2101,7 @@ export default function App() {
       await printDeck();
       return;
     }
-    if (printing.current || savingPptx.current || busy || modal) return;
+    if (openingFile.current || printing.current || savingPptx.current || busy || modal) return;
     printing.current = true;
     setMenu(null);
     commitPendingInputs();
@@ -2117,7 +2119,7 @@ export default function App() {
     }
   };
   const printDeck = async () => {
-    if (printing.current || savingPptx.current || busy || modal) return;
+    if (openingFile.current || printing.current || savingPptx.current || busy || modal) return;
     printing.current = true;
     commitPendingInputs();
     setEditing(null);
@@ -2177,9 +2179,12 @@ export default function App() {
     }
   };
   const openProject = async () => {
+    if (openingFile.current || savingPptx.current || printing.current || busy || modal || presentationActive.current) return;
+    openingFile.current = true;
     setMenu(null);
     try {
       if (window.desktop) {
+        setBusy("파일 열기 선택창을 기다리고 있습니다");
         const file = await window.desktop.openFile();
         if (file) await readFile(file.name, file.data, file.context);
       } else fileInput.current?.click();
@@ -2187,6 +2192,9 @@ export default function App() {
       notify(
         `파일 열기 실패: ${error instanceof Error ? error.message : String(error)}`,
       );
+    } finally {
+      openingFile.current = false;
+      setBusy("");
     }
   };
   useEffect(() => window.desktop?.onOpenRequested?.(() => {
@@ -2198,7 +2206,8 @@ export default function App() {
     takingRequestedFile.current = true;
     void window.desktop.takeRequestedFile().then(setRequestedFile).catch(error => {
       notify(`파일 열기 실패: ${error instanceof Error ? error.message : String(error)}`);
-      setOpenRequestVersion(version => version + 1);
+      // A failed IPC/read must wait for a new OS request or explicit user action.
+      // Incrementing this effect's dependency here retries a permanent error forever.
     }).finally(() => { takingRequestedFile.current = false; });
   }, [ready, busy, modal, presenting, requestedFile, openRequestVersion]);
   useEffect(() => {
@@ -2265,7 +2274,7 @@ export default function App() {
     presentationNumber.current = "";
   };
   const startPresent = (fromBeginning = false) => {
-    if (!ready || presentationActive.current || modal || busy || printing.current || savingPptx.current) return;
+    if (!ready || presentationActive.current || modal || busy || openingFile.current || printing.current || savingPptx.current) return;
     commitPendingInputs();
     const current = deckRef.current;
     setEditing(null);
@@ -3074,7 +3083,7 @@ export default function App() {
     return () => window.removeEventListener("paste", paste);
   });
   const openUpdates = (check = false) => {
-    if (busy || savingPptx.current || printing.current || presentationActive.current || modal && modal !== "updates") return;
+    if (busy || openingFile.current || savingPptx.current || printing.current || presentationActive.current || modal && modal !== "updates") return;
     finish(); setEditing(null); setMenu(null); setModal("updates");
     if (check) void updates.run("check");
   };
@@ -3088,6 +3097,7 @@ export default function App() {
           presentationInk.current?.command(action.slice(13));
         return;
       }
+      if (openingFile.current) return;
       if (action === "undo" || action === "redo") {
         if (busy || savingPptx.current || printing.current) return;
         const focused = document.activeElement;
@@ -6086,7 +6096,7 @@ export default function App() {
       )}
       {busy && (
         <div className="modal-backdrop busy-backdrop">
-          <div className="busy-dialog">
+          <div className="busy-dialog" role="status" aria-live="polite">
             <LoaderCircle className="spin" size={24} />
             <p>{busy}</p>
           </div>

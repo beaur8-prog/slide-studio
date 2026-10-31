@@ -103,6 +103,31 @@ test("a delayed initial IPC response cannot erase newer download progress", asyn
   await expect(page.locator(".update-status")).toContainText("72%");
 });
 
+test("progress and instructions remain readable in dark and light themes", async ({ page }, info) => {
+  await fixture(page);
+  await page.evaluate(() => (window as any).__updates.emit({ phase: "downloading", percent: 42, receivedBytes: 4404019, totalBytes: 10485760 }));
+  await page.getByRole("button", { name: "업데이트 상태 보기" }).click();
+  for (const theme of ["dark", "light"]) {
+    await page.evaluate(theme => { document.documentElement.dataset.chrome = theme; }, theme);
+    const ratios = await dialog(page).evaluate(element => {
+      const luminance = (color: string) => {
+        const values = color.match(/[\d.]+/g)!.slice(0, 3).map(Number).map(value => {
+          const channel = value / 255; return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
+        });
+        return values[0] * .2126 + values[1] * .7152 + values[2] * .0722;
+      };
+      return [".update-stage", ".update-note", "h2"].map(selector => {
+        const node = element.querySelector(selector)!;
+        const foreground = luminance(getComputedStyle(node).color);
+        const background = luminance(getComputedStyle(selector === ".update-stage" ? node : element).backgroundColor);
+        return (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05);
+      });
+    });
+    for (const ratio of ratios) expect(ratio).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: info.outputPath(`update-${theme}.png`) });
+  }
+});
+
 for (const platform of ["darwin", "linux"]) test(`${platform} explains manual installation and keeps keyboard focus inside the update window`, async ({ page }) => {
   await fixture(page, platform);
   await page.evaluate(() => (window as any).__updateMenu("updates-manual"));

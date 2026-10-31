@@ -68,6 +68,8 @@ try {
   $deadline = [DateTime]::UtcNow.AddMinutes(4)
   $sawProgress = $false
   $lastWindows = ''
+  $visibleSince = $null
+  $capturedProgress = $false
   while (-not $helper.HasExited) {
     $helper.Refresh()
     $windows = [UpdateWindowProbe]::Describe($helper.Id) | ConvertTo-Json
@@ -76,8 +78,13 @@ try {
       Set-Content (Join-Path $report 'all-observed-windows.json') $windows -Encoding utf8NoBOM
     }
     $progressWindow = [UpdateWindowProbe]::FindVisible($helper.Id, 'Slide Studio 업데이트')
-    if ($progressWindow -ne [IntPtr]::Zero -and -not $sawProgress) {
+    if ($progressWindow -ne [IntPtr]::Zero) {
       $sawProgress = $true
+      if ($null -eq $visibleSince) { $visibleSince = [DateTime]::UtcNow }
+    }
+    # Capture after the first paint rather than the empty controls at creation.
+    if ($progressWindow -ne [IntPtr]::Zero -and -not $capturedProgress -and ([DateTime]::UtcNow - $visibleSince).TotalSeconds -ge 1) {
+      $capturedProgress = $true
       [UpdateWindowProbe]::Describe($helper.Id) | ConvertTo-Json | Set-Content (Join-Path $report 'observed-windows.json') -Encoding utf8NoBOM
       Add-Type -AssemblyName System.Drawing
       $bounds = New-Object UpdateWindowProbe+Rect

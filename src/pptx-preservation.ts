@@ -157,6 +157,7 @@ const textModel = (e: SlideElement) =>
       "writingMode",
       "textInsets",
       "textFrame",
+      "textRotation",
       "textOpacity",
     ].map((k) => [k, e[k as keyof SlideElement]]),
   );
@@ -209,11 +210,10 @@ function unmodeledText(root: Element | Document) {
     ["rPr", "defRPr", "endParaRPr"].some((name) =>
       all(root, name).some(
         (n) =>
-          ["strike", "cap"].some(
-            (a) =>
-              n.hasAttribute(a) &&
-              !["noStrike", "none"].includes(n.getAttribute(a)!),
-          ) ||
+          (n.hasAttribute("strike") &&
+            n.getAttribute("strike") !== "noStrike") ||
+          (n.hasAttribute("cap") &&
+            !["none", "small", "all"].includes(n.getAttribute("cap")!)) ||
           (n.hasAttribute("u") &&
             !["none", "sng"].includes(n.getAttribute("u")!)) ||
           [

@@ -1,0 +1,9 @@
+.recovery-notice { display: flex; align-items: center; gap: 16px; padding: 9px 16px; background: #fff3d1; color: #49350d; font-size: 12px; flex: none; }
+.recovery-notice span { flex: 1; }
+.recovery-notice button { border: 1px solid #aa8849; border-radius: 4px; padding: 4px 10px; white-space: nowrap; }
+.recovery-backups { max-width: 680px; width: min(680px, 90vw); }
+.recovery-record { border: 1px solid #d4d8ce; border-radius: 6px; padding: 14px; margin: 12px 0; font-size: 13px; }
+.recovery-record p { overflow-wrap: anywhere; line-height: 1.6; }
+.recovery-record button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #a7b09c; border-radius: 4px; padding: 6px 12px; margin: 0 8px 4px 0; }
+.recovery-backups .recovery-message { color: #44573b; }
+.recovery-backups .dialog-actions { font-size: 12px; gap: 20px; }

@@ -2,10 +2,45 @@ import { listNumberLabel } from "./list-numbering";
 import { localFontAlias } from "./local-fonts";
 import type { SlideElement, TextParagraph, TextRun } from "./types";
 
-export function fontStack(name = "Arial", bold = false): string {
-  const clean = name
+// The same installed family can expose its Korean or English name depending
+// on the platform/font installer. Try those names before unrelated fallbacks,
+// without changing the source family kept in the document.
+const sourceFontGroups = [
+  ["맑은 고딕", "Malgun Gothic"],
+  ["굴림", "Gulim"],
+  ["굴림체", "GulimChe"],
+  ["돋움", "Dotum"],
+  ["돋움체", "DotumChe"],
+  ["바탕", "Batang"],
+  ["바탕체", "BatangChe"],
+  ["궁서", "Gungsuh"],
+  ["궁서체", "GungsuhChe"],
+  ["나눔바른고딕", "NanumBarunGothic", "Nanum Barun Gothic"],
+];
+// fontStack is called for every painted run, including thumbnails. Resolve
+// known names once instead of repeatedly scanning all localized family names.
+const sourceFontAliases = new Map(
+  sourceFontGroups.flatMap((names) =>
+    names.map(
+      (name) =>
+        [name.toLowerCase(), names.filter((other) => other !== name)] as const,
+    ),
+  ),
+);
+
+function sourceFontName(name: string): string {
+  return name
     .replace(/\s*\((?:Headings|Body)\)\s*$/i, "")
     .replace(/["\\\n\r]/g, "");
+}
+
+export function fontFamilyNames(name: string): string[] {
+  const clean = sourceFontName(name);
+  return [clean, ...(sourceFontAliases.get(clean.toLowerCase()) ?? [])];
+}
+
+export function fontStack(name = "Arial", bold = false): string {
+  const clean = sourceFontName(name);
   const substitute = /^Calibri Light$/i.test(clean)
     ? ', "Slide Studio Calibri Light", Carlito'
     : /^Calibri$/i.test(clean)
@@ -20,7 +55,12 @@ export function fontStack(name = "Arial", bold = false): string {
   const office = /^Calibri(?: Light)?$/i.test(clean)
     ? `, "Slide Studio Office ${clean}"`
     : "";
-  return `"${clean}", "${localFontAlias(clean)}"${office}${substitute}, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+  const aliases =
+    sourceFontAliases
+      .get(clean.toLowerCase())
+      ?.map((n) => `, "${n}", "${localFontAlias(n)}"`)
+      .join("") ?? "";
+  return `"${clean}", "${localFontAlias(clean)}"${aliases}${office}${substitute}, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
 }
 
 // Keep the source run and its two font faces in the model; split only for

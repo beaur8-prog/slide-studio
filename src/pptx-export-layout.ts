@@ -49,10 +49,24 @@ export function restoreLayoutXml(
         el.opacity * (el.fillOpacity ?? 1),
       );
     const outline = child(properties, "ln");
-    if (outline && el.type === "shape" && (!el.width || !el.height))
-      // PptxGenJS substitutes a default when line width is zero. Preserve
-      // invisible collapsed decoration as well as visible collapsed outlines.
-      outline.setAttribute("w", String(Math.round((el.strokeWidth ?? 0) * 9525)));
+    if (outline && el.type === "shape") {
+      // PptxGenJS substitutes a default for zero widths, including ordinary
+      // and imported zero-height lines whose editor box is one pixel tall.
+      if (el.strokeWidth !== undefined || !el.width || !el.height)
+        outline.setAttribute("w", String(Math.round((el.strokeWidth ?? 0) * 9525)));
+      if (!el.stroke || el.stroke === "transparent" || el.strokeWidth === 0) {
+        for (const name of ["noFill", "solidFill", "gradFill", "pattFill"])
+          child(outline, name)?.remove();
+        const paint = make(!el.stroke || el.stroke === "transparent" ? "noFill" : "solidFill");
+        if (paint.localName === "solidFill") {
+          // A zero-width line is invisible without erasing its chosen color.
+          const color = make("srgbClr", { val: el.stroke!.slice(1) }, paint);
+          const opacity = el.opacity * (el.strokeOpacity ?? 1);
+          if (opacity !== 1) make("alpha", { val: Math.round(opacity * 100000) }, color);
+        }
+        outline.insertBefore(paint, outline.firstChild);
+      }
+    }
     if (outline && el.strokeDash) {
       child(outline, "prstDash")?.remove();
       child(outline, "custDash")?.remove();
@@ -244,6 +258,8 @@ export function restoreLayoutXml(
         make(el.autoHeight ? "spAutoFit" : "noAutofit", {}, bp);
         // The model stores effective spacing after source edge suppression.
         bp.setAttribute("spcFirstLastPara", "1");
+        if (el.textRotation !== undefined)
+          bp.setAttribute("rot", String(Math.round(el.textRotation * 60000)));
         if ((el.textColumns ?? 1) > 1) {
           bp.setAttribute("numCol", String(el.textColumns));
           bp.setAttribute(
@@ -293,6 +309,7 @@ export function restoreLayoutXml(
         if (run.hyperlink && name === "rPr")
           n.setAttribute("data-ss-link", JSON.stringify(run.hyperlink));
         if (run.baseline) n.setAttribute("baseline", String(run.baseline));
+        if (run.caps !== undefined) n.setAttribute("cap", run.caps);
         if (run.letterSpacing !== undefined)
           n.setAttribute("spc", String(Math.round(run.letterSpacing * 75)));
         if (run.kerning !== undefined)
@@ -420,12 +437,16 @@ export function restoreLayoutXml(
           );
         } else make("buNone", {}, pr);
         for (const run of bullet?.runs ?? paragraph.runs) {
+          const effectiveRun = {
+            ...run,
+            fontSize: run.fontSize ?? paragraph.fontSize,
+          };
           const lines = run.text.split("\n");
           lines.forEach((text, index) => {
-            if (index) runProps(make("br", {}, p), run);
+            if (index) runProps(make("br", {}, p), effectiveRun);
             if (!text) return;
             const r = make("r", {}, p);
-            runProps(r, run);
+            runProps(r, effectiveRun);
             const t = make("t", {}, r);
             t.textContent = text;
           });

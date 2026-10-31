@@ -1,7 +1,7 @@
 import type { SlideElement, TextParagraph, TextRun } from "./types";
 import { editableText } from "./text-layout";
 export type InlineFormat = "bold" | "italic" | "underline";
-type TextFormat = InlineFormat | "color" | "fontFamily" | "fontSize";
+type TextFormat = InlineFormat | "color" | "fontFamily" | "fontSize" | "caps";
 type RunStyle = Pick<TextRun, TextFormat | "fontFamilyEastAsian">;
 const pendingSizes = new WeakMap<
   HTMLElement,
@@ -97,6 +97,13 @@ function readStyle(
   if (formats.has("fontSize")) style.fontSize = parseFloat(css.fontSize);
   if (formats.has("bold")) style.bold = Number(css.fontWeight) >= 600;
   if (formats.has("italic")) style.italic = css.fontStyle !== "normal";
+  if (formats.has("caps"))
+    style.caps =
+      css.textTransform === "uppercase"
+        ? "all"
+        : css.fontVariantCaps === "small-caps"
+          ? "small"
+          : "none";
   if (formats.has("underline")) {
     style.underline = false;
     // Text decorations propagate through ancestors, unlike font-style.
@@ -263,7 +270,10 @@ export function applyTextFormatRanges(
               continue;
             }
             const current =
-              run[key] ?? element[key] ?? (key === "color" ? "#233D35" : false);
+              run[key] ??
+              (key === "caps"
+                ? "none"
+                : (element[key] ?? (key === "color" ? "#233D35" : false)));
             // Preserve omitted (inherited) values and unrelated run metadata.
             if (value !== undefined && value !== current)
               Object.assign(patch, { [key]: value });

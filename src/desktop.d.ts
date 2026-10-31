@@ -29,6 +29,7 @@ declare global {
         extensions: ["pptx"];
         context?: { token?: string; saveAs?: boolean };
       }): Promise<string | PresentationFileContext | null>;
+      saveRecoveryData?(payload: { name: string; data: Uint8Array; extension: "json" | "zip" | "bin" }): Promise<boolean>;
       openFile(): Promise<OpenPresentationFile | null>;
       takeRequestedFile?(): Promise<OpenPresentationFile | null>;
       onOpenRequested?(callback: () => void): () => void;

@@ -150,7 +150,7 @@ try {
         item.open_to_saved_ms = performance.now() - start;
         const switches = [];
         for (const index of [
-          ...new Set([0, 1, Math.floor(stats.slides / 2), stats.slides - 1]),
+          ...new Set([0, 1, Math.floor(stats.slides / 2), stats.slides - 1].filter((index) => index >= 0 && index < stats.slides)),
         ]) {
           const started = performance.now();
           await page.locator(".thumbnail-row").nth(index).click();
@@ -407,7 +407,7 @@ try {
               },
             };
           });
-          for (const index of picks) {
+          for (const index of picks.filter((index) => index >= 0 && index < stats.slides)) {
             const name = `${filename.replace(".pptx", "")}-slide-${String(index + 1).padStart(3, "0")}.png`;
             await page.evaluate(async (slideIndex) => {
               window.__qaScreenshot.render(slideIndex);

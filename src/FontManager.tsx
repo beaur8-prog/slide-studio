@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import {
   addLocalFonts,
@@ -6,13 +6,45 @@ import {
   MAX_LOCAL_FONT_BYTES,
   removeLocalFont,
 } from "./local-fonts";
+import {
+  documentFontUsage,
+  diagnoseDocumentFonts,
+  refreshDocumentFonts,
+  type DocumentFontStatus,
+} from "./document-fonts";
+import type { Deck } from "./types";
 import "./font-manager.css";
 
-export default function FontManager({ onClose }: { onClose: () => void }) {
+export default function FontManager({
+  deck,
+  onClose,
+}: {
+  deck: Deck;
+  onClose: () => void;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const [fonts, setFonts] = useState(listLocalFonts);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const usage = useMemo(() => documentFontUsage(deck), [deck]);
+  const [statuses, setStatuses] = useState<DocumentFontStatus[]>([]);
+  const [checking, setChecking] = useState(true);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let current = true;
+    const controller = new AbortController();
+    setChecking(true);
+    void diagnoseDocumentFonts(usage, controller.signal).then((result) => {
+      if (current) {
+        setStatuses(result);
+        setChecking(false);
+      }
+    });
+    return () => {
+      current = false;
+      controller.abort();
+    };
+  }, [usage, fonts, revision]);
   return (
     <div
       className="modal-backdrop"
@@ -65,6 +97,48 @@ export default function FontManager({ onClose }: { onClose: () => void }) {
           추가한 글꼴은 이 기기에 저장되어 다음 실행에도 적용됩니다. 다른
           PC에서도 사용하려면 해당 기기에 같은 글꼴을 추가해야 합니다.
         </p>
+        <section
+          className="document-fonts"
+          aria-labelledby="document-fonts-title"
+        >
+          <div className="document-fonts-heading">
+            <h3 id="document-fonts-title">이 문서의 사용 글꼴</h3>
+            <button
+              disabled={checking || busy}
+              onClick={() => {
+                refreshDocumentFonts();
+                setRevision((value) => value + 1);
+              }}
+            >
+              다시 확인
+            </button>
+          </div>
+          <p>
+            텍스트와 표에 사용된 글꼴 {usage.length}개입니다. 원본 글꼴이 없으면
+            글자 폭·두께와 줄바꿈이 달라질 수 있습니다.
+          </p>
+          {checking ? (
+            <p aria-live="polite">이 기기의 글꼴 확인 중…</p>
+          ) : (
+            <ul aria-label="문서에 사용된 글꼴" tabIndex={0}>
+              {statuses.map((font) => (
+                <li key={font.family.toLowerCase()}>
+                  <span>
+                    <strong>{font.family}</strong> · {font.slides}장
+                    <small data-font-status={font.kind}>{font.label}</small>
+                    {font.detail && <small>{font.detail}</small>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!usage.length && <p>아직 텍스트나 표에 사용된 글꼴이 없습니다.</p>}
+          <small>
+            글꼴 이름 기준의 확인입니다. 글꼴의 굵기·기울임 파일이나 일부 문자의
+            대체 여부는 별도 확인이 필요합니다. 이 과정에서 글꼴을 다운로드하지
+            않습니다.
+          </small>
+        </section>
         <input
           ref={input}
           type="file"

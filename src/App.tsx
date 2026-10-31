@@ -171,7 +171,8 @@ import {
 import SlideCanvas, { SlideVisual } from "./SlideCanvas";
 import { exportPptx, importPptx, parseDeckJson, validateDeck } from "./io";
 import { mergePptxSources, replaceSlideTransition } from "./pptx-preservation";
-import { loadAutosave, saveAutosave } from "./storage";
+import { loadAutosave, saveAutosave, listRecoveryBackups, AutosaveRecoveryError } from "./storage";
+import RecoveryBackups, { RecoveryNotice } from "./RecoveryBackups";
 import { restoreWindowBuffer } from "./startup";
 import type { RecentPresentationFile } from "./types";
 import TableEditor from "./TableEditor";
@@ -210,6 +211,7 @@ type History = {
 };
 type Tab = "home" | "insert" | "design" | "transitions" | "slideshow" | "view";
 type Modal =
+  | "recovery"
   | "image-crop"
   | "fonts"
   | "new"
@@ -606,6 +608,9 @@ export default function App() {
   const activeFindIndex = Math.min(findIndex, Math.max(0, findResults.matches.length - 1));
   const activeFindMatch = findResults.matches[activeFindIndex];
   const [ready, setReady] = useState(false);
+  const [hasRecoveryBackups, setHasRecoveryBackups] = useState(false);
+  const [autosaveBlocked, setAutosaveBlocked] = useState(false);
+  const autosaveBlockedRef = useRef(false);
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">(
     "saving",
   );
@@ -784,17 +789,32 @@ export default function App() {
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(""), 4200);
   }, []);
+  const capacityNotice = useRef<string | null>(null);
   const commit = useCallback((update: (d: Deck) => Deck) => {
     setHistory((h) => {
       const next = update(h.present);
       if (sameDocument(next, h.present)) return h;
+      const error = documentCapacityError(next);
+      if (error) {
+        if (!capacityNotice.current) {
+          capacityNotice.current = error;
+          // React may replay an updater. Report once after it has completed,
+          // without changing history, dirty state or the recovery document.
+          queueMicrotask(() => {
+            const message = capacityNotice.current;
+            capacityNotice.current = null;
+            if (message) notify(message);
+          });
+        }
+        return h;
+      }
       return {
         past: [...h.past, h.present].slice(-LIMIT),
         present: next,
         future: [],
       };
     });
-  }, []);
+  }, [notify]);
   const begin = useCallback(() => {
     // All document updates are immutable. Reuse the snapshot, including large
     // embedded images, instead of cloning the entire deck on each edit.
@@ -1200,54 +1220,77 @@ export default function App() {
 
   useEffect(() => {
     let disposed = false;
-    loadAutosave()
+    loadAutosave(validateDeck)
       .then((saved) => {
         if (disposed) return;
         if (saved && restoreWindowBuffer) {
-          try {
-            const safe = validateDeck(saved);
-            setHistory({ past: [], present: safe, future: [] });
-            setFileSnapshot(restoredFileChanges.current ? null : safe);
-            setActiveId(safe.slides[0].id);
-          } catch {
-            notify("저장된 문서를 읽지 못해 새 프레젠테이션을 열었습니다.");
-          }
+          setHistory({ past: [], present: saved, future: [] });
+          setFileSnapshot(restoredFileChanges.current ? null : saved);
+          setActiveId(saved.slides[0].id);
         }
         loadedRef.current = true;
         setReady(true);
       })
-      .catch(() => {
-        if (!disposed) {
-          setReady(true);
+      .catch((error) => {
+        if (disposed) return;
+        if (error instanceof AutosaveRecoveryError) {
+          autosaveBlockedRef.current = !error.backup;
+          setAutosaveBlocked(!error.backup);
+          loadedRef.current = !!error.backup;
+          setHasRecoveryBackups(!!error.backup);
+          if (!error.backup) setSaveStatus("error");
+          notify(error.message);
+        } else {
           setSaveStatus("error");
           notify("자동 저장소를 열지 못했습니다. 파일로 저장해 주세요.");
         }
+        setReady(true);
+      })
+      .finally(() => {
+        if (!disposed) void listRecoveryBackups().then(records => {
+          if (!disposed) setHasRecoveryBackups(records.length > 0);
+        }).catch(() => {});
       });
-    return () => {
-      disposed = true;
-    };
+    return () => { disposed = true; };
   }, [notify]);
   useLayoutEffect(() => {
-    if (!ready || !loadedRef.current) return;
+    if (!ready || !loadedRef.current || autosaveBlockedRef.current) return;
     setSaveStatus("saving");
     let live = true;
     const timer = setTimeout(() => {
       saveAutosave(deck)
-        .then(() => {
-          if (live) setSaveStatus("saved");
-        })
-        .catch(() => {
+        .then(() => { if (live) setSaveStatus("saved"); })
+        .catch((error) => {
           if (live) {
             setSaveStatus("error");
-            notify("자동 저장에 실패했습니다. 파일로 저장해 주세요.");
+            if (error instanceof AutosaveRecoveryError) {
+              autosaveBlockedRef.current = true;
+              setAutosaveBlocked(true);
+              notify(error.message);
+            } else notify("자동 저장에 실패했습니다. 파일로 저장해 주세요.");
           }
         });
     }, 450);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [deck, ready, notify]);
+    return () => { live = false; clearTimeout(timer); };
+  }, [deck, ready, notify, autosaveBlocked]);
+  const retryRecovery = async () => {
+    try {
+      await loadAutosave(validateDeck);
+      const records = await listRecoveryBackups();
+      setHasRecoveryBackups(records.length > 0);
+      autosaveBlockedRef.current = false;
+      setAutosaveBlocked(false);
+      loadedRef.current = true;
+    } catch (error) {
+      if (error instanceof AutosaveRecoveryError && error.backup) {
+        autosaveBlockedRef.current = false;
+        setAutosaveBlocked(false);
+        loadedRef.current = true;
+        setHasRecoveryBackups(true);
+        notify("기존 복구 데이터를 별도로 보관했습니다. 자동 저장을 다시 시작합니다.");
+      } else notify("기존 복구 데이터를 아직 보관하지 못했습니다. 원문을 내려받고 저장 공간을 확인해 주세요.");
+    }
+  };
   useEffect(() => {
     if (!ready) return;
     try { sessionStorage.setItem("slide-studio-file-dirty", String(hasFileChanges)); }
@@ -1319,7 +1362,7 @@ export default function App() {
     if (error) notify(error);
     return !error;
   };
-  const canAddElements = (count: number) => {
+  const canAddElements = (count: number | readonly SlideElement[]) => {
     // A file read may complete after the document was replaced.
     if (deckRef.current.id !== deck.id || !deckRef.current.slides.some((s) => s.id === slide.id))
       return false;
@@ -1486,21 +1529,23 @@ export default function App() {
     setSelected([next.id]);
     setMenu(null);
   };
-  const insertElements = (elements: SlideElement[]) => {
-    if (!elements.length) return;
+  const insertElements = (elements: SlideElement[]): boolean => {
+    if (!elements.length) return false;
     try {
       // Validate new objects against the same limits as saved projects before
       // adding them to the undo history. Existing image strings remain shared.
       const checked = validateDeck({ ...deck, slides: [{ ...slide, elements }] }).slides[0].elements;
-      if (!canAddElements(checked.length)) return;
+      if (!canAddElements(checked)) return false;
       changeSlide((s) => ({ ...s, elements: [...s.elements, ...checked] }));
       setSelected(checked.map((el) => el.id));
       setEditing(null);
       setModal(null);
       setMenu(null);
       setSorter(false);
+      return true;
     } catch (err) {
       notify((err as Error).message);
+      return false;
     }
   };
   const openChart = (id: string | null = null) => {
@@ -1528,6 +1573,23 @@ export default function App() {
     );
     setModal("table");
     setMenu(null);
+  };
+  const appendTableRow = (id: string): boolean => {
+    const current = deckRef.current;
+    const target = current.slides.find((s) => s.id === slide.id);
+    const original = target?.elements.find((e) => e.id === id);
+    if (!original?.table || original.locked || original.table.cells.length >= MAX_TABLE_ROWS)
+      return false;
+    const replacement = {
+      ...original,
+      table: changeTableAxis(original.table, "row", original.table.cells.length),
+      height: Math.min(100000, original.height * (original.table.cells.length + 1) / original.table.cells.length),
+    };
+    const next = { ...current, slides: current.slides.map((s) => s === target
+      ? { ...s, elements: s.elements.map((e) => e === original ? replacement : e) } : s) };
+    if (!withinCapacity({}, next)) return false;
+    commit(() => next);
+    return true;
   };
   const openFooter = (initial: "footer" | "date" | "number") => {
     setFooterInitial(initial);
@@ -1594,7 +1656,7 @@ export default function App() {
       return;
     }
     const source = slide.elements.filter((e) => selected.includes(e.id));
-    if (!canAddElements(source.length)) return;
+    if (!canAddElements(source)) return;
     const copies = copyElements(source, 24, 24).map((e) => ({ ...e, locked: false }));
     changeSlide((s) => ({ ...s, elements: [...s.elements, ...copies] }));
     setSelected(copies.map((e) => e.id));
@@ -1786,7 +1848,7 @@ export default function App() {
         );
       }
     } else if (clipboard.current.elements) {
-      if (!canAddElements(clipboard.current.elements.length)) return;
+      if (!canAddElements(clipboard.current.elements)) return;
       const copies = copyElements(clipboard.current.elements, 24, 24).map(
         (e) => ({ ...e, locked: false }),
       );
@@ -2931,8 +2993,10 @@ export default function App() {
             if(activeTableSelection&&selectedElement?.table){
               if(selectedElement.locked){notify('잠긴 표에는 붙여넣을 수 없습니다.');return;}
               const next=pasteStudioTable(selectedElement.table,activeTableSelection.focus.row,activeTableSelection.focus.column,source);
+              const candidate = {...deck,slides:deck.slides.map(s=>s.id===slide.id?{...s,elements:s.elements.map(el=>el.id===selectedElement.id?{...el,table:next}:el)}:s)};
+              if (!withinCapacity({}, candidate)) return;
               changeSlide(s=>({...s,elements:s.elements.map(el=>el.id===selectedElement.id?{...el,table:next}:el)}));
-            }else insertElements([createTableElement(source,deck.width,deck.height)]);
+            }else if (!insertElements([createTableElement(source,deck.width,deck.height)])) return;
             notify('표를 붙여넣었습니다.');return;
           }
         }catch(error){e.preventDefault();notify(error instanceof Error?error.message:'표를 붙여넣지 못했습니다.');return;}
@@ -4060,6 +4124,7 @@ export default function App() {
                   인쇄<span>{shortcut("P")}</span>
                 </button>
                 <hr />
+                {(hasRecoveryBackups || autosaveBlocked) && <button onClick={() => { setModal("recovery"); setMenu(null); }}><FileDown size={16}/>보관된 복구 데이터</button>}
                 <button
                   onClick={() => {
                     setModal("shortcuts");
@@ -4794,6 +4859,7 @@ export default function App() {
             </>
           )}
         </div>
+        {(hasRecoveryBackups || autosaveBlocked) && <RecoveryNotice blocked={autosaveBlocked} onOpen={() => setModal("recovery")} />}
         <main className="workspace">
           {findOpen ? <FindReplacePanel query={findQuery} replacement={findReplacement}
             options={findOptions} results={findResults} index={activeFindIndex}
@@ -5068,30 +5134,7 @@ export default function App() {
                           };
                         })
                       }
-                      appendTableRow={(id) =>
-                        changeSlide((s) => ({
-                          ...s,
-                          elements: s.elements.map((e) =>
-                            e.id === id &&
-                            e.table &&
-                            e.table.cells.length < MAX_TABLE_ROWS
-                              ? {
-                                  ...e,
-                                  table: changeTableAxis(
-                                    e.table,
-                                    "row",
-                                    e.table.cells.length,
-                                  ),
-                                  height: Math.min(
-                                    100000,
-                                    (e.height * (e.table.cells.length + 1)) /
-                                      e.table.cells.length,
-                                  ),
-                                }
-                              : e,
-                          ),
-                        }))
-                      }
+                      appendTableRow={appendTableRow}
                       begin={begin}
                       finish={finish}
                       cancel={cancel}
@@ -5872,7 +5915,7 @@ export default function App() {
           updateImage(cropImage.target, () => ({ crop }));
           setModal(null); setCropImage(null);
         }} />}
-      {modal === "fonts" && <FontManager onClose={() => setModal(null)} />}
+      {modal === "fonts" && <FontManager deck={deck} onClose={() => setModal(null)} />}
       {modal === "table" && (
         <TableEditor
           initialRange={tableEditRange}
@@ -5891,21 +5934,20 @@ export default function App() {
           onCancel={() => setModal(null)}
           onApply={(table) => {
             if (tableEditId) {
-              changeSlide((s) => ({
-                ...s,
-                elements: s.elements.map((el) =>
-                  el.id === tableEditId && !el.locked
-                    ? fitTableRows({ ...el, table })
-                    : el,
-                ),
-              }));
+              const current = deckRef.current;
+              const candidate = { ...current, slides: current.slides.map((s) => s.id === slide.id
+                ? { ...s, elements: s.elements.map((el) => el.id === tableEditId && !el.locked ? { ...el, table } : el) } : s) };
+              const error = documentCapacityError(candidate);
+              if (error) throw new Error(`${error} 표의 행·열 수를 줄여 주세요.`);
+              commit(() => ({ ...candidate, slides: candidate.slides.map((s) => s.id === slide.id
+                ? { ...s, elements: s.elements.map((el) => el.id === tableEditId && !el.locked ? fitTableRows(el) : el) } : s) }));
               setModal(null);
-            } else
-              insertElements([
-                fitTableRows(
-                  createTableElement(table, deck.width, deck.height),
-                ),
-              ]);
+            } else {
+              const next = createTableElement(table, deck.width, deck.height);
+              const error = documentCapacityError(deckRef.current, {elements:{[slide.id]:[next]}});
+              if (error) throw new Error(`${error} 표의 행·열 수를 줄여 주세요.`);
+              insertElements([fitTableRows(next)]);
+            }
           }}
         />
       )}
@@ -6026,6 +6068,7 @@ export default function App() {
           </div>
         </div>
       )}
+      {modal === "recovery" && <RecoveryBackups blocked={autosaveBlocked} onRetry={retryRecovery} onClose={() => setModal(null)} />}
       {modal && ["new", "library", "shortcuts", "import"].includes(modal) && (
         <div
           className="modal-backdrop"

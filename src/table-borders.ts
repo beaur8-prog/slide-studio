@@ -87,6 +87,25 @@ export function tableBorderSegments(
       add(false, column, r, borders[3]);
       add(false, columnEnd, r, borders[1]);
     }
+    for (const key of ["tlToBr", "blToTr"] as const) {
+      const border = style.diagonalBorders?.[key];
+      if (
+        !border?.width ||
+        border.color === "transparent" ||
+        border.opacity === 0
+      )
+        continue;
+      const segmentKey = `d-${row}-${column}-${key}`;
+      edges.set(segmentKey, {
+        ...border,
+        opacity: border.opacity ?? style.strokeOpacity,
+        key: segmentKey,
+        x1: x[column],
+        y1: key === "tlToBr" ? y[row] : y[rowEnd],
+        x2: x[columnEnd],
+        y2: key === "tlToBr" ? y[rowEnd] : y[row],
+      });
+    }
   }
   return [...edges.values()];
 }

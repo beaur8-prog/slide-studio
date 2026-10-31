@@ -378,7 +378,7 @@ export default function EditableText({
             length: editableText(content).length,
           };
           host.dataset.textFormats =
-            "bold italic underline color fontFamily fontSize align";
+            "bold italic underline color fontFamily fontSize align caps";
           document.execCommand("insertHTML", false, html);
           if (previous) host.dataset.textFormats = previous;
           else delete host.dataset.textFormats;

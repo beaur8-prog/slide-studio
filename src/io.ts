@@ -1,3 +1,4 @@
+import { separateMasterThemes } from "./pptx-master-themes";
 import {
   finalizeSource, preservationRequired, validatePptxRef, validateSlideSource,
   validateSources, writePreservedPptx,
@@ -17,7 +18,10 @@ import { readAudioPlayback } from "./pptx-video";
 import { audioMime, audioExtension, safeAudio, MAX_AUDIO_BYTES } from "./audio";
 import { AUDIO_ICON } from "./audio-icon";
 import { drawingTextFrame } from "./drawing-guides";
-import { normalizeObjectAlpha, rgbToHsl, hslToRgb } from "./colors";
+import { normalizeObjectAlpha, hslToRgb } from "./colors";
+import { applyDrawingmlColorTransforms, linearToSrgb } from "./drawingml-color";
+import { resolveThemeStyleReference, inheritDrawingmlLine } from "./drawingml-style";
+import { readDrawingmlImageFill, unsupportedDrawingmlImageEffects } from "./chart-image";
 import {
   record,
   stringValue,
@@ -38,12 +42,13 @@ import type {
   SlideElement,
   TextParagraph,
   TextRun,
+  TableCellFormat,
 } from "./types";
 import { paragraphText } from "./text-layout";
 import { drawingPaths } from "./drawing-path";
 import { readTextBody } from "./pptx-text";
 import { restoreLayoutXml } from "./pptx-export-layout";
-import { inheritTableCellStyle } from "./pptx-table-style";
+import { inheritTableCellStyle, readTableDiagonalBorders, writeTableDiagonalBorders, tableDiagonalBordersMatch, fallbackTableDiagonalElements, resolveTableStyleReferences, defaultTableGridStyle } from "./pptx-table-style";
 import { resolveTableRowHeights } from "./table-layout";
 import { MAX_SLIDES, MAX_SLIDE_ELEMENTS, MAX_ELEMENTS } from "./document-limits";
 import { writeBackgroundImage } from "./pptx-background";
@@ -74,7 +79,8 @@ import {
 } from "./table";
 import { resolveDeckFields, validateElementLink } from "./insert-fields";
 import { validateChart, chartBytes, readChartModel } from "./chart";
-import { readChartPackage, writeCharts } from "./pptx-chart";
+import { readChartPackage, writeCharts, writeChartThemes } from "./pptx-chart";
+import { placeholder, inheritedShape, inheritedTransform } from "./pptx-placeholder";
 
 // The editor uses CSS pixels. OOXML uses English Metric Units and PptxGenJS
 // uses inches/points; keeping these conversions in one place avoids drift.
@@ -140,6 +146,40 @@ function validateBackgroundImage(value: unknown, label: string): NonNullable<Sli
     result.crop = source.crop.map((v: unknown) => numberValue(v, `${label} 배경 자르기`, -10, 10)) as [number, number, number, number];
     if (result.crop[0] + result.crop[2] >= 0.999 || result.crop[1] + result.crop[3] >= 0.999)
       fail(`${label}: 배경 자르기 범위가 잘못되었습니다.`);
+  }
+  if (source.placement !== undefined) {
+    const placement = record(source.placement, `${label} 그림 배치`);
+    const width = numberValue(placement.width, `${label} 그림 폭`, 1, 32768);
+    const height = numberValue(placement.height, `${label} 그림 높이`, 1, 32768);
+    if (width * height > 16000000) fail(`${label}: 배경 이미지 해상도가 너무 큽니다.`);
+    if (!Array.isArray(placement.fill) || placement.fill.length !== 4)
+      fail(`${label}: 잘못된 배경 채우기 범위`);
+    const fill = placement.fill.map((v: unknown) => numberValue(v, `${label} 배경 채우기`, -10, 10)) as [number,number,number,number];
+    if (fill[0] + fill[2] >= 0.999 || fill[1] + fill[3] >= 0.999)
+      fail(`${label}: 배경 채우기 범위가 잘못되었습니다.`);
+    result.placement = { width, height, dpi: numberValue(placement.dpi, `${label} 그림 DPI`, 0.001, 10000), fill };
+    if (placement.duotone !== undefined) {
+      const duotone = record(placement.duotone, `${label} 그림 이중톤`);
+      if (!Array.isArray(duotone.colors) || duotone.colors.length !== 2 ||
+          !duotone.colors.every((color: unknown) => typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)) ||
+          !Array.isArray(duotone.opacities) || duotone.opacities.length !== 2)
+        fail(`${label}: 잘못된 그림 이중톤`);
+      result.placement.duotone = {
+        colors: duotone.colors.map((color: string) => color.toUpperCase()) as [string, string],
+        opacities: duotone.opacities.map((alpha: unknown) => numberValue(alpha, `${label} 이중톤 불투명도`, 0, 1)) as [number, number],
+      };
+    }
+    if (placement.tile !== undefined) {
+      const tile = record(placement.tile, `${label} 그림 반복`);
+      result.placement.tile = {
+        scaleX: numberValue(tile.scaleX, `${label} 반복 가로 배율`, 0.001, 1000),
+        scaleY: numberValue(tile.scaleY, `${label} 반복 세로 배율`, 0.001, 1000),
+        offsetX: numberValue(tile.offsetX, `${label} 반복 가로 위치`, -1000000, 1000000),
+        offsetY: numberValue(tile.offsetY, `${label} 반복 세로 위치`, -1000000, 1000000),
+        align: enumValue(tile.align, ["tl","t","tr","l","ctr","r","bl","b","br"] as const, `${label} 반복 맞춤`),
+        flip: enumValue(tile.flip, ["none","x","y","xy"] as const, `${label} 반복 반전`),
+      };
+    }
   }
   return result;
 }
@@ -351,6 +391,8 @@ export function validateDeck(input: unknown): Deck {
             if (el.textFrame![2] <= 0 || el.textFrame![3] <= 0)
               fail("도형 텍스트 영역의 너비와 높이는 양수여야 합니다.");
           }
+          if (source.textRotation !== undefined)
+            el.textRotation = numberValue(source.textRotation, `${elLabel} 텍스트 회전`, -36000, 36000);
           if (source.hyperlink !== undefined)
             el.hyperlink = validateElementLink(source.hyperlink);
           if (source.field !== undefined)
@@ -777,6 +819,7 @@ function restoreTableXml(doc: Document, elements: SlideElement[]) {
               underline: style.underline,
               color: style.color,
               align: style.align,
+              writingMode: style.writingMode,
               textInsets: style.textInsets ?? [
                 style.padding,
                 style.padding,
@@ -788,6 +831,7 @@ function restoreTableXml(doc: Document, elements: SlideElement[]) {
           ]);
           body.replaceWith(doc.importNode(child(root, "txBody")!, true));
         }
+        if (cp) cp.setAttribute("vert", style.writingMode === "vertical" ? "vert" : style.writingMode === "vertical270" ? "vert270" : style.writingMode === "stacked" ? "eaVert" : "horz");
         if (cp && style.textInsets)
           ["marT", "marR", "marB", "marL"].forEach((key, i) =>
             cp.setAttribute(
@@ -796,7 +840,8 @@ function restoreTableXml(doc: Document, elements: SlideElement[]) {
             ),
           );
         if (cp && style.fill === "transparent") {
-          child(cp, "solidFill")?.remove();
+          for (const node of Array.from(cp.children))
+            if (["noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"].includes(node.localName)) node.remove();
           cp.append(doc.createElementNS(A, "a:noFill"));
         }
         if (cp && style.borders)
@@ -822,6 +867,18 @@ function restoreTableXml(doc: Document, elements: SlideElement[]) {
             line.append(fill);
             cp.append(line);
           });
+        if (cp)
+          writeTableDiagonalBorders(doc, cp, style.diagonalBorders, element.opacity, style.strokeOpacity);
+        if (cp) {
+          // CT_TableCellProperties orders borders before its single fill.
+          // Appending replacement lines after the fill produces invalid OOXML.
+          const order = ["lnL", "lnR", "lnT", "lnB", "lnTlToBr", "lnBlToTr", "cell3D", "noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill", "headers", "extLst"];
+          const rank = (node: Element) => {
+            const i = order.indexOf(node.localName);
+            return i < 0 ? order.length : i;
+          };
+          Array.from(cp.children).sort((a, b) => rank(a) - rank(b)).forEach(node => cp.append(node));
+        }
       }),
     );
     children(table, "tr").forEach((row, r) =>
@@ -1059,8 +1116,6 @@ export async function exportPptx(input: Deck, options: {onWarning?: (message:str
             ? {
                 ...line,
                 width: (el.strokeWidth ?? 2) * 0.75,
-                transparency,
-                color: hex(el.stroke, "172033"),
                 endArrowType: el.shape === "arrow" ? "triangle" : undefined,
               }
             : line,
@@ -1080,6 +1135,12 @@ export async function exportPptx(input: Deck, options: {onWarning?: (message:str
   // PptxGenJS does not expose transitions. A standard OOXML transition is placed
   // after clrMapOvr, in the schema-defined slide child order.
   const zip = await JSZip.loadAsync(bytes);
+  // PptxGenJS can list a master per slide while writing only one master part.
+  // Clean its generated manifest before adding any retained source parts.
+  const generatedTypes = xmlDocument(await zip.file("[Content_Types].xml")!.async("string"), "content types");
+  for (const override of all(generatedTypes, "Override"))
+    if (!zip.file((override.getAttribute("PartName") ?? "").replace(/^\//, ""))) override.remove();
+  zip.file("[Content_Types].xml", new XMLSerializer().serializeToString(generatedTypes));
   for (const [index, slide] of deck.slides.entries()) {
     const path = `ppt/slides/slide${index + 1}.xml`;
     let xml = await zip.file(path)!.async("string");
@@ -1191,6 +1252,8 @@ export async function exportPptx(input: Deck, options: {onWarning?: (message:str
     zip.file(path, xml);
   }
   await writePreservedPptx(zip,deck,message => options.onWarning?.(message));
+  await writeChartThemes(zip, deck);
+  await separateMasterThemes(zip);
   const output = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
   checkZip(output);
   return output;
@@ -1354,49 +1417,13 @@ function readColor(
       "#" +
       ["r", "g", "b"]
         .map((k) =>
-          Math.round(clamp(attrNumber(node, k) / 100000, 0, 1) * 255)
+          Math.round(linearToSrgb(attrNumber(node, k) / 100000))
             .toString(16)
             .padStart(2, "0"),
         )
         .join("");
   if (!value) return undefined;
-  let rgb = [1, 3, 5].map((i) => Number.parseInt(value!.slice(i, i + 2), 16));
-  let opacity = 1;
-  for (const transform of Array.from(node.children)) {
-    const amount = attrNumber(transform, "val", 100000) / 100000;
-    if (transform.localName === "tint")
-      rgb = rgb.map((c) => c * amount + 255 * (1 - amount));
-    if (transform.localName === "shade") rgb = rgb.map((c) => c * amount);
-    if (/^(?:lum|sat|hue)(?:Mod|Off)?$/.test(transform.localName)) {
-      const name = transform.localName,
-        hsl = rgbToHsl(rgb),
-        index = name.startsWith("hue") ? 0 : name.startsWith("sat") ? 1 : 2;
-      const val =
-        index === 0 ? attrNumber(transform, "val", 0) / 60000 : amount;
-      hsl[index] = name.endsWith("Mod")
-        ? hsl[index] * amount
-        : name.endsWith("Off")
-          ? hsl[index] + val
-          : val;
-      rgb = hslToRgb(hsl);
-    }
-    if (transform.localName === "alpha") opacity = amount;
-    if (transform.localName === "alphaMod") opacity *= amount;
-    if (transform.localName === "alphaOff") opacity += amount;
-  }
-  return {
-    color:
-      "#" +
-      rgb
-        .map((c) =>
-          Math.round(clamp(c, 0, 255))
-            .toString(16)
-            .padStart(2, "0"),
-        )
-        .join("")
-        .toUpperCase(),
-    opacity: clamp(opacity, 0, 1),
-  };
+  return applyDrawingmlColorTransforms(value, node.children);
 }
 
 interface Geometry {
@@ -1462,46 +1489,6 @@ function transformGroupedElement(
         }
       : {}),
   };
-}
-function placeholder(
-  node: Element,
-): { type: string; index: string | null } | undefined {
-  const ph = first(
-    ["nvSpPr", "nvPicPr", "nvGrpSpPr", "nvGraphicFramePr", "nvCxnSpPr"]
-      .map((name) => child(node, name))
-      .find(Boolean),
-    "ph",
-  );
-  return ph
-    ? {
-        type: ph.getAttribute("type") ?? "obj",
-        index: ph.getAttribute("idx"),
-      }
-    : undefined;
-}
-function inheritedShape(
-  node: Element,
-  doc: Document | undefined,
-): Element | undefined {
-  const ph = placeholder(node);
-  if (!ph || !doc) return undefined;
-  const shapes = all(doc, "sp");
-  const sameType = (type: string | undefined) =>
-    type === ph.type ||
-    (["title", "ctrTitle"].includes(ph.type) &&
-      ["title", "ctrTitle"].includes(type ?? ""));
-  return (
-    (ph.index !== null
-      ? shapes.find((candidate) => {
-          const p = placeholder(candidate);
-          return p?.index === ph.index && sameType(p.type);
-        })
-      : undefined) ??
-    (ph.index !== null
-      ? shapes.find((candidate) => placeholder(candidate)?.index === ph.index)
-      : undefined) ??
-    shapes.find((candidate) => sameType(placeholder(candidate)?.type))
-  );
 }
 function bodyText(body: Element | undefined): string {
   return children(body, "p")
@@ -1662,10 +1649,9 @@ export async function importPptx(
     )?.path;
     const master = await readXml(masterPath);
     const masterRels = masterPath ? await relationships(masterPath) : [];
-    const themeDoc = await readXml(
-      masterRels.find((r) => r.type.endsWith("/theme"))?.path ??
-        presentationRels.find((r) => r.type.endsWith("/theme"))?.path,
-    );
+    const themePath = masterRels.find((r) => r.type.endsWith("/theme"))?.path ??
+      presentationRels.find((r) => r.type.endsWith("/theme"))?.path;
+    const themeDoc = await readXml(themePath);
     const theme: Theme = {
       ...FALLBACK_THEME,
       colors: { ...FALLBACK_THEME.colors },
@@ -1725,33 +1711,43 @@ export async function importPptx(
     const ownBackground = first(doc, "bg"), layoutBackground = first(layout, "bg");
     const backgroundNode = ownBackground ?? layoutBackground ?? first(master, "bg");
     const backgroundRels = ownBackground ? rels : layoutBackground ? layoutRels : masterRels;
+    const backgroundReference = child(backgroundNode, "bgRef");
+    const referencedBackground = resolveThemeStyleReference(backgroundReference, first(themeDoc, "fmtScheme"), (n) => readColor(n, theme), "fill");
+    const backgroundProperties = child(backgroundNode, "bgPr");
+    const backgroundPaint = (name: string) => backgroundProperties
+      ? child(backgroundProperties, name)
+      : referencedBackground?.localName === name ? referencedBackground : undefined;
     const bgColor =
-      readColor(child(child(backgroundNode, "bgPr"), "solidFill"), theme) ??
-      readColor(child(backgroundNode, "bgRef"), theme);
+      readColor(backgroundPaint("solidFill"), theme) ??
+      (!referencedBackground ? readColor(backgroundReference, theme) : undefined);
     const bgGradient = readGradient(
-      child(child(backgroundNode, "bgPr"), "gradFill"),
+      backgroundPaint("gradFill"),
       (n) => readColor(n, theme),
     );
     let backgroundImage: Slide["backgroundImage"];
-    const backgroundFill = child(child(backgroundNode, "bgPr"), "blipFill");
+    const backgroundFill = backgroundPaint("blipFill");
     if (backgroundFill) {
       const blip = child(backgroundFill, "blip");
       const fillRect = child(child(backgroundFill, "stretch"), "fillRect");
-      const supportedPlacement = !child(backgroundFill, "tile") && !["t", "r", "b", "l"].some((key) => attrNumber(fillRect, key) !== 0);
-      if (supportedPlacement) {
-        const src = await readPicture(blip, backgroundRels);
-        if (src) {
+      const simplePlacement = !child(blip, "duotone") && !child(backgroundFill, "tile") && !["t", "r", "b", "l"].some((key) => attrNumber(fillRect, key) !== 0);
+      const src = await readPicture(blip, referencedBackground === backgroundFill && themePath ? await relationships(themePath) : backgroundRels);
+      if (src) {
+        const pictureFill = simplePlacement ? undefined : readDrawingmlImageFill(backgroundFill, src, (node) => readColor(node, theme));
+        if (unsupportedDrawingmlImageEffects(backgroundFill) || (child(blip, "duotone") && !pictureFill?.duotone))
+          warn("일부 그림 배경 효과는 화면에 표시되지 않지만 원본 PPTX에는 보존됩니다.");
+        if (simplePlacement || pictureFill) {
           const crop = ["t", "r", "b", "l"].map((key) => attrNumber(child(backgroundFill, "srcRect"), key) / 100000) as [number, number, number, number];
           backgroundImage = validateBackgroundImage({ src,
             ...(crop.some(v => v !== 0) ? { crop } : {}),
             opacity: clamp(attrNumber(child(blip, "alphaModFix"), "amt", 100000) / 100000, 0, 1),
+            ...(pictureFill ? { placement: { width: pictureFill.width, height: pictureFill.height, dpi: pictureFill.dpi, fill: pictureFill.fill, ...(pictureFill.duotone ? { duotone: pictureFill.duotone } : {}), ...(pictureFill.tile ? { tile: pictureFill.tile } : {}) } } : {}),
           }, `${slideIndex + 1}번 슬라이드`);
           embeddedAssetBytes += src.length * 0.75;
           if (embeddedAssetBytes > MAX_EXPANDED / 2) fail("내장 이미지·배경의 합계가 100 MB를 초과합니다.");
         }
       }
     }
-    if (backgroundNode && !bgColor && !bgGradient && !backgroundImage && !child(child(backgroundNode, "bgPr"), "noFill"))
+    if (backgroundNode && !bgColor && !bgGradient && !backgroundImage && !backgroundPaint("noFill"))
       warn(
         "일부 배경의 그라데이션·이미지·효과는 단색 배경으로 대체되었습니다.",
       );
@@ -1840,9 +1836,7 @@ export async function importPptx(
           return { color: "transparent", opacity: 1 };
         const solid = readColor(child(properties, "solidFill"), theme);
         if (solid)
-          return solid.opacity === 0
-            ? { color: "transparent", opacity: 1 }
-            : solid;
+          return solid.opacity === 0 ? { color: "transparent", opacity: 1 } : solid;
         const gradient = readGradient(child(properties, "gradFill"), (n) =>
           readColor(n, theme),
         );
@@ -1850,15 +1844,31 @@ export async function importPptx(
           return { color: gradient.stops[0].color, opacity: 1, gradient };
         if (child(properties, "pattFill") || child(properties, "blipFill"))
           warn("도형의 패턴·그림 채우기는 가져오지 않습니다.");
-        const reference = readColor(
-          child(child(node, "style"), "fillRef"),
-          theme,
+        const fillRef = child(child(node, "style"), "fillRef");
+        const themedFill = resolveThemeStyleReference(
+          fillRef,
+          first(themeDoc, "fmtScheme"),
+          (n) => readColor(n, theme),
+          "fill",
         );
+        if (themedFill?.localName === "noFill")
+          return { color: "transparent", opacity: 1 };
+        if (themedFill?.localName === "solidFill") {
+          const color = readColor(themedFill, theme);
+          if (color) return color;
+        }
+        if (themedFill?.localName === "gradFill") {
+          const gradient = readGradient(themedFill, (n) => readColor(n, theme));
+          if (gradient)
+            return { color: gradient.stops[0].color, opacity: 1, gradient };
+        }
         if (
-          reference &&
-          child(child(node, "style"), "fillRef")?.getAttribute("idx") !== "0"
+          themedFill?.localName === "pattFill" ||
+          themedFill?.localName === "blipFill"
         )
-          return reference;
+          warn("도형의 패턴·그림 채우기는 가져오지 않습니다.");
+        const reference = readColor(fillRef, theme);
+        if (reference && fillRef?.getAttribute("idx") !== "0") return reference;
       }
       return { color: defaultColor, opacity: 1 };
     };
@@ -1874,77 +1884,85 @@ export async function importPptx(
       dash?: number[];
       cap?: SlideElement["strokeCap"];
     } => {
-      for (const node of nodes) {
-        const line = child(child(node, "spPr"), "ln");
-        if (line) {
-          const color =
-            readColor(child(line, "solidFill"), theme) ??
-            readColor(child(child(node, "style"), "lnRef"), theme);
-          if (child(line, "noFill"))
-            return { color: "transparent", width: 0, opacity: 1, arrow: false };
-          const marker = (name: string): LineEnd => {
-            const n = child(line, name);
-            const type = n?.getAttribute("type") ?? "none";
-            const size = (key: string) => {
-              const value = n?.getAttribute(key);
-              return value === "sm" || value === "lg" ? value : "med";
-            };
-            return {
-              type: [
-                "triangle",
-                "stealth",
-                "diamond",
-                "oval",
-                "arrow",
-              ].includes(type)
-                ? (type as LineEnd["type"])
-                : "none",
-              width: size("w"),
-              length: size("len"),
-            };
+      const line = nodes
+        .map((node) =>
+          inheritDrawingmlLine(
+            child(child(node, "spPr"), "ln"),
+            resolveThemeStyleReference(
+              child(child(node, "style"), "lnRef"),
+              first(themeDoc, "fmtScheme"),
+              (n) => readColor(n, theme),
+              "line",
+            ),
+          ),
+        )
+        .reduceRight<Element | undefined>(
+          (inherited, own) => inheritDrawingmlLine(own, inherited),
+          undefined,
+        );
+      if (line) {
+        const color =
+          readColor(child(line, "solidFill"), theme) ??
+          nodes
+            .map((node) => readColor(child(child(node, "style"), "lnRef"), theme))
+            .find(Boolean);
+        if (child(line, "noFill"))
+          return { color: "transparent", width: 0, opacity: 1, arrow: false };
+        const marker = (name: string): LineEnd => {
+          const n = child(line, name);
+          const type = n?.getAttribute("type") ?? "none";
+          const size = (key: string) => {
+            const value = n?.getAttribute(key);
+            return value === "sm" || value === "lg" ? value : "med";
           };
-          const start = marker("headEnd"),
-            end = marker("tailEnd");
-          const presets: Record<string, number[]> = {
-            dot: [1, 3],
-            dash: [4, 3],
-            lgDash: [8, 3],
-            dashDot: [4, 3, 1, 3],
-            lgDashDot: [8, 3, 1, 3],
-            lgDashDotDot: [8, 3, 1, 3, 1, 3],
-            sysDot: [1, 1],
-            sysDash: [3, 1],
-            sysDashDot: [3, 1, 1, 1],
-            sysDashDotDot: [3, 1, 1, 1, 1, 1],
-          };
-          const width = color ? attrNumber(line, "w", 12700) / EMU_PER_PX : 0;
-          const custom = children(child(line, "custDash"), "ds").flatMap(
-            (n) => [attrNumber(n, "d") / 100000, attrNumber(n, "sp") / 100000],
-          );
-          const dash = (
-            custom.length
-              ? custom
-              : presets[child(line, "prstDash")?.getAttribute("val") ?? ""]
-          )?.map((n) => Math.max(0.01, n * width));
           return {
-            color:
-              color?.opacity === 0
-                ? "transparent"
-                : (color?.color ?? "transparent"),
-            width: color ? attrNumber(line, "w", 12700) / EMU_PER_PX : 0,
-            opacity: color?.opacity ?? 1,
-            arrow: end.type !== "none" || start.type !== "none",
-            start,
-            end,
-            dash,
-            cap:
-              line.getAttribute("cap") === "rnd"
-                ? "round"
-                : line.getAttribute("cap") === "sq"
-                  ? "square"
-                  : "butt",
+            type: ["triangle", "stealth", "diamond", "oval", "arrow"].includes(type)
+              ? (type as LineEnd["type"])
+              : "none",
+            width: size("w"),
+            length: size("len"),
           };
-        }
+        };
+        const start = marker("headEnd"),
+          end = marker("tailEnd");
+        const presets: Record<string, number[]> = {
+          dot: [1, 3],
+          dash: [4, 3],
+          lgDash: [8, 3],
+          dashDot: [4, 3, 1, 3],
+          lgDashDot: [8, 3, 1, 3],
+          lgDashDotDot: [8, 3, 1, 3, 1, 3],
+          sysDot: [1, 1],
+          sysDash: [3, 1],
+          sysDashDot: [3, 1, 1, 1],
+          sysDashDotDot: [3, 1, 1, 1, 1, 1],
+        };
+        const width = color ? attrNumber(line, "w", 12700) / EMU_PER_PX : 0;
+        const custom = children(child(line, "custDash"), "ds").flatMap((n) => [
+          attrNumber(n, "d") / 100000,
+          attrNumber(n, "sp") / 100000,
+        ]);
+        const dash = (
+          custom.length
+            ? custom
+            : presets[child(line, "prstDash")?.getAttribute("val") ?? ""]
+        )?.map((n) => Math.max(0.01, n * width));
+        return {
+          color:
+            color?.opacity === 0 ? "transparent" : (color?.color ?? "transparent"),
+          width: color ? attrNumber(line, "w", 12700) / EMU_PER_PX : 0,
+          opacity: color?.opacity ?? 1,
+          arrow: end.type !== "none" || start.type !== "none",
+          start,
+          end,
+          dash,
+          cap:
+            line.getAttribute("cap") === "rnd"
+              ? "round"
+              : line.getAttribute("cap") === "sq"
+                ? "square"
+                : "butt",
+        };
       }
       return { color: "transparent", width: 0, opacity: 1, arrow: false };
     };
@@ -1978,6 +1996,7 @@ export async function importPptx(
           styleName === "titleStyle" ? theme.majorFont : theme.minorFont,
         color: (n) => readColor(n, theme),
         defaultColor: theme.colors.dk1,
+        hyperlinkColor: theme.colors.hlink,
         geometry,
         // Group transforms place the text box. Authored point sizes/spacing
         // already describe the text inside it; scaling these again enlarges
@@ -2010,9 +2029,7 @@ export async function importPptx(
       const masterShape = inheritedShape(layoutShape ?? node, master);
       const chain = [node, layoutShape, masterShape];
       const properties = child(node, "spPr");
-      const xfrm = chain
-        .map((s) => child(child(s, "spPr"), "xfrm"))
-        .find(Boolean);
+      const xfrm = inheritedTransform(chain);
       const geometry = transformGeometry(xfrm, parent);
       if (!geometry) {
         warn("위치 정보를 찾을 수 없는 개체를 제외했습니다.");
@@ -2247,7 +2264,7 @@ export async function importPptx(
         } = textElement;
         Object.assign(shapeElement, content, {
           autoHeight: false,
-          textFrame: sourceTextFrame ?? [
+          textFrame: textElement.textFrame ?? sourceTextFrame ?? [
             inset,
             inset,
             1 - 2 * inset,
@@ -2277,7 +2294,9 @@ export async function importPptx(
       parent: Transform,
       pictureRelationships: Relationship[] = rels,
     ): Promise<void> => {
-      const xfrm = child(child(node, "spPr"), "xfrm");
+      const layoutShape = inheritedShape(node, layout);
+      const masterShape = layoutShape && inheritedShape(layoutShape, master);
+      const xfrm = inheritedTransform([node, layoutShape, masterShape]);
       const geometry = transformGeometry(xfrm, parent);
       if (!geometry) {
         warn("위치 정보를 찾을 수 없는 이미지를 제외했습니다.");
@@ -2497,8 +2516,15 @@ export async function importPptx(
               const props = child(cellElements[r][c], "tcPr");
               const fill = readColor(child(props, "solidFill"), theme);
               return (
+                tableDiagonalBordersMatch(
+                  props ? readTableDiagonalBorders(props, [], (n) => readColor(n, theme), parent.sx) : undefined,
+                  style.diagonalBorders,
+                  opacity,
+                  style.strokeOpacity,
+                ) &&
                 fill?.color === style.fill &&
                 el.verticalAlign === style.verticalAlign &&
+                (el.writingMode ?? "horizontal") === style.writingMode &&
                 (el.textInsets ?? []).every((n) => close(n, style.padding)) &&
                 (el.paragraphs ?? []).every(
                   (p) =>
@@ -2602,12 +2628,16 @@ export async function importPptx(
         columnSpan: number;
         span: number;
         x: number;
+        diagonalBorders?: TableCellFormat["diagonalBorders"];
       }[] = [];
       const props = child(table, "tblPr"),
         styleId = child(props, "tableStyleId")?.textContent;
-      const style = all(tableStyles, "tblStyle").find(
+      const nativeStyle = child(props, "tableStyle") ?? all(tableStyles, "tblStyle").find(
         (s) => s.getAttribute("styleId") === styleId,
       );
+      const style = nativeStyle
+        ? resolveTableStyleReferences(nativeStyle, first(themeDoc, "fmtScheme"), (n) => readColor(n, theme))
+        : !styleId ? defaultTableGridStyle(node.ownerDocument) : undefined;
       let y = 0;
       rows.forEach((row, r) => {
         const cells = children(row, "tc");
@@ -2658,7 +2688,11 @@ export async function importPptx(
                   : "band2H",
               );
             if (props?.getAttribute("bandCol") === "1")
-              names.push(c % 2 === 0 ? "band1V" : "band2V");
+              names.push(
+                (c - (props.getAttribute("firstCol") === "1" ? 1 : 0)) % 2 === 0
+                  ? "band1V"
+                  : "band2V",
+              );
             if (c === 0 && props?.getAttribute("firstCol") === "1")
               names.push("firstCol");
             if (
@@ -2771,6 +2805,7 @@ export async function importPptx(
               columnSpan: colSpan,
               span: rowSpan,
               x,
+              diagonalBorders: readTableDiagonalBorders(cp, styles, (n) => readColor(n, theme), parent.sx),
             });
           }
           const advance = cells.length < columns.length ? colSpan : 1;
@@ -2830,7 +2865,7 @@ export async function importPptx(
           data.columnWidths = widths;
           data.rowHeights = rowHeights;
           data.merges = [];
-          for (const { el, row, column, columnSpan, span } of pendingCells) {
+          for (const { el, row, column, columnSpan, span, diagonalBorders } of pendingCells) {
             data.cells[row][column] = el.text ?? "";
             data.cellStyles[row][column] = {
               fill: el.fill ?? "transparent",
@@ -2845,9 +2880,11 @@ export async function importPptx(
               underline: el.underline ?? false,
               align: el.align ?? "left",
               verticalAlign: el.verticalAlign ?? "top",
+              writingMode: el.writingMode ?? "horizontal",
               padding: 0,
               textInsets: el.textInsets,
               borders: el.borders,
+              diagonalBorders,
               paragraphs: el.paragraphs,
             };
             if (authoredBase)
@@ -2870,7 +2907,7 @@ export async function importPptx(
           // Keep readable cells when a damaged/oversized table is not representable.
         }
       }
-      for (const { el, row, span, x } of pendingCells) {
+      for (const { el, row, span, x, diagonalBorders } of pendingCells) {
         const y = rowHeights.slice(0, row).reduce((a, b) => a + b, 0);
         el.y = geometry.y + y;
         el.height = rowHeights
@@ -2895,6 +2932,8 @@ export async function importPptx(
             el.height / 2;
         }
         addElement(el);
+        for (const line of fallbackTableDiagonalElements(el, diagonalBorders, uid))
+          addElement(line);
       }
       warn("표를 셀별로 편집 가능한 텍스트·배경·테두리로 가져왔습니다.");
     };

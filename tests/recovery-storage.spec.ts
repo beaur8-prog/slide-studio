@@ -140,7 +140,7 @@ test("ordinary and legacy recovery records keep the existing single current docu
     name: "이전 복구 형식",
     rawName: "이전 복구 형식",
     version: 1,
-    keys: ["current"],
+    keys: ["current", "current-revision"],
   });
 });
 

@@ -4,6 +4,7 @@ import { useRef, useLayoutEffect } from "react";
 import type { CSSProperties } from "react";
 import type { SlideElement } from "./types";
 import { fontStack } from "./text-layout";
+import { textDirectionStyle } from "./text-direction";
 export function useTextHeight(
   element: SlideElement,
   onHeight?: (id: string, height: number) => void,
@@ -67,13 +68,7 @@ export function textStyle(e: SlideElement): CSSProperties {
         ? `${e.strokeWidth}px solid ${alphaColor(e.stroke, e.strokeOpacity)}`
         : undefined,
     padding: e.textInsets?.map((v) => `${v}px`).join(" "),
-    writingMode:
-      e.writingMode === "vertical" || e.writingMode === "stacked"
-        ? "vertical-rl"
-        : e.writingMode === "vertical270"
-          ? "vertical-lr"
-          : undefined,
-    textOrientation: e.writingMode === "stacked" ? "upright" : undefined,
+    ...textDirectionStyle(e.writingMode),
     justifyContent:
       e.verticalAlign === "middle"
         ? "center"

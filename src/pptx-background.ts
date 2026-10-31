@@ -32,16 +32,68 @@ export function writeBackgroundImage(
     backgroundFill.append(node.cloneNode(true));
   const blip = child(backgroundFill, "blip")!;
   child(blip, "alphaModFix")?.remove();
+  child(blip, "duotone")?.remove();
+  if (image.placement?.duotone) {
+    const effect = doc.createElementNS(A, "a:duotone");
+    image.placement.duotone.colors.forEach((color, index) => {
+      const endpoint = doc.createElementNS(A, "a:srgbClr");
+      endpoint.setAttribute("val", color.slice(1));
+      const opacity = image.placement!.duotone!.opacities[index];
+      if (opacity !== 1) {
+        const alpha = doc.createElementNS(A, "a:alpha");
+        alpha.setAttribute("val", String(Math.round(opacity * 100000)));
+        endpoint.append(alpha);
+      }
+      effect.append(endpoint);
+    });
+    blip.append(effect);
+  }
   const alpha = doc.createElementNS(A, "a:alphaModFix");
   alpha.setAttribute("amt", String(Math.round((image.opacity ?? 1) * 100000)));
   blip.append(alpha);
+  if (image.placement) {
+    // Native dpi is unsignedInt; fractional image-header density stays in
+    // the original raster bytes and is selected by the schema's dpi=0 value.
+    backgroundFill.setAttribute(
+      "dpi",
+      String(Number.isInteger(image.placement.dpi) ? image.placement.dpi : 0),
+    );
+    child(backgroundFill, "stretch")?.remove();
+    child(backgroundFill, "tile")?.remove();
+    const tile = image.placement.tile;
+    const placement = doc.createElementNS(A, tile ? "a:tile" : "a:stretch");
+    if (tile) {
+      for (const [key, value] of Object.entries({
+        sx: Math.round(tile.scaleX * 100000),
+        sy: Math.round(tile.scaleY * 100000),
+        tx: Math.round(tile.offsetX * 9525),
+        ty: Math.round(tile.offsetY * 9525),
+        algn: tile.align,
+        flip: tile.flip,
+      }))
+        placement.setAttribute(key, String(value));
+    } else {
+      const rectangle = doc.createElementNS(A, "a:fillRect");
+      ["t", "r", "b", "l"].forEach((name, i) =>
+        rectangle.setAttribute(
+          name,
+          String(Math.round(image.placement!.fill[i] * 100000)),
+        ),
+      );
+      placement.append(rectangle);
+    }
+    backgroundFill.append(placement);
+  }
   child(backgroundFill, "srcRect")?.remove();
   if (image.crop) {
     const crop = doc.createElementNS(A, "a:srcRect");
     ["t", "r", "b", "l"].forEach((name, i) =>
       crop.setAttribute(name, String(Math.round(image.crop![i] * 100000))),
     );
-    backgroundFill.insertBefore(crop, child(backgroundFill, "stretch") ?? null);
+    backgroundFill.insertBefore(
+      crop,
+      child(backgroundFill, "stretch") ?? child(backgroundFill, "tile") ?? null,
+    );
   }
   props.append(backgroundFill, doc.createElementNS(A, "a:effectLst"));
   bg.append(props);

@@ -52,6 +52,12 @@ export function validateParagraphs(
           run.kerning = numberValue(r.kerning, elLabel, 0, 10000);
         for (const key of ["bold", "italic", "underline"] as const)
           if (r[key] !== undefined) run[key] = booleanValue(r[key], elLabel);
+        if (r.caps !== undefined)
+          run.caps = enumValue(
+            r.caps,
+            ["none", "small", "all"] as const,
+            elLabel,
+          );
         if (r.hyperlink !== undefined)
           run.hyperlink = validateElementLink(r.hyperlink);
         if (r.opacity !== undefined)

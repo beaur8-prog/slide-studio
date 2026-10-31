@@ -17,6 +17,8 @@ export interface TextRun {
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
+  // Display-only capitals. Keep the original Unicode text for editing/search.
+  caps?: "none" | "small" | "all";
   color?: string;
   hyperlink?: ElementLink;
   baseline?: number;
@@ -65,6 +67,10 @@ export interface ElementLink {
   url?: string;
   slideId?: string;
 }
+export interface TableDiagonalBorders {
+  blToTr?: TextBorder;
+  tlToBr?: TextBorder;
+}
 export interface TableCellFormat {
   fillOpacity?: number;
   textOpacity?: number;
@@ -77,6 +83,8 @@ export interface TableCellFormat {
   paragraphs?: TextParagraph[];
   textInsets?: [number, number, number, number];
   borders?: [TextBorder, TextBorder, TextBorder, TextBorder];
+  diagonalBorders?: TableDiagonalBorders;
+  writingMode?: "horizontal" | "vertical" | "vertical270" | "stacked";
   fontFamily?: string;
   fontSize?: number;
   padding?: number;
@@ -117,6 +125,24 @@ export interface GradientFill {
   kind: "linear" | "radial";
   angle: number;
   stops: { offset: number; color: string; opacity?: number }[];
+}
+export interface PictureFillPlacement {
+  width: number;
+  height: number;
+  dpi: number;
+  fill: [number, number, number, number];
+  duotone?: {
+    colors: [string, string];
+    opacities: [number, number];
+  };
+  tile?: {
+    scaleX: number;
+    scaleY: number;
+    offsetX: number;
+    offsetY: number;
+    align: string;
+    flip: string;
+  };
 }
 export interface ObjectShadow {
   color: string;
@@ -227,6 +253,8 @@ export interface SlideElement {
   textInsets?: [number, number, number, number];
   // Relative text rectangle inside the shape: left, top, width, height.
   textFrame?: [number, number, number, number];
+  // Rotation of the text within its frame, relative to the object's rotation.
+  textRotation?: number;
   borders?: [TextBorder, TextBorder, TextBorder, TextBorder];
   paths?: ShapePath[];
   flipH?: boolean;
@@ -264,6 +292,7 @@ export interface Slide {
     src: string;
     crop?: [number, number, number, number];
     opacity?: number;
+    placement?: PictureFillPlacement;
   };
   notes: string;
   elements: SlideElement[];

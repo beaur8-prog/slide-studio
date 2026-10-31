@@ -1,4 +1,9 @@
-import type { SlideElement, TableCellFormat, TableData } from "./types";
+import type {
+  SlideElement,
+  TableCellFormat,
+  TableData,
+  TextBorder,
+} from "./types";
 import { validateParagraphs } from "./text-validation";
 import { paragraphText, editText, patchText } from "./text-layout";
 
@@ -37,6 +42,34 @@ export function createTable(rows = 4, columns = 3): TableData {
     padding: 10,
     align: "left",
     verticalAlign: "middle",
+  };
+}
+
+function validateCellBorder(value: unknown): TextBorder {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("잘못된 셀 테두리");
+  const b = value as Record<string, unknown>;
+  if (
+    typeof b.color !== "string" ||
+    !/^(?:#[\da-f]{6}|transparent)$/i.test(b.color) ||
+    typeof b.width !== "number" ||
+    !Number.isFinite(b.width) ||
+    b.width < 0 ||
+    b.width > 1000
+  )
+    throw new Error("잘못된 셀 테두리");
+  if (
+    b.opacity !== undefined &&
+    (typeof b.opacity !== "number" ||
+      !Number.isFinite(b.opacity) ||
+      b.opacity < 0 ||
+      b.opacity > 1)
+  )
+    throw new Error("잘못된 테두리 불투명도");
+  return {
+    color: b.color === "transparent" ? b.color : b.color.toUpperCase(),
+    width: b.width,
+    ...(b.opacity !== undefined ? { opacity: b.opacity as number } : {}),
   };
 }
 
@@ -104,35 +137,28 @@ export function validateTableCellFormat(value: unknown): TableCellFormat {
   if (has("borders")) {
     if (!Array.isArray(source.borders) || source.borders.length !== 4)
       throw new Error("잘못된 셀 테두리");
-    format.borders = source.borders.map((b) => {
-      if (
-        !b ||
-        typeof b !== "object" ||
-        typeof b.color !== "string" ||
-        !/^(?:#[\da-f]{6}|transparent)$/i.test(b.color) ||
-        typeof b.width !== "number" ||
-        !Number.isFinite(b.width) ||
-        b.width < 0 ||
-        b.width > 1000
+    format.borders = source.borders.map(
+      validateCellBorder,
+    ) as TableCellFormat["borders"];
+  }
+  if (has("diagonalBorders")) {
+    const value = source.diagonalBorders;
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new Error("잘못된 셀 대각선 테두리");
+    const diagonals = value as Record<string, unknown>;
+    format.diagonalBorders = {};
+    for (const key of ["blToTr", "tlToBr"] as const)
+      if (Object.hasOwn(diagonals, key) && diagonals[key] !== undefined)
+        format.diagonalBorders[key] = validateCellBorder(diagonals[key]);
+  }
+  if (has("writingMode")) {
+    if (
+      !["horizontal", "vertical", "vertical270", "stacked"].includes(
+        source.writingMode as string,
       )
-        throw new Error("잘못된 셀 테두리");
-      return {
-        color: b.color === "transparent" ? b.color : b.color.toUpperCase(),
-        width: b.width,
-        ...(b.opacity !== undefined
-          ? {
-              opacity:
-                typeof b.opacity === "number" &&
-                b.opacity >= 0 &&
-                b.opacity <= 1
-                  ? b.opacity
-                  : (() => {
-                      throw new Error("잘못된 테두리 불투명도");
-                    })(),
-            }
-          : {}),
-      };
-    }) as TableCellFormat["borders"];
+    )
+      throw new Error("표 셀 글자 방향이 올바르지 않습니다.");
+    format.writingMode = source.writingMode as TableCellFormat["writingMode"];
   }
   if (has("fontFamily")) {
     if (
@@ -522,8 +548,16 @@ export function tableCellStyle(
   table: TableData,
   row: number,
   column = 0,
-): Required<Omit<TableCellFormat, "paragraphs" | "textInsets" | "borders">> &
-  Pick<TableCellFormat, "paragraphs" | "textInsets" | "borders"> {
+): Required<
+  Omit<
+    TableCellFormat,
+    "paragraphs" | "textInsets" | "borders" | "diagonalBorders"
+  >
+> &
+  Pick<
+    TableCellFormat,
+    "paragraphs" | "textInsets" | "borders" | "diagonalBorders"
+  > {
   const heading = table.header && row === 0;
   const style = {
     fill: heading
@@ -545,6 +579,7 @@ export function tableCellStyle(
     borderWidth: table.borderWidth,
     align: table.align,
     verticalAlign: table.verticalAlign,
+    writingMode: "horizontal" as const,
     ...table.cellStyles?.[row]?.[column],
   };
   if (

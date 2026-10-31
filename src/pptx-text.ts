@@ -27,6 +27,7 @@ interface Context {
     node: Element | undefined,
   ) => { color: string; opacity: number } | undefined;
   defaultColor: string;
+  hyperlinkColor?: string;
   link?: (node: Element | undefined) => TextRun["hyperlink"];
   geometry: {
     x: number;
@@ -102,20 +103,47 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
       const latin = face("latin") || ctx.defaultFont;
       const eastAsian = face("ea") || latin;
       const language = firstAttribute(nodes, "lang", "");
-      const color =
-        nodes
-          .map((n) => ctx.color(child(n, "solidFill")) ?? ctx.color(n))
-          .find(Boolean) ??
-        ctx.nodes
-          .map((n) => ctx.color(child(child(n, "style"), "fontRef")))
-          .find(Boolean);
+      // A shape's own fontRef is its authored default text color. It must not
+      // be masked by a less-specific master/presentation default (SmartArt
+      // commonly uses a white fontRef on an accent-colored shape).
+      const colorNodes = [
+        r,
+        defaults[0],
+        ...(ctx.runDefaults ?? []),
+        defaults[1],
+        child(child(ctx.nodes[0], "style"), "fontRef"),
+        ...bodies
+          .slice(1)
+          .flatMap((_, i) => [
+            defaults[2 + i * 2],
+            defaults[3 + i * 2],
+            child(child(ctx.nodes[i + 1], "style"), "fontRef"),
+          ]),
+        ...defaults.slice(2 + (bodies.length - 1) * 2),
+      ];
+      const inheritedColor = colorNodes
+        .map((n) => ctx.color(child(n, "solidFill")) ?? ctx.color(n))
+        .find(Boolean);
+      // Office applies the hyperlink theme appearance to a native hlinkClick
+      // even when no explicit run formatting was authored. Generic paragraph
+      // defaults must not mask it. Resolve appearance from the source node,
+      // independently of whether its target passes our link policy.
+      const linkNode = child(r, "hlinkClick");
+      const hyperlink = ctx.link?.(linkNode);
+      const color = linkNode
+        ? (ctx.color(child(r, "solidFill")) ??
+          ctx.color(r) ?? {
+            color: ctx.hyperlinkColor ?? "#0563C1",
+            opacity: 1,
+          })
+        : inheritedColor;
       if (textOpacity === undefined) textOpacity = color?.opacity ?? 1;
-      const under = firstAttribute(nodes, "u", "none");
+      const under = linkNode
+        ? (r?.getAttribute("u") ?? "sng")
+        : firstAttribute(nodes, "u", "none");
       return {
         text,
-        ...(ctx.link?.(child(r, "hlinkClick"))
-          ? { hyperlink: ctx.link(child(r, "hlinkClick")) }
-          : {}),
+        ...(hyperlink ? { hyperlink } : {}),
         fontFamily: ctx.font(latin, text, language),
         fontFamilyEastAsian: ctx.font(eastAsian, text, language),
         ...(language ? { language } : {}),
@@ -133,6 +161,10 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
         bold: ["1", "true", "on"].includes(firstAttribute(nodes, "b", "0")),
         italic: ["1", "true", "on"].includes(firstAttribute(nodes, "i", "0")),
         underline: under !== "none",
+        ...(nodes.some((n) => n?.hasAttribute("cap")) &&
+        ["none", "small", "all"].includes(firstAttribute(nodes, "cap", "none"))
+          ? { caps: firstAttribute(nodes, "cap", "none") as TextRun["caps"] }
+          : {}),
         color: color?.color ?? ctx.defaultColor,
         opacity: color?.opacity ?? 1,
         ...(num(nodes, "baseline", 0)
@@ -283,6 +315,8 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
   const first =
     paragraphs[0].runs[paragraphs[0].bulletPrefix ? 1 : 0] ??
     paragraphs[0].runs[0];
+  // Capitals are run-only styling; do not duplicate them on the shape model.
+  const { caps: _caps, ...baseRun } = first;
   const cp = ctx.cellProperties;
   const insets: [number, number, number, number] = cp
     ? [
@@ -307,7 +341,38 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
     "anchor",
     "t",
   );
-  const vertical = firstAttribute(bodyProps, "vert", "horz");
+  const vertical = firstAttribute(
+    cp ? [cp, ...bodyProps] : bodyProps,
+    "vert",
+    "horz",
+  );
+  const diagramText = child(ctx.nodes[0], "txXfrm");
+  const sourceTransform = child(child(ctx.nodes[0], "spPr"), "xfrm");
+  const sourceOffset = child(sourceTransform, "off");
+  const sourceExtent = child(sourceTransform, "ext");
+  const textOffset = child(diagramText, "off");
+  const textExtent = child(diagramText, "ext");
+  const sourceWidth = num([sourceExtent], "cx", 0);
+  const sourceHeight = num([sourceExtent], "cy", 0);
+  // Diagram txXfrm coordinates share the shape's unrotated drawing space.
+  // The rectangle and its relative rotation are independent of the shape's
+  // outline; keep both instead of rotating the whole shape again.
+  const diagramFrame: SlideElement["textFrame"] =
+    diagramText && sourceWidth > 0 && sourceHeight > 0
+      ? [
+          (num([textOffset], "x", num([sourceOffset], "x", 0)) -
+            num([sourceOffset], "x", 0)) /
+            sourceWidth,
+          (num([textOffset], "y", num([sourceOffset], "y", 0)) -
+            num([sourceOffset], "y", 0)) /
+            sourceHeight,
+          num([textExtent], "cx", sourceWidth) / sourceWidth,
+          num([textExtent], "cy", sourceHeight) / sourceHeight,
+        ]
+      : undefined;
+  const degrees =
+    (num(bodyProps, "rot", 0) + num([diagramText], "rot", 0)) / 60000;
+  const textRotation = ((((degrees + 180) % 360) + 360) % 360) - 180;
   const g = ctx.geometry;
   return {
     id: crypto.randomUUID(),
@@ -321,11 +386,18 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
           width: Math.max(1, g.width - insets[1] - insets[3]),
           height: Math.max(1, g.height - insets[0] - insets[2]),
         }),
-    ...first,
+    ...baseRun,
     hyperlink: undefined,
     opacity: 1,
     text: paragraphText(paragraphs),
     paragraphs,
+    ...(textRotation ? { textRotation } : {}),
+    ...(diagramFrame &&
+    diagramFrame.every((n) => Number.isFinite(n) && Math.abs(n) <= 10) &&
+    diagramFrame[2] > 0 &&
+    diagramFrame[3] > 0
+      ? { textFrame: diagramFrame }
+      : {}),
     ...(num(bodyProps, "numCol", 1) > 1
       ? {
           textColumns: Math.max(

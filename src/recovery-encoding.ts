@@ -19,10 +19,22 @@ function estimate(value: unknown, remaining: number): number {
 
 /** Encode JSON in bounded string fragments, never stringify the whole deck or
  * one entire base64 asset. Chunk boundaries also preserve lone surrogates. */
-export function jsonBlob(value: unknown): Blob {
+export class JsonBlobSizeError extends Error {
+  constructor() {
+    super("복구 JSON 원문의 크기 제한을 초과했습니다.");
+    this.name = "JsonBlobSizeError";
+  }
+}
+export function jsonBlob(value: unknown, maximumBytes = Infinity): Blob {
+  const encoder = Number.isFinite(maximumBytes) ? new TextEncoder() : undefined;
+  let encodedBytes = 0;
   const parts: string[] = [];
   let buffer = "";
   const append = (text: string) => {
+    if (encoder) {
+      encodedBytes += encoder.encode(text).byteLength;
+      if (encodedBytes > maximumBytes) throw new JsonBlobSizeError();
+    }
     if (buffer.length + text.length > STRING_CHUNK) {
       if (buffer) parts.push(buffer);
       buffer = "";

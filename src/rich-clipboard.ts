@@ -57,6 +57,8 @@ export function richClipboardHtml(html: string): string | undefined {
       "textDecoration",
       "color",
       "textAlign",
+      "textTransform",
+      "fontVariantCaps",
     ] as const) {
       const value = style?.[key];
       if (
@@ -65,12 +67,23 @@ export function richClipboardHtml(html: string): string | undefined {
         /url|var\(|expression|[<>]/i.test(value)
       )
         continue;
+      if (key === "textTransform" && !["none", "uppercase"].includes(value))
+        continue;
+      if (
+        key === "fontVariantCaps" &&
+        !["normal", "small-caps"].includes(value)
+      )
+        continue;
       if (key === "fontSize") {
         const n = parseFloat(value);
         if (!Number.isFinite(n) || n <= 0 || n > 1000) continue;
       }
       dest.style[key] = value;
     }
+    // The editor disables synthetic weights. Re-enable only small-cap glyph
+    // synthesis for a supported imported small-caps style while typing.
+    if (dest.style.fontVariantCaps === "small-caps")
+      dest.style.fontSynthesis = "style small-caps";
     if (["B", "STRONG"].includes(node.tagName)) dest.style.fontWeight = "bold";
     if (["I", "EM"].includes(node.tagName)) dest.style.fontStyle = "italic";
     if (node.tagName === "U") dest.style.textDecoration = "underline";

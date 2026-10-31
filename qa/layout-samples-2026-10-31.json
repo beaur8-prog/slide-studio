@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-31",
+  "repository": "https://github.com/apache/poi",
+  "repositoryCommit": "6327f056ba3cfdae326a0261a236460592b80f5c",
+  "samples": [
+    {
+      "id": "poi-withmaster",
+      "filename": "poi-withmaster.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/WithMaster.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/WithMaster.pptx",
+      "bytes": 47505,
+      "sha256": "54ae7677fd2813a815160cc72bd8960a4e482690dfc369b392868521c9b61549",
+      "slides": 2
+    },
+    {
+      "id": "poi-bar-chart",
+      "filename": "poi-bar-chart.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bar-chart.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bar-chart.pptx",
+      "bytes": 44410,
+      "sha256": "79e1d218bfb2903e8dc8425a6b1997d9c1976f5a5f025bada85b0c47b5777969",
+      "slides": 1
+    },
+    {
+      "id": "poi-line-chart",
+      "filename": "poi-line-chart.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/line-chart.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/line-chart.pptx",
+      "bytes": 44700,
+      "sha256": "a2319540fb096629874e8c2baf91b9f8afd1386bfba411efff503b96dce9e9a1",
+      "slides": 1
+    },
+    {
+      "id": "poi-pie-chart",
+      "filename": "poi-pie-chart.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/pie-chart.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/pie-chart.pptx",
+      "bytes": 55297,
+      "sha256": "3b6404b59b24cb79fbb91fc2e92bd8b80cdc340aeed71a1ec1e267db0d8ad444",
+      "slides": 1
+    },
+    {
+      "id": "poi-radar-chart",
+      "filename": "poi-radar-chart.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/radar-chart.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/radar-chart.pptx",
+      "bytes": 43689,
+      "sha256": "faf631199e44a1eb5dae48527d233b3231e67ea0345e93fd0c9306ce5261b570",
+      "slides": 1
+    },
+    {
+      "id": "poi-scatter-chart",
+      "filename": "poi-scatter-chart.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/scatter-chart.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/scatter-chart.pptx",
+      "bytes": 44269,
+      "sha256": "946d17760f23822950d97a02aeeedbac773fe8ba5afd61bb26a9ee5fd8db53be",
+      "slides": 1
+    },
+    {
+      "id": "poi-chart-picture-bg",
+      "filename": "poi-chart-picture-bg.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/chart-picture-bg.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/chart-picture-bg.pptx",
+      "bytes": 651648,
+      "sha256": "97bad7041fa5f23408eea513cd85bf7fed47a8ba218d8791a59be14cb53fdaa5",
+      "slides": 1
+    },
+    {
+      "id": "poi-placeholder-layout-color",
+      "filename": "poi-placeholder-layout-color.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/placeholder-layout-color.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/placeholder-layout-color.pptx",
+      "bytes": 346876,
+      "sha256": "b683af99cf4e71db112fe87db15840846c53dbc7a6839cbf84804980d21af9ce",
+      "slides": 1
+    },
+    {
+      "id": "poi-table-with-theme",
+      "filename": "poi-table-with-theme.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-theme.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-theme.pptx",
+      "bytes": 35189,
+      "sha256": "571d0cd2e1e9767249b3a02544c7771c883c48bb191264409729c7cec574ab48",
+      "slides": 1
+    },
+    {
+      "id": "poi-table-with-no-theme",
+      "filename": "poi-table-with-no-theme.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-no-theme.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-no-theme.pptx",
+      "bytes": 34362,
+      "sha256": "d6b3cca13b8bdeaa66df184883ace4fcbc6bf7a88a9547abdbd01875caf5af4e",
+      "slides": 1
+    },
+    {
+      "id": "poi-table-with-different-font-colors",
+      "filename": "poi-table-with-different-font-colors.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-different-font-colors.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-different-font-colors.pptx",
+      "bytes": 36562,
+      "sha256": "fb0245f28e32e5137da6f9c2a9c35c5a8694a71c35d675ab671a595c1b93d72d",
+      "slides": 2
+    },
+    {
+      "id": "poi-table_test2",
+      "filename": "poi-table_test2.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table_test2.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table_test2.pptx",
+      "bytes": 33414,
+      "sha256": "e80d09a5fa767f6ee2d024f3a4198f1e8b3241cc638183e5ebafdbacf1fb2838",
+      "slides": 1
+    },
+    {
+      "id": "poi-shapes",
+      "filename": "poi-shapes.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/shapes.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/shapes.pptx",
+      "bytes": 68822,
+      "sha256": "19fde9b87e33dd1a95fdbba0cf6abc2278bf03874f4665c7f8b88b6afe4a2571",
+      "slides": 6
+    },
+    {
+      "id": "poi-smartart-rotated-text",
+      "filename": "poi-smartart-rotated-text.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/smartart-rotated-text.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/smartart-rotated-text.pptx",
+      "bytes": 43459,
+      "sha256": "a357985aec81b0bfa8a71138bbe94c9b3f6e00dee110c0da34302e22253de260",
+      "slides": 1
+    },
+    {
+      "id": "poi-themes",
+      "filename": "poi-themes.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/themes.pptx",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/themes.pptx",
+      "bytes": 322325,
+      "sha256": "3ea86e4ee84a8bca6b99fe3a9f2a9a9186c0655df28ff92a2d02da24926c64ba",
+      "slides": 10
+    }
+  ]
+}

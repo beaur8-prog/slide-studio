@@ -149,7 +149,7 @@ export const ElementVisual = memo(function ElementVisual({
     return <AudioVisual element={element} playing={playMedia} />;
   if (element.type === "image")
     return <ImageVisual element={element} playing={playMedia} />;
-  if (element.type === "chart") return <ChartVisual element={element} />;
+  if (element.type === "chart") return <ChartVisual element={element} playing={playMedia} />;
   if (element.type !== "shape")
     return <ArtworkVisual element={element} onTextHeight={onTextHeight} />;
   return (
@@ -416,7 +416,7 @@ interface Props {
   editTable?: (id: string, range?: TableCellRange) => void;
   editChart?: (id: string) => void;
   resizeTable: (id: string, before: TableData, after: TableData) => void;
-  appendTableRow: (id: string) => void;
+  appendTableRow: (id: string) => boolean;
   tableResizeEnabled: boolean;
   begin: () => void;
   preview: (elements: SlideElement[]) => void;
@@ -1172,14 +1172,14 @@ export default function SlideCanvas({
                               next = cells[index + (backward ? -1 : 1)];
                             if (next) startCell(e, next.row, next.column);
                             else {
-                              edit(null);
-                              setInlineCell(null);
                               if (
                                 !backward &&
                                 e.table!.cells.length < MAX_TABLE_ROWS
                               ) {
                                 const row = e.table!.cells.length;
-                                appendTableRow(e.id);
+                                if (!appendTableRow(e.id)) return;
+                                edit(null);
+                                setInlineCell(null);
                                 selectTableCells({
                                   elementId: e.id,
                                   anchor: { row, column: 0 },
@@ -1192,6 +1192,9 @@ export default function SlideCanvas({
                                     )
                                     ?.focus(),
                                 );
+                              } else {
+                                edit(null);
+                                setInlineCell(null);
                               }
                             }
                           },

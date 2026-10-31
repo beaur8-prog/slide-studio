@@ -167,6 +167,12 @@ function TextLine({
                   : r.italic
                     ? "italic"
                     : "normal",
+              textTransform: r.caps === "all" ? "uppercase" : "none",
+              fontVariantCaps: r.caps === "small" ? "small-caps" : "normal",
+              // The parent disables synthetic weights. Allow small-cap glyph
+              // synthesis only for runs which explicitly request that effect.
+              fontSynthesis:
+                r.caps === "small" ? "style small-caps" : undefined,
               textDecoration:
                 (r.underline ?? e.underline) ? "underline" : "none",
               color: alphaColor(
@@ -260,21 +266,47 @@ export function TextContent({
         ))}
       </>
     );
-  return (e.textColumns ?? 1) > 1 ? (
+  const body =
+    (e.textColumns ?? 1) > 1 ? (
+      <div
+        data-text-columns
+        style={{
+          height: "100%",
+          minHeight: 0,
+          flexShrink: 0,
+          columnCount: e.textColumns,
+          columnGap: e.textColumnGap ?? 0,
+          columnFill: "auto",
+        }}
+      >
+        {content}
+      </div>
+    ) : (
+      content
+    );
+  return e.textRotation ? (
     <div
-      data-text-columns
+      data-text-rotation={e.textRotation}
       style={{
+        width: "100%",
         height: "100%",
         minHeight: 0,
         flexShrink: 0,
-        columnCount: e.textColumns,
-        columnGap: e.textColumnGap ?? 0,
-        columnFill: "auto",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent:
+          e.verticalAlign === "middle"
+            ? "center"
+            : e.verticalAlign === "bottom"
+              ? "flex-end"
+              : "flex-start",
+        transform: `rotate(${e.textRotation}deg)`,
+        transformOrigin: "center",
       }}
     >
-      {content}
+      {body}
     </div>
   ) : (
-    content
+    body
   );
 }

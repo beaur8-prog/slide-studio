@@ -36,3 +36,45 @@
 .font-manager > p {
   color: #586651;
 }
+.document-fonts {
+  border-block: 1px solid #d8dfd9;
+  margin-block: 16px;
+  padding-block: 12px;
+}
+.document-fonts-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.document-fonts h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.document-fonts p {
+  font-size: 13px;
+}
+.document-fonts ul {
+  max-height: 190px;
+  margin-block: 8px;
+}
+.document-fonts li {
+  align-items: flex-start;
+  padding-block: 6px;
+  font-size: 13px;
+}
+.document-fonts li strong {
+  font-weight: 600;
+}
+.document-fonts [data-font-status] {
+  margin-top: 3px;
+  opacity: 1;
+}
+.document-fonts [data-font-status="unknown"],
+.document-fonts [data-font-status="substitute"] {
+  color: #8a4b20;
+}
+.document-fonts ul:focus-visible {
+  outline: 2px solid #607c65;
+  outline-offset: 2px;
+}

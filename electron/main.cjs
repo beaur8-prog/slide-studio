@@ -12,6 +12,7 @@ const { createStudioUpdater } = require('./studio-updater.cjs');
 const { FileOpenRequests } = require('./file-open-requests.cjs');
 const { FileContexts } = require('./file-contexts.cjs');
 const { createPresentationSaver } = require('./presentation-save.cjs');
+const { createRecoverySaver } = require('./recovery-save.cjs');
 const { atomicWrite } = require('./atomic-write.cjs');
 
 const PRODUCT_NAME = 'Slide Studio';
@@ -408,6 +409,10 @@ function installIPC() {
   });
   ipcMain.handle('slide-studio:save-file', (event, payload) => withNativeDialog(event, () =>
     savePresentation(decodeFilePayload(payload), payload.context)));
+
+  const saveRecovery = createRecoverySaver({ dialog, getWindow: () => mainWindow,
+    defaultPath: defaultDialogPath, atomicWrite, safeFilename });
+  ipcMain.handle('slide-studio:save-recovery-data', (event, payload) => withNativeDialog(event, () => saveRecovery(payload)));
 
   ipcMain.handle('slide-studio:open-file', event => withNativeDialog(event, async () => {
     const result = await dialog.showOpenDialog(mainWindow, {

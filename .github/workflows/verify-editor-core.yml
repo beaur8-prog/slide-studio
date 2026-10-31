@@ -13,6 +13,7 @@ jobs:
     timeout-minutes: 20
     env:
       PLAYWRIGHT_CHANNEL: chromium
+      LAYOUT_COMPARISON_SAMPLES: ${{ github.workspace }}/qa/samples
       PLAYWRIGHT_JSON_OUTPUT_NAME: qa/results/editor-core-ci.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -21,6 +22,15 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Verify bounded public corpus acquisition
+        run: >-
+          node --test
+          tests/corpus/fetch-layout-samples.mjs
+          tests/corpus/fetch-workplace-samples.mjs
+      - name: Fetch pinned layout regression samples
+        run: node scripts/fetch-layout-samples.mjs
+      - name: Fetch hash-verified public workplace samples
+        run: node scripts/fetch-workplace-samples.mjs
       # Electron 42 ships an explicit installer rather than an npm postinstall.
       - name: Install checksum-verified native Electron runtime
         run: node node_modules/electron/install.js
@@ -31,7 +41,7 @@ jobs:
       - name: Build production renderer
         id: build
         run: npm run build
-      - name: Verify file handling and presentation behavior
+      - name: Verify editing, recovery and layout behavior
         run: >-
           npx playwright test
           tests/file-contexts.spec.ts
@@ -48,6 +58,30 @@ jobs:
           tests/presentation-start-input.spec.ts
           tests/presentation-fullscreen.spec.ts
           tests/windows-ui.spec.ts
+          tests/document-capacity.spec.ts
+          tests/document-table-capacity.spec.ts
+          tests/recovery-quarantine.spec.ts
+          tests/recovery-download-bounds.spec.ts
+          tests/native-recovery-save.spec.ts
+          tests/table-web-compatibility.spec.ts
+          tests/table-diagonal-workflow.spec.ts
+          tests/table-theme-references.spec.ts
+          tests/table-hyperlink-style.spec.ts
+          tests/table-vertical-text.spec.ts
+          tests/theme-style-inheritance.spec.ts
+          tests/pptx-master-themes.spec.ts
+          tests/theme-backgrounds.spec.ts
+          tests/smartart-text-layout.spec.ts
+          tests/web-layout-text.spec.ts
+          tests/text-caps.spec.ts
+          tests/picture-placeholder.spec.ts
+          tests/picture-duotone.spec.ts
+          tests/chart-layout-compatibility.spec.ts
+          tests/chart-picture-fill.spec.ts
+          tests/dense-chart-markers.spec.ts
+          tests/chart-marker-symbols.spec.ts
+          tests/radar-chart.spec.ts
+          tests/pptx-xml-order.spec.ts
           --reporter=line,json --output=qa/results/editor-core-artifacts
       - name: Exercise real Windows production app with disposable files
         if: always() && steps.build.outcome == 'success' && runner.os == 'Windows'
@@ -63,6 +97,17 @@ jobs:
           QA_APP_ROOT: ${{ github.workspace }}
           QA_NO_SANDBOX: '1'
         run: xvfb-run --auto-servernum node scripts/qa-save-native.cjs node_modules/electron/dist/electron qa/results/editor-core-native
+      - name: Verify real Windows recovery preservation and download
+        if: always() && steps.build.outcome == 'success' && runner.os == 'Windows'
+        env:
+          QA_APP_ROOT: ${{ github.workspace }}
+        run: node scripts/qa-recovery-download-native.cjs node_modules/electron/dist/electron.exe qa/results/editor-core-recovery
+      - name: Verify real Linux recovery preservation and download
+        if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
+        env:
+          QA_APP_ROOT: ${{ github.workspace }}
+          QA_NO_SANDBOX: '1'
+        run: xvfb-run --auto-servernum node scripts/qa-recovery-download-native.cjs node_modules/electron/dist/electron qa/results/editor-core-recovery
       - name: Verify Windows MP3 AAC WAV playback and PDF with synthetic media
         if: always() && steps.build.outcome == 'success' && runner.os == 'Windows'
         env:
@@ -85,6 +130,8 @@ jobs:
             qa/results/editor-core-ci.json
             qa/results/editor-core-native/*.json
             qa/results/editor-core-native/*.png
+            qa/results/editor-core-recovery/**/*.json
+            qa/results/editor-core-recovery/**/*.png
             qa/results/editor-core-audio/*.json
             qa/results/editor-core-audio/*.png
             qa/results/editor-core-artifacts/**/*.png

@@ -75,6 +75,9 @@ export function normalizeObjectAlpha(el: SlideElement) {
           for (const b of style.borders)
             if (b.width && b.color !== "transparent")
               add(b.opacity, (n) => (b.opacity = n));
+        for (const b of Object.values(style.diagonalBorders ?? {}))
+          if (b.width && b.color !== "transparent")
+            add(b.opacity, (n) => (b.opacity = n));
       }
   } else {
     if (el.fill && el.fill !== "transparent")

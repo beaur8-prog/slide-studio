@@ -1,11 +1,21 @@
 import type { ChartData } from "./types";
+import { canPreviewRadar } from "./chart-radar";
 import { record, stringValue, colorValue } from "./validation";
+import { applyDrawingmlColorTransforms } from "./drawingml-color";
+import {
+  readChartImageFill,
+  unsupportedDrawingmlImageEffects,
+  type ChartImageFill,
+} from "./chart-image";
 
 export const CHART_NS =
   "http://schemas.openxmlformats.org/drawingml/2006/chart";
 export const DRAWING_NS =
   "http://schemas.openxmlformats.org/drawingml/2006/main";
 export const MAX_CHART_BYTES = 16 * 1024 * 1024;
+export const MAX_CHART_LABELS = 1000;
+export const MAX_CHART_LABEL_TEXT = 512;
+const MAX_NUMBER_FORMAT_LENGTH = 512;
 export const child = (node: Element | Document | undefined, name: string) =>
   Array.from(node?.children ?? []).find((n) => n.localName === name);
 export const all = (node: Element | Document | undefined, name: string) =>
@@ -168,7 +178,44 @@ export interface ChartAxis {
   fontSize: number;
   format: string;
   gridColor?: string;
+  gridWidth?: number;
+  fontFamily: string;
+  labelSkip?: number;
+  labelPosition: string;
+  lineColor: string;
+  lineWidth: number;
+  crosses: string;
+  crossValue?: number;
 }
+export interface ChartDataLabel {
+  deleted: boolean;
+  value: boolean;
+  category: boolean;
+  series: boolean;
+  percent: boolean;
+  position: string;
+  format: string;
+  sourceLinked: boolean;
+  separator: string;
+  color: string;
+  fontSize: number;
+  fontFamily: string;
+  bold: boolean;
+  italic: boolean;
+  text?: string;
+}
+export const CHART_MARKER_SYMBOLS = [
+  "circle",
+  "dash",
+  "diamond",
+  "dot",
+  "plus",
+  "square",
+  "star",
+  "triangle",
+  "x",
+] as const;
+export type ChartMarkerSymbol = (typeof CHART_MARKER_SYMBOLS)[number];
 export interface ChartSeries {
   name: string;
   values: (number | null)[];
@@ -179,7 +226,15 @@ export interface ChartSeries {
   dash?: string;
   marker: boolean;
   markerSize: number;
+  markerSymbol: ChartMarkerSymbol;
   pointColors: Record<number, string>;
+  numberFormat: string;
+  pointFormats: Record<number, string>;
+  dataLabel: ChartDataLabel;
+  pointLabels: Record<number, ChartDataLabel>;
+  border?: { color: string; width: number };
+  radarFill?: { color: string; opacity: number };
+  radarLine?: { color: string; opacity: number; width: number };
 }
 export interface ChartPlot {
   kind: ChartKind;
@@ -188,6 +243,21 @@ export interface ChartPlot {
   series: ChartSeries[];
   hole: number;
   firstAngle: number;
+  gapWidth: number;
+  radarStyle?: string;
+}
+export interface ChartAnnotation {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text: string;
+  fontSize: number;
+  fontFamily: string;
+  color: string;
+  bold: boolean;
+  italic: boolean;
+  align: string;
 }
 export interface ChartModel {
   title: string;
@@ -195,12 +265,21 @@ export interface ChartModel {
   xAxis: ChartAxis;
   yAxis: ChartAxis;
   legend?: string;
+  legendFontSize: number;
+  legendFontFamily: string;
+  legendTextColor: string;
   fontFamily: string;
   fontSize: number;
   textColor: string;
   background: string;
   plotFill: string;
+  backgroundImage?: ChartImageFill;
+  plotImage?: ChartImageFill;
   approximate: boolean;
+  blankMode: "gap" | "span" | "zero";
+  plotLineColor: string;
+  plotLineWidth: number;
+  annotations: ChartAnnotation[];
 }
 const PALETTE = [
   "#4472C4",
@@ -210,47 +289,35 @@ const PALETTE = [
   "#5B9BD5",
   "#70AD47",
 ];
-export function chartColor(
+function chartColorValue(
   node: Element | undefined,
   colors: Record<string, string>,
-  fallback: string,
-): string {
-  if (!node || child(node, "noFill")) return fallback;
-  const rgb = first(node, "srgbClr"),
-    scheme = first(node, "schemeClr"),
-    system = first(node, "sysClr");
-  let color = rgb
+): { color: string; opacity: number } | undefined {
+  if (!node || child(node, "noFill")) return;
+  const rgb = node.localName === "srgbClr" ? node : first(node, "srgbClr"),
+    scheme = node.localName === "schemeClr" ? node : first(node, "schemeClr"),
+    system = node.localName === "sysClr" ? node : first(node, "sysClr");
+  const color = rgb
     ? "#" + val(rgb)
     : scheme
       ? colors[val(scheme)]
       : system
         ? "#" + system.getAttribute("lastClr")
         : undefined;
-  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return fallback;
-  const source = rgb ?? scheme ?? system;
-  let channels = [1, 3, 5].map((i) => parseInt(color!.slice(i, i + 2), 16));
-  for (const modifier of Array.from(source?.children ?? [])) {
-    const amount = num(modifier) / 100000;
-    if (modifier.localName === "tint" || modifier.localName === "lumOff")
-      channels = channels.map((v) =>
-        modifier.localName === "tint"
-          ? v + (255 - v) * amount
-          : v + 255 * amount,
-      );
-    if (modifier.localName === "shade" || modifier.localName === "lumMod")
-      channels = channels.map((v) => v * amount);
-  }
-  return (
-    "#" +
-    channels
-      .map((v) =>
-        Math.round(Math.max(0, Math.min(255, v)))
-          .toString(16)
-          .padStart(2, "0"),
-      )
-      .join("")
+  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return;
+  return applyDrawingmlColorTransforms(
+    color,
+    Array.from((rgb ?? scheme ?? system)?.children ?? []),
   );
 }
+export function chartColor(
+  node: Element | undefined,
+  colors: Record<string, string>,
+  fallback: string,
+): string {
+  return chartColorValue(node, colors)?.color ?? fallback;
+}
+
 function text(node: Element | undefined): string {
   const runs = all(node, "t");
   return (
@@ -289,12 +356,343 @@ const numbers = (node: Element | undefined) =>
       ? null
       : Number(v),
   );
+const generalNumberFormat = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 10,
+  useGrouping: false,
+});
+const numberFormats = new Map<string, Intl.NumberFormat>();
+function numberFormat(
+  integer: number,
+  minimum: number,
+  maximum: number,
+  grouping: boolean,
+) {
+  const key = `${integer}/${minimum}/${maximum}/${grouping}`;
+  let formatter = numberFormats.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat("en-US", {
+      minimumIntegerDigits: integer,
+      minimumFractionDigits: minimum,
+      maximumFractionDigits: maximum,
+      useGrouping: grouping,
+    });
+    if (numberFormats.size >= 64)
+      numberFormats.delete(numberFormats.keys().next().value!);
+    numberFormats.set(key, formatter);
+  }
+  return formatter;
+}
+
+/** Common OOXML/Excel number formats used by chart axes and data labels.
+ * Quoted/escaped text is kept separate from numeric placeholders so a literal
+ * percent, semicolon or comma cannot accidentally alter the number's value.
+ */
+export function formatChartNumber(value: number, code = "General"): string {
+  if (!Number.isFinite(value)) return "";
+  const general = () =>
+    Math.abs(value) >= 1e11 || (Math.abs(value) > 0 && Math.abs(value) < 1e-6)
+      ? value.toExponential(5).replace(/\.?0+e/, "e")
+      : generalNumberFormat.format(value);
+  if (code.length > MAX_NUMBER_FORMAT_LENGTH) return general();
+  const sections: string[] = [""];
+  let quoted = false,
+    conditional = false;
+  for (let index = 0; index < code.length; index++) {
+    const c = code[index];
+    if (c === "\\") {
+      sections[sections.length - 1] += c + (code[++index] ?? "");
+      continue;
+    }
+    if (c === '"') quoted = !quoted;
+    if (!quoted && c === "[" && /[<>=]/.test(code[index + 1] ?? ""))
+      conditional = true;
+    if (c === ";" && !quoted) sections.push("");
+    else sections[sections.length - 1] += c;
+  }
+  // Conditional and date formats need a spreadsheet evaluator. Display the
+  // original numeric value rather than selecting a misleading sign section.
+  if (conditional) return general();
+  const explicitNegative = value < 0 && sections.length > 1;
+  const section =
+    value < 0 && sections.length > 1
+      ? sections[1]
+      : value === 0 && sections.length > 2
+        ? sections[2]
+        : sections[0];
+  if (!section.trim()) return "";
+  if (/^General$/i.test(section.trim())) return general();
+  type Token = { text: string; numeric: boolean };
+  const tokens: Token[] = [];
+  for (let index = 0; index < section.length; index++) {
+    const c = section[index];
+    if (c === '"') {
+      let literal = "";
+      while (++index < section.length && section[index] !== '"')
+        literal += section[index];
+      tokens.push({ text: literal, numeric: false });
+    } else if (c === "\\")
+      tokens.push({ text: section[++index] ?? "", numeric: false });
+    else if (c === "_" || c === "*") index++;
+    else if (c === "[") {
+      const end = section.indexOf("]", index + 1);
+      if (end < 0) return general();
+      const bracket = section.slice(index + 1, end);
+      // Locale-qualified currencies, e.g. [$€-407]. Color directives affect
+      // styling and are not emitted as label text.
+      if (bracket.startsWith("$"))
+        tokens.push({ text: bracket.slice(1).split("-")[0], numeric: false });
+      index = end;
+    } else if (/[a-df-z]/i.test(c)) return general();
+    else tokens.push({ text: c, numeric: /[0#?.,%Ee+\-]/.test(c) });
+  }
+  const firstNumber = tokens.findIndex(
+    (t) => t.numeric && /[0#?]/.test(t.text),
+  );
+  let lastNumber = -1;
+  tokens.forEach((t, i) => {
+    if (t.numeric && /[0#?]/.test(t.text)) lastNumber = i;
+  });
+  const literal = (items: Token[]) =>
+    items
+      .filter((t) => !t.numeric || !/[#?]/.test(t.text))
+      .map((t) => t.text)
+      .join("");
+  if (firstNumber < 0) return literal(tokens).trim();
+  const numberTokens = tokens.slice(firstNumber, lastNumber + 1);
+  if (numberTokens.some((t) => !t.numeric)) return general();
+  const pattern = numberTokens.map((t) => t.text).join("");
+  if (value === 0 && !pattern.includes("0")) return literal(tokens).trim();
+  if (!/^[0#?,]+(?:\.[0#?]+)?(?:[Ee][+\-]?[0#?]+)?$/.test(pattern))
+    return general();
+  const exponent = pattern.match(/[Ee]([+\-]?)([0#?]+)$/);
+  const mantissa = pattern.replace(/[Ee].*$/, "");
+  const fraction = mantissa.split(".")[1] ?? "";
+  const minFraction = Math.min(20, (fraction.match(/0/g) ?? []).length);
+  const maxFraction = Math.min(20, fraction.length);
+  const percents = tokens.filter((t) => t.numeric && t.text === "%").length;
+  let scalingCommas = 0;
+  for (
+    let i = lastNumber + 1;
+    tokens[i]?.numeric && tokens[i].text === ",";
+    i++
+  )
+    scalingCommas++;
+  const scaled = (Math.abs(value) * 100 ** percents) / 1000 ** scalingCommas;
+  if (!Number.isFinite(scaled)) return general();
+  let shown: string;
+  if (exponent) {
+    const [base, rawExponent] = scaled.toExponential(maxFraction).split("e");
+    const exp = Number(rawExponent);
+    shown =
+      base +
+      "E" +
+      (exp < 0 ? "-" : exponent[1] === "+" ? "+" : "") +
+      String(Math.abs(exp)).padStart(exponent[2].length, "0");
+  } else
+    shown = numberFormat(
+      Math.max(
+        1,
+        Math.min(21, (mantissa.split(".")[0].match(/0/g) ?? []).length),
+      ),
+      minFraction,
+      maxFraction,
+      mantissa.split(".")[0].includes(","),
+    ).format(scaled);
+  const prefix = literal(tokens.slice(0, firstNumber));
+  const suffix = literal(tokens.slice(lastNumber + 1 + scalingCommas));
+  return (
+    (value < 0 && !explicitNegative ? "-" : "") +
+    prefix +
+    shown +
+    suffix
+  ).trim();
+}
+
+export const CHART_COLOR_MAPPING: Record<string, string> = {
+  bg1: "lt1",
+  tx1: "dk1",
+  bg2: "lt2",
+  tx2: "dk2",
+  accent1: "accent1",
+  accent2: "accent2",
+  accent3: "accent3",
+  accent4: "accent4",
+  accent5: "accent5",
+  accent6: "accent6",
+  hlink: "hlink",
+  folHlink: "folHlink",
+};
+const DEFAULT_SCHEME: Record<string, string> = {
+  dk1: "#000000",
+  lt1: "#FFFFFF",
+  dk2: "#44546A",
+  lt2: "#E7E6E6",
+  ...Object.fromEntries(
+    PALETTE.map((color, index) => [`accent${index + 1}`, color]),
+  ),
+  hlink: "#0563C1",
+  folHlink: "#954F72",
+};
+export function readChartTheme(data: ChartData, root?: Element) {
+  const rootPart = data.parts.find((part) => part.path === data.root)!;
+  root ??= chartXml(chartPartText(rootPart.data)).documentElement;
+  const colors = { ...DEFAULT_SCHEME, ...data.colors },
+    mapping = { ...CHART_COLOR_MAPPING };
+  // A chart can inherit a slide's color mapping without carrying a map itself.
+  // Capture that active mapping before applying a chart-local theme override.
+  const ownMapping = child(root, "clrMapOvr");
+  for (const [alias, fallback] of Object.entries(mapping)) {
+    const explicit = ownMapping?.getAttribute(alias);
+    mapping[alias] =
+      explicit && Object.hasOwn(DEFAULT_SCHEME, explicit)
+        ? explicit
+        : data.colors[alias] && data.colors[alias] !== data.colors[fallback]
+          ? (Object.keys(DEFAULT_SCHEME).find(
+              (key) => data.colors[key] === data.colors[alias],
+            ) ?? fallback)
+          : fallback;
+  }
+  const overridePath = rootPart.relationships.find(
+      (rel) => rel.type.endsWith("/themeOverride") && !rel.external,
+    )?.target,
+    overridePart = data.parts.find((part) => part.path === overridePath),
+    override = overridePart
+      ? chartXml(chartPartText(overridePart.data)).documentElement
+      : undefined;
+  for (const entry of Array.from(
+    child(override, "clrScheme")?.children ?? [],
+  )) {
+    if (!Object.hasOwn(DEFAULT_SCHEME, entry.localName)) continue;
+    colors[entry.localName] = chartColor(
+      entry,
+      colors,
+      colors[entry.localName],
+    );
+  }
+  for (const [alias, name] of Object.entries(mapping))
+    colors[alias] = colors[name];
+  const fonts = child(override, "fontScheme");
+  return {
+    colors,
+    mapping,
+    majorFont: (
+      first(child(fonts, "majorFont"), "latin")?.getAttribute("typeface") ||
+      data.fontFamily
+    ).slice(0, 200),
+    minorFont: (
+      first(child(fonts, "minorFont"), "latin")?.getAttribute("typeface") ||
+      data.fontFamily
+    ).slice(0, 200),
+  };
+}
+
 export function readChartModel(data: ChartData): ChartModel {
   const root = chartXml(
     chartPartText(data.parts.find((p) => p.path === data.root)!.data),
   ).documentElement;
+  const theme = readChartTheme(data, root),
+    colors = theme.colors;
   const chart = child(root, "chart"),
     plotArea = child(chart, "plotArea");
+  const textSize = (raw: string | null | undefined, fallback: number) => {
+    const size =
+      raw === undefined || raw === null ? fallback : Number(raw) / 75;
+    return Number.isFinite(size) ? Math.min(400, Math.max(1, size)) : fallback;
+  };
+  const tx = child(root, "txPr"),
+    defaultText = first(tx, "defRPr"),
+    rootFont = first(tx, "latin")?.getAttribute("typeface"),
+    fontFamily =
+      rootFont && !rootFont.startsWith("+")
+        ? rootFont.slice(0, 200)
+        : rootFont?.startsWith("+mn")
+          ? theme.minorFont
+          : theme.majorFont,
+    fontSize = textSize(defaultText?.getAttribute("sz"), 16),
+    textColor = chartColor(child(defaultText, "solidFill"), colors, "#263445");
+  const family = (node: Element | undefined, fallback = fontFamily) => {
+    const face = first(node, "latin")?.getAttribute("typeface");
+    return face?.startsWith("+mj")
+      ? theme.majorFont
+      : face?.startsWith("+mn")
+        ? theme.minorFont
+        : face && !face.startsWith("+")
+          ? face.slice(0, 200)
+          : fallback;
+  };
+  const flag = (node: Element | undefined, name: string, fallback: boolean) => {
+    const setting = child(node, name);
+    return setting ? !["0", "false"].includes(val(setting, "1")) : fallback;
+  };
+  const length = (raw: string | null | undefined, fallback: number) => {
+    const value = raw == null ? fallback : Number(raw) / 9525;
+    return Number.isFinite(value)
+      ? Math.max(0, Math.min(400, value))
+      : fallback;
+  };
+  const lineStyle = (
+    node: Element | undefined,
+    fallback: string,
+    width = 1,
+  ) => ({
+    lineColor: child(node, "noFill")
+      ? "transparent"
+      : chartColor(child(node, "solidFill"), colors, fallback),
+    lineWidth: length(node?.getAttribute("w"), width),
+  });
+  const label = (
+    node: Element | undefined,
+    inherited?: ChartDataLabel,
+    sourceFormat = "General",
+  ): ChartDataLabel => {
+    const props =
+        first(child(node, "txPr"), "defRPr") ??
+        first(child(node, "txPr"), "rPr"),
+      format = child(node, "numFmt"),
+      explicitText = child(node, "tx");
+    return {
+      deleted: flag(node, "delete", inherited?.deleted ?? false),
+      value: flag(node, "showVal", inherited?.value ?? false),
+      category: flag(node, "showCatName", inherited?.category ?? false),
+      series: flag(node, "showSerName", inherited?.series ?? false),
+      percent: flag(node, "showPercent", inherited?.percent ?? false),
+      position: val(child(node, "dLblPos"), inherited?.position ?? ""),
+      format: format
+        ? format.getAttribute("sourceLinked") === "1"
+          ? sourceFormat
+          : (format.getAttribute("formatCode") ?? sourceFormat)
+        : (inherited?.format ?? sourceFormat),
+      sourceLinked: format
+        ? format.getAttribute("sourceLinked") === "1"
+        : (inherited?.sourceLinked ?? true),
+      separator: (
+        child(node, "separator")?.textContent ??
+        inherited?.separator ??
+        ", "
+      ).slice(0, MAX_CHART_LABEL_TEXT),
+      color: chartColor(
+        child(props, "solidFill"),
+        colors,
+        inherited?.color ?? textColor,
+      ),
+      fontSize: textSize(
+        props?.getAttribute("sz"),
+        inherited?.fontSize ?? fontSize,
+      ),
+      fontFamily: family(props, inherited?.fontFamily ?? fontFamily),
+      bold: props?.hasAttribute("b")
+        ? props.getAttribute("b") === "1"
+        : (inherited?.bold ?? false),
+      italic: props?.hasAttribute("i")
+        ? props.getAttribute("i") === "1"
+        : (inherited?.italic ?? false),
+      ...(explicitText
+        ? { text: text(explicitText) }
+        : inherited?.text !== undefined
+          ? { text: inherited.text }
+          : {}),
+    };
+  };
   const axis = (node: Element | undefined): ChartAxis => {
     const scale = child(node, "scaling"),
       tx = child(node, "txPr"),
@@ -311,15 +709,32 @@ export function readChartModel(data: ChartData): ChartModel {
         : {}),
       reverse: val(child(scale, "orientation")) === "maxMin",
       hidden: val(child(node, "delete")) === "1",
-      color: chartColor(child(props, "solidFill"), data.colors, "#596573"),
-      fontSize: Number(props?.getAttribute("sz") ?? 1200) / 75,
+      color: chartColor(child(props, "solidFill"), colors, textColor),
+      fontSize: textSize(props?.getAttribute("sz"), 16),
+      fontFamily: family(props),
       format: child(node, "numFmt")?.getAttribute("formatCode") ?? "General",
+      ...(num(child(node, "tickLblSkip")) > 0
+        ? { labelSkip: Math.max(1, num(child(node, "tickLblSkip"))) }
+        : {}),
+      labelPosition: val(child(node, "tickLblPos"), "nextTo"),
+      ...lineStyle(child(child(node, "spPr"), "ln"), "#8C9399"),
+      crosses: val(child(node, "crosses"), "autoZero"),
+      ...(child(node, "crossesAt")
+        ? { crossValue: num(child(node, "crossesAt")) }
+        : {}),
       ...(child(node, "majorGridlines")
         ? {
             gridColor: chartColor(
               first(child(node, "majorGridlines"), "solidFill"),
-              data.colors,
+              colors,
               "#D7DCE2",
+            ),
+            gridWidth: length(
+              child(
+                child(child(node, "majorGridlines"), "spPr"),
+                "ln",
+              )?.getAttribute("w"),
+              0.8,
             ),
           }
         : {}),
@@ -362,16 +777,31 @@ export function readChartModel(data: ChartData): ChartModel {
           pointCount += values.length;
           if (pointCount > 100000)
             throw Error("차트 데이터는 합계 100,000개까지 표시합니다.");
-          const labels = points(child(ser, "cat")).map((v) => v ?? "");
+          const xNode = child(ser, "xVal"),
+            stringX =
+              kind === "scatter" &&
+              !!(first(xNode, "strCache") ?? first(xNode, "strLit"));
+          const labels = points(
+            child(ser, "cat") ?? (stringX ? xNode : undefined),
+          ).map((v) => v ?? "");
           const props = child(ser, "spPr"),
             line = child(props, "ln");
+          // idx identifies a series across reordering; order is only its draw
+          // order. Office uses idx for the default accent color.
+          const sourceIndex = Math.max(
+            0,
+            Math.floor(num(child(ser, "idx"), seriesIndex - 1)),
+          );
           const color = chartColor(
-            kind === "line" || kind === "scatter"
+            kind === "line" ||
+              kind === "scatter" ||
+              (kind === "radar" &&
+                val(child(plot, "radarStyle"), "standard") !== "filled")
               ? (child(line, "solidFill") ?? child(props, "solidFill"))
               : (child(props, "solidFill") ?? child(line, "solidFill")),
-            data.colors,
-            data.colors[`accent${((seriesIndex - 1) % 6) + 1}`] ??
-              PALETTE[(seriesIndex - 1) % 6],
+            colors,
+            colors[`accent${(sourceIndex % 6) + 1}`] ??
+              PALETTE[sourceIndex % 6],
           );
           const pointColors: Record<number, string> = {};
           for (const point of Array.from(ser.children).filter(
@@ -379,24 +809,64 @@ export function readChartModel(data: ChartData): ChartModel {
           ))
             pointColors[num(child(point, "idx"))] = chartColor(
               child(child(point, "spPr"), "solidFill"),
-              data.colors,
+              colors,
               color,
             );
+          const cache =
+              first(child(ser, "val") ?? child(ser, "yVal"), "numCache") ??
+              first(child(ser, "val") ?? child(ser, "yVal"), "numLit"),
+            numberFormat = child(cache, "formatCode")?.textContent ?? "General",
+            pointFormats: Record<number, string> = {};
+          for (const point of all(cache, "pt"))
+            if (point.hasAttribute("formatCode"))
+              pointFormats[Number(point.getAttribute("idx"))] =
+                point.getAttribute("formatCode")!;
+          const plotLabelNode = child(plot, "dLbls"),
+            seriesLabelNode = child(ser, "dLbls"),
+            dataLabel = label(
+              seriesLabelNode,
+              label(plotLabelNode, undefined, numberFormat),
+              numberFormat,
+            ),
+            pointLabels: Record<number, ChartDataLabel> = {};
+          for (const parent of [plotLabelNode, seriesLabelNode])
+            for (const point of Array.from(parent?.children ?? []).filter(
+              (n) => n.localName === "dLbl",
+            )) {
+              const index = num(child(point, "idx"), -1);
+              if (
+                Number.isInteger(index) &&
+                index >= 0 &&
+                index < values.length
+              )
+                pointLabels[index] = label(
+                  point,
+                  pointLabels[index] ?? dataLabel,
+                  pointFormats[index] ?? numberFormat,
+                );
+            }
           return {
             name: text(child(ser, "tx")) || `계열 ${seriesIndex}`,
             values,
             labels,
             color,
             ...(kind === "scatter"
-              ? { xValues: numbers(child(ser, "xVal")) }
+              ? {
+                  xValues: stringX
+                    ? points(xNode).map((value, index) =>
+                        value === null ? null : index + 1,
+                      )
+                    : numbers(xNode),
+                }
               : {}),
             width:
-              kind === "scatter" &&
-              val(child(plot, "scatterStyle")) === "marker"
+              child(line, "noFill") ||
+              (kind === "scatter" &&
+                val(child(plot, "scatterStyle")) === "marker")
                 ? 0
                 : Math.max(
-                    0.5,
-                    (Number(line?.getAttribute("w") ?? 23812) || 23812) / 9525,
+                    kind === "radar" ? 0 : 0.5,
+                    length(line?.getAttribute("w"), 2.5),
                   ),
             dash: ["dash", "sysDash", "lgDash"].includes(
               val(child(line, "prstDash")),
@@ -406,12 +876,61 @@ export function readChartModel(data: ChartData): ChartModel {
                 ? "2 4"
                 : undefined,
             marker:
-              kind === "scatter" ||
-              !["none", ""].includes(
-                val(first(child(ser, "marker"), "symbol")),
-              ),
-            markerSize: num(first(child(ser, "marker"), "size"), 5),
+              val(first(child(ser, "marker"), "symbol")) !== "none" &&
+              (kind === "scatter"
+                ? !["line", "smooth", "none"].includes(
+                    val(child(plot, "scatterStyle")),
+                  )
+                : !!val(first(child(ser, "marker"), "symbol")) ||
+                  (kind === "radar" &&
+                    val(child(plot, "radarStyle"), "standard") === "marker") ||
+                  flag(plot, "marker", false)),
+            markerSymbol: CHART_MARKER_SYMBOLS.includes(
+              val(first(child(ser, "marker"), "symbol")) as ChartMarkerSymbol,
+            )
+              ? (val(
+                  first(child(ser, "marker"), "symbol"),
+                ) as ChartMarkerSymbol)
+              : "circle",
+            // OOXML marker size is an integer diameter in points (2..72).
+            markerSize: Math.max(
+              2,
+              Math.min(72, num(first(child(ser, "marker"), "size"), 5)),
+            ),
+            ...(kind === "radar"
+              ? {
+                  radarFill: child(props, "noFill")
+                    ? { color, opacity: 0 }
+                    : (chartColorValue(child(props, "solidFill"), colors) ?? {
+                        color,
+                        opacity: 1,
+                      }),
+                  radarLine: {
+                    ...(chartColorValue(child(line, "solidFill"), colors) ?? {
+                      color,
+                      opacity: 1,
+                    }),
+                    width: child(line, "noFill")
+                      ? 0
+                      : Math.max(0, length(line?.getAttribute("w"), 2.5)),
+                  },
+                }
+              : {}),
             pointColors,
+            numberFormat,
+            pointFormats,
+            dataLabel,
+            pointLabels,
+            ...(line
+              ? {
+                  border: {
+                    color: child(line, "noFill")
+                      ? "transparent"
+                      : chartColor(child(line, "solidFill"), colors, color),
+                    width: length(line.getAttribute("w"), 1),
+                  },
+                }
+              : {}),
           };
         });
       return {
@@ -420,38 +939,199 @@ export function readChartModel(data: ChartData): ChartModel {
         grouping: val(child(plot, "grouping"), "standard"),
         series,
         hole: num(child(plot, "holeSize"), 50),
-        firstAngle: num(child(plot, "firstSliceAng")),
+        firstAngle: num(child(plot, "firstSliceAng")) % 360,
+        gapWidth: Math.max(0, Math.min(500, num(child(plot, "gapWidth"), 150))),
+        ...(kind === "radar"
+          ? { radarStyle: val(child(plot, "radarStyle"), "standard") }
+          : {}),
       };
     });
-  const tx = child(root, "txPr"),
-    font = first(tx, "latin")?.getAttribute("typeface");
+  const annotations: ChartAnnotation[] = [];
+  const userShapes = child(root, "userShapes") ?? child(chart, "userShapes"),
+    relationshipId = userShapes?.getAttributeNS(
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+      "id",
+    ),
+    rootPart = data.parts.find((p) => p.path === data.root),
+    drawingPath = rootPart?.relationships.find(
+      (r) => r.id === relationshipId && !r.external,
+    )?.target,
+    drawing = data.parts.find((p) => p.path === drawingPath);
+  if (drawing) {
+    const document = chartXml(chartPartText(drawing.data));
+    for (const anchor of all(document, "relSizeAnchor")) {
+      if (annotations.length >= 200) break;
+      const shape = child(anchor, "sp"),
+        body = child(shape, "txBody"),
+        content = text(body),
+        from = child(anchor, "from"),
+        to = child(anchor, "to"),
+        x = Number(child(from, "x")?.textContent),
+        y = Number(child(from, "y")?.textContent),
+        right = Number(child(to, "x")?.textContent),
+        bottom = Number(child(to, "y")?.textContent),
+        props = first(body, "rPr") ?? first(body, "defRPr");
+      if (
+        !content.trim() ||
+        ![x, y, right, bottom].every(
+          (value) => Number.isFinite(value) && Math.abs(value) <= 10,
+        ) ||
+        right < x ||
+        bottom < y
+      )
+        continue;
+      annotations.push({
+        x,
+        y,
+        width: right - x,
+        height: bottom - y,
+        text: content,
+        fontSize: textSize(props?.getAttribute("sz"), 1100 / 75),
+        fontFamily: family(props),
+        color: chartColor(child(props, "solidFill"), colors, textColor),
+        bold: props?.getAttribute("b") === "1",
+        italic: props?.getAttribute("i") === "1",
+        align: first(body, "pPr")?.getAttribute("algn") ?? "l",
+      });
+    }
+  }
+  const legendProps = first(child(child(chart, "legend"), "txPr"), "defRPr");
+  const imageNodes = [
+    child(child(root, "spPr"), "blipFill"),
+    child(child(plotArea, "spPr"), "blipFill"),
+  ];
+  const imageFills = imageNodes.map((node) =>
+    readChartImageFill(node, data, (node) => chartColorValue(node, colors)),
+  );
+  const approximateImages = imageNodes.some(
+    (node, index) =>
+      unsupportedDrawingmlImageEffects(node) ||
+      (!!child(child(node, "blip"), "duotone") && !imageFills[index]?.duotone),
+  );
+  const xAxis = axis(x),
+    yAxis = axis(y);
+  const rawBlankMode = val(child(chart, "dispBlanksAs"), "gap");
+  const blankMode =
+    rawBlankMode === "span" || rawBlankMode === "zero" ? rawBlankMode : "gap";
   return {
-    title: text(child(chart, "title")),
+    blankMode,
+    title:
+      text(child(chart, "title")) ||
+      (child(chart, "title") &&
+      !flag(chart, "autoTitleDeleted", false) &&
+      plots.flatMap((plot) => plot.series).length === 1
+        ? (plots[0]?.series[0]?.name ?? "")
+        : ""),
     plots,
-    xAxis: axis(x),
-    yAxis: axis(y),
+    xAxis,
+    yAxis,
     legend: child(chart, "legend")
       ? val(child(child(chart, "legend"), "legendPos"), "b")
       : undefined,
-    fontFamily: font && !font.startsWith("+") ? font : data.fontFamily,
-    fontSize: Number(first(tx, "defRPr")?.getAttribute("sz") ?? 1200) / 75,
-    textColor: chartColor(first(tx, "solidFill"), data.colors, "#263445"),
+    legendFontSize: textSize(legendProps?.getAttribute("sz"), fontSize),
+    legendFontFamily: family(legendProps),
+    legendTextColor: chartColor(
+      child(legendProps, "solidFill"),
+      colors,
+      textColor,
+    ),
+    fontFamily,
+    fontSize,
+    textColor,
     background: chartColor(
       child(child(root, "spPr"), "solidFill"),
-      data.colors,
+      colors,
       "transparent",
     ),
     plotFill: chartColor(
       child(child(plotArea, "spPr"), "solidFill"),
-      data.colors,
+      colors,
       "transparent",
     ),
+    backgroundImage: imageFills[0],
+    plotImage: imageFills[1],
+    ...(() => {
+      const style = lineStyle(
+        child(child(plotArea, "spPr"), "ln"),
+        "transparent",
+      );
+      return { plotLineColor: style.lineColor, plotLineWidth: style.lineWidth };
+    })(),
+    annotations,
     approximate:
-      plots.some((p) => ["unsupported", "radar"].includes(p.kind)) ||
+      approximateImages ||
+      all(plotArea, "symbol").some(
+        (node) =>
+          val(node) !== "auto" &&
+          val(node) !== "none" &&
+          !CHART_MARKER_SYMBOLS.includes(val(node) as ChartMarkerSymbol),
+      ) ||
+      plots.some((p) => p.kind === "unsupported") ||
+      (plots.some((p) => p.kind === "radar") &&
+        !canPreviewRadar(plots, xAxis, yAxis, blankMode)) ||
       all(plotArea, "valAx").length >
         (plots.every((p) => p.kind === "scatter") ? 2 : 1) ||
       Array.from(plotArea?.children ?? []).some((p) =>
         p.localName.includes("3D"),
       ),
   };
+}
+
+type PreviewEntry = {
+  root: string;
+  fontFamily: string;
+  colors: [string, string][];
+  parts: { path: string; data: string }[];
+  relationships: ChartData["parts"][number]["relationships"];
+  model: ChartModel;
+};
+const previewModels = new WeakMap<ChartData, PreviewEntry>();
+function freezePreview(value: object): void {
+  for (const item of Object.values(value))
+    if (item && typeof item === "object") freezePreview(item);
+  Object.freeze(value);
+}
+
+/** Share immutable parsed artwork between thumbnail/editor/presenter views.
+ * Weak keys release it with its source chart. Snapshot comparisons deliberately
+ * also invalidate in-place source/theme mutations, rather than assuming every
+ * importer and clipboard caller will always allocate a new ChartData object.
+ */
+export function readChartPreview(data: ChartData): ChartModel {
+  const previous = previewModels.get(data),
+    relationships =
+      data.parts.find((part) => part.path === data.root)?.relationships ?? [];
+  if (
+    previous &&
+    previous.root === data.root &&
+    previous.fontFamily === data.fontFamily &&
+    previous.colors.length === Object.keys(data.colors).length &&
+    previous.colors.every(([key, value]) => data.colors[key] === value) &&
+    previous.parts.length === data.parts.length &&
+    previous.parts.every(
+      (part, index) =>
+        part.path === data.parts[index].path &&
+        part.data === data.parts[index].data,
+    ) &&
+    previous.relationships.length === relationships.length &&
+    previous.relationships.every(
+      (rel, index) =>
+        rel.id === relationships[index].id &&
+        rel.type === relationships[index].type &&
+        rel.target === relationships[index].target &&
+        rel.external === relationships[index].external,
+    )
+  )
+    return previous.model;
+  const model = readChartModel(data);
+  freezePreview(model);
+  previewModels.set(data, {
+    root: data.root,
+    fontFamily: data.fontFamily,
+    colors: Object.entries(data.colors),
+    parts: data.parts.map(({ path, data }) => ({ path, data })),
+    relationships: relationships.map((relationship) => ({ ...relationship })),
+    model,
+  });
+  return model;
 }

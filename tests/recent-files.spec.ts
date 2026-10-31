@@ -93,7 +93,7 @@ test("editing buffer updates do not create a stored copy for every document", as
       request.onerror = () => reject(request.error);
     });
   });
-  expect(keys).toEqual(["current"]);
+  expect(keys).toEqual(["current", "current-revision"]);
 });
 
 test("recent files deduplicate real paths, preserve distinct folders and remove deleted files after restart", async () => {

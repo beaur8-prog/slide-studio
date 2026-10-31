@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('desktop', Object.freeze({
     return () => ipcRenderer.removeListener('slide-studio:presentation-ended', listener);
   },
   saveFile: payload => ipcRenderer.invoke('slide-studio:save-file', payload),
+  saveRecoveryData: payload => ipcRenderer.invoke('slide-studio:save-recovery-data', payload),
   openFile: () => ipcRenderer.invoke('slide-studio:open-file'),
   takeRequestedFile: () => ipcRenderer.invoke('slide-studio:take-requested-file'),
   onOpenRequested: callback => {

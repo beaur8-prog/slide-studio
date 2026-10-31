@@ -7,6 +7,7 @@ import type {
 } from "react";
 import type { SlideElement, TableCellFormat, TableData } from "./types";
 import { fontStack } from "./text-layout";
+import { textDirectionStyle } from "./text-direction";
 import { TextContent } from "./TextContent";
 import { tableBorderSegments } from "./table-borders";
 import NumberInput from "./NumberInput";
@@ -14,6 +15,11 @@ import EditableText from "./EditableText";
 import type { TextFormatRange } from "./text-formatting";
 import type { TextEdit } from "./text-layout";
 import { parseTableClipboard, pasteTableClipboard } from "./table-clipboard";
+import {
+  copyStudioTable,
+  readStudioTable,
+  pasteStudioTable,
+} from "./table-exchange";
 import {
   changeTableAxis,
   applyTableCellFormat,
@@ -159,6 +165,18 @@ export function TableVisual({
                     overflow: "visible",
                     whiteSpace: "pre-wrap",
                     overflowWrap: "anywhere",
+                    ...(style.writingMode !== "horizontal"
+                      ? {
+                          ...textDirectionStyle(style.writingMode),
+                          width: "100%",
+                          height: "100%",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: style.verticalAlign === "middle"
+                            ? "center" : style.verticalAlign === "bottom"
+                              ? "flex-end" : "flex-start",
+                        }
+                      : {}),
                   }}
                 >
                   {inlineEditing?.row === r && inlineEditing.column === c ? (
@@ -199,6 +217,7 @@ export function TableVisual({
                         italic: style.italic,
                         underline: style.underline,
                         align: style.align,
+                        writingMode: style.writingMode,
                       }}
                     />
                   ) : (
@@ -380,20 +399,9 @@ export default function TableEditor({
     if (selectionCount < 2 || composing.current) return;
     event.preventDefault();
     event.stopPropagation();
-    const quote = (text: string) =>
-      /[\t\n\r"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-    event.clipboardData.setData(
-      "text/plain",
-      draft.cells
-        .slice(range.startRow, range.endRow + 1)
-        .map((row) =>
-          row
-            .slice(range.startColumn, range.endColumn + 1)
-            .map(quote)
-            .join("\t"),
-        )
-        .join("\n"),
-    );
+    const copied = copyStudioTable(draft, range, elementSize);
+    event.clipboardData.setData("text/plain", copied.text);
+    event.clipboardData.setData("text/html", copied.html);
     event.clipboardData.setData("application/x-slide-studio-table", "1");
     if (event.type === "cut") clearCells();
   };
@@ -809,11 +817,10 @@ export default function TableEditor({
                       value={text}
                       onPaste={(event) => {
                         const text = event.clipboardData.getData("text/plain");
+                        const html = event.clipboardData.getData("text/html");
                         if (
                           !text.includes("\t") &&
-                          !event.clipboardData
-                            .getData("text/html")
-                            .includes("<table") &&
+                          !/<table(?:\s|>)/i.test(html) &&
                           !event.clipboardData.getData(
                             "application/x-slide-studio-table",
                           )
@@ -822,8 +829,15 @@ export default function TableEditor({
                         event.preventDefault();
                         event.stopPropagation();
                         try {
-                          const source = parseTableClipboard(text);
-                          setDraft(pasteTableClipboard(draft, r, c, source));
+                          const rich = html ? readStudioTable(html) : null;
+                          const source =
+                            rich?.cells ?? parseTableClipboard(text);
+                          setDraft(
+                            rich
+                              ? pasteStudioTable(draft, r, c, rich)
+                              : pasteTableClipboard(draft, r, c, source),
+                          );
+                          setError("");
                           setAnchor({ row: r, column: c });
                           setSelected({
                             row: r + source.length - 1,
@@ -1021,18 +1035,27 @@ export default function TableEditor({
               ] as const
             ).map(([key, label, min, max]) => (
               <label key={key}>
-                {label}{key === "fontSize" ? " (pt)" : ""}
+                {label}
+                {key === "fontSize" ? " (pt)" : ""}
                 <NumberInput
                   aria-label={label}
                   min={key === "fontSize" ? pixelsToPoints(min) : min}
                   max={key === "fontSize" ? pixelsToPoints(max) : max}
                   step={key === "fontSize" ? 0.1 : 1}
                   value={
-                    key === "fontSize" ? pixelsToPoints(formatTarget === "selection" ? format[key] : draft[key])
-                    : formatTarget === "selection" ? format[key] : draft[key]
+                    key === "fontSize"
+                      ? pixelsToPoints(
+                          formatTarget === "selection"
+                            ? format[key]
+                            : draft[key],
+                        )
+                      : formatTarget === "selection"
+                        ? format[key]
+                        : draft[key]
                   }
                   onChange={(input) => {
-                    const value = key === "fontSize" ? pointsToPixels(input) : input;
+                    const value =
+                      key === "fontSize" ? pointsToPixels(input) : input;
                     if (
                       Number.isFinite(value) &&
                       value >= min &&

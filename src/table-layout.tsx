@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { TextContent } from "./TextContent";
 import { textStyle } from "./text-geometry";
+import { textDirectionStyle } from "./text-direction";
 import {
   tableCellStyle,
   tableSizes,
@@ -8,6 +9,58 @@ import {
   tableMerge,
 } from "./table";
 import type { SlideElement } from "./types";
+
+function measureCellText(measure: HTMLElement, element: SlideElement): number {
+  const vertical = !!element.writingMode && element.writingMode !== "horizontal";
+  const model = {
+    ...element,
+    autoHeight: !vertical,
+    wrap: true,
+    verticalAlign: "top" as const,
+  };
+  const minimum = Math.max(1, (vertical ? 1 : (element.fontSize ?? 24) * 1.2) +
+    (element.textInsets?.[0] ?? 0) + (element.textInsets?.[2] ?? 0));
+  const render = (height: number) => {
+    measure.innerHTML = renderToStaticMarkup(
+      <div style={{
+        ...textStyle(model),
+        ...textDirectionStyle(model.writingMode),
+        display: "flex",
+        flexDirection: "column",
+        boxSizing: "border-box",
+        width: Math.max(1, element.width),
+        height: vertical ? height : "auto",
+        lineHeight: 1.2,
+      }}><TextContent element={model} /></div>,
+    );
+    return measure.firstElementChild as HTMLElement;
+  };
+  if (!vertical) return Math.max(1, render(0).getBoundingClientRect().height);
+
+  // For rotated/stacked text, explicit line breaks create columns. Measuring
+  // them as ordinary horizontal rows incorrectly makes the table very tall.
+  // Keep the authored height when its columns fit, otherwise grow the inline
+  // extent until wrapping fits the available physical cell width.
+  let lower = Math.max(minimum, element.height), upper = lower;
+  const largestFont = Math.max(element.fontSize ?? 24,
+    ...(element.paragraphs ?? []).flatMap((p) => [p.fontSize ?? 0, ...p.runs.map((r) => r.fontSize ?? 0)]));
+  const longestLine = (element.text ?? "").split("\n").reduce((n, line) => Math.max(n, line.length), 1);
+  const limit = Math.max(lower, Math.min(100000, longestLine * largestFont * 2 + minimum));
+  const fits = (height: number) => {
+    const box = render(height);
+    return box.scrollWidth <= box.clientWidth + 1 && box.scrollHeight <= box.clientHeight + 1;
+  };
+  if (fits(lower)) return lower;
+  while (upper < limit && !fits(upper)) upper = Math.min(limit, upper * 2);
+  // Too many explicit columns (or a cell narrower than one glyph) cannot be
+  // repaired by making the row taller. Preserve its minimum in that case.
+  if (!fits(upper)) return Math.max(minimum, element.height);
+  for (let i = 0; i < 12 && upper - lower > 0.5; i++) {
+    const middle = (lower + upper) / 2;
+    if (fits(middle)) upper = middle; else lower = middle;
+  }
+  return upper;
+}
 
 /** Intrinsic cell heights at the imported widths, including wraps and insets. */
 export async function measureTableText(
@@ -23,30 +76,7 @@ export async function measureTableText(
   });
   document.body.append(measure);
   const heights = () =>
-    elements.map((element) => {
-      const model = {
-        ...element,
-        autoHeight: true,
-        wrap: true,
-        verticalAlign: "top" as const,
-      };
-      measure.innerHTML = renderToStaticMarkup(
-        <div
-          style={{
-            ...textStyle(model),
-            display: "flex",
-            flexDirection: "column",
-            boxSizing: "border-box",
-            width: Math.max(1, element.width),
-            height: "auto",
-            lineHeight: 1.2,
-          }}
-        >
-          <TextContent element={model} />
-        </div>,
-      );
-      return Math.max(1, measure.getBoundingClientRect().height);
-    });
+    elements.map((element) => measureCellText(measure, element));
   try {
     let result = heights();
     // Laying out the cells requests their bundled/local font faces. Recheck
@@ -168,25 +198,12 @@ export function fitTableRows(
         textColumns: 1,
         fill: "transparent",
         strokeWidth: 0,
+        width: Math.max(1, width - horizontalBorder),
+        height: Math.max(1, heights.slice(row, row + span).reduce((a, b) => a + b, 0) - verticalBorder),
         textInsets: style.textInsets ?? [padding, padding, padding, padding],
       } as SlideElement;
-      measure.innerHTML = renderToStaticMarkup(
-        <div
-          style={{
-            ...textStyle(model),
-            display: "flex",
-            flexDirection: "column",
-            boxSizing: "border-box",
-            width: Math.max(1, width - horizontalBorder),
-            height: "auto",
-            lineHeight: 1.2,
-          }}
-        >
-          <TextContent element={model} />
-        </div>,
-      );
       const need = Math.ceil(
-          measure.getBoundingClientRect().height + verticalBorder,
+          measureCellText(measure, model) + verticalBorder,
         ),
         current = heights.slice(row, row + span).reduce((a, b) => a + b, 0);
       if (need > current + 0.5)

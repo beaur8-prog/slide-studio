@@ -59,6 +59,7 @@ for (const platform of ['win32', 'darwin']) {
     let installedMenu: any[] = [];
     let destroyed = false;
     const clipboardActions: string[] = [];
+    let aboutShown = 0;
     const contents = {
       copy() { clipboardActions.push("copy"); },
       cut() { clipboardActions.push("cut"); },
@@ -74,6 +75,7 @@ for (const platform of ['win32', 'darwin']) {
         app: {
           isPackaged: true, setName() {}, setPath() {}, getPath() { return '/tmp'; },
           setAppUserModelId() {}, requestSingleInstanceLock() { return false; }, quit() {},
+          showAboutPanel() { aboutShown++; },
         },
         BrowserWindow: class {
           webContents = contents;
@@ -105,6 +107,8 @@ for (const platform of ['win32', 'darwin']) {
     expect(saveItem).toBeTruthy();
     const updateMenu = installedMenu.find(item => item.label === '도움말')?.submenu;
     expect(updateMenu?.find((item: any) => item.label === '업데이트 확인…')).toBeTruthy();
+    updateMenu?.find((item: any) => item.label === 'Slide Studio 정보').click();
+    expect(aboutShown).toBe(1);
     saveItem.click();
     expect(sentActions).toEqual([['slide-studio:menu', 'save']]);
     expect(options.webPreferences).toMatchObject({ contextIsolation: true, nodeIntegration: false, sandbox: true });

@@ -254,7 +254,11 @@ function installMenu() {
     ] },
     { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' },
       ...(process.platform === 'darwin' ? [{ role: 'front' }] : [])] },
-    { label: '도움말', submenu: updates.menuTemplate() },
+    { label: '도움말', submenu: [
+      ...updates.menuTemplate(),
+      { type: 'separator' },
+      { label: 'Slide Studio 정보', click: () => app.showAboutPanel() },
+    ] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

@@ -3,6 +3,7 @@ import {
   textUndoCheckpoints,
   type TextUndoSession,
 } from "./text-undo";
+import { version as appVersion } from "../package.json";
 import { isVideoFile, readVideo, VIDEO_ACCEPT } from "./video";
 import { isAudioFile, readAudio, AUDIO_ACCEPT } from "./audio";
 import { AUDIO_ICON } from "./audio-icon";
@@ -3820,9 +3821,10 @@ export default function App() {
             <span className="brand-mark">
               <Presentation size={21} />
             </span>
-            <span>
+            <span className="brand-name">
               Slide<span className="brand-light"> Studio</span>
             </span>
+            <small className="app-version" aria-label={`앱 버전 ${appVersion}`}>v{appVersion}</small>
           </button>
           <div className="top-separator" />
           <div className="document-title">
@@ -4134,6 +4136,7 @@ export default function App() {
                   <Keyboard size={16} />
                   키보드 단축키
                 </button>
+                <div className="file-current">Slide Studio v{appVersion}</div>
               </div>
             )}
           </div>

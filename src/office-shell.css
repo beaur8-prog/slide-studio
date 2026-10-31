@@ -44,6 +44,7 @@
 .office-shell .brand-mark { width: 23px; height: 23px; border-radius: 3px; background: #c25436; }
 .office-shell .brand-mark svg { width: 17px; height: 17px; }
 .office-shell .brand-light { color: inherit; }
+.office-shell .app-version { font-size: 10px; font-weight: 400; color: var(--chrome-secondary); letter-spacing: 0; }
 .office-shell .top-separator { display: none; }
 .office-shell .document-title { flex: 1; min-width: 120px; max-width: 330px; flex-direction: row; align-items: center; gap: 10px; }
 .office-shell .document-title input { font-size: 12px; font-weight: 400; color: var(--chrome-text); }
@@ -194,7 +195,7 @@
 .command-footer { padding: 9px 12px; font-size: 10px; color: var(--chrome-secondary); border-top: 1px solid var(--chrome-border); }
 @media (max-width: 1250px) {
   .office-shell .topbar { gap: 9px; }
-  .office-shell .app-brand > span:last-child { display: none; }
+  .office-shell .app-brand .brand-name { display: none; }
   .office-shell .document-title { max-width: 230px; }
   .office-shell .save-indicator > span { display: none; }
   .office-shell .document-actions .export-button { padding: 0 7px; }

@@ -45,9 +45,14 @@ for (const platform of ["win32", "darwin"]) test(`${platform} recovery IPC only 
     expect(app.dialogs.at(-1).filters).toEqual([{ name: "Recovery data", extensions: ["json"] }]);
     expect(app.dialogs.at(-1).defaultPath).toBe(path.join(root, "한글 복구.json"));
     const output = path.join(root, "기존.json"); await fs.writeFile(output, "old recovery"); await fs.chmod(output, 0o640);
+    // VM platform labels do not change the real host filesystem. Windows
+    // exposes writable mode bits differently from POSIX, so preserve what the
+    // host actually reports while keeping a strict Unix fixture assertion.
+    const originalMode = (await fs.stat(output)).mode & 0o777;
+    if (process.platform !== "win32") expect(originalMode).toBe(0o640);
     app.replies.push({ canceled: false, filePath: output });
     expect(await app.call(payload)).toBe(true); expect([...await fs.readFile(output)]).toEqual([...data]);
-    expect((await fs.stat(output)).mode & 0o777).toBe(0o640);
+    expect((await fs.stat(output)).mode & 0o777).toBe(originalMode);
     expect(app.contexts.get(issued.token).path).toBe(input); expect(app.contexts.files.size).toBe(1);
     expect(await fs.readFile(input, "utf8")).toBe("source PPTX");
     expect(await fs.readdir(root)).not.toContain("recent-presentations.json");

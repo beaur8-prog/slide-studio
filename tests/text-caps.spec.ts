@@ -247,12 +247,35 @@ test("CSS capitals preserve Unicode source, logical selection/search offsets and
         range.startOffset,
       ),
       end = textPointOffset(host, range.endContainer, range.endOffset);
-    const small = spans[1],
-      smallRange = document.createRange();
-    smallRange.selectNodeContents(small);
-    const withSynthesis = smallRange.getBoundingClientRect().width;
-    (small as HTMLElement).style.fontSynthesis = "style";
-    const withoutSynthesis = smallRange.getBoundingClientRect().width;
+    const small = spans[1];
+    // OS Arial and mixed-script fallback can have different native shaping
+    // behavior. Use the same shipped Latin font on every platform; Carlito's
+    // GSUB has no smcp/c2sc feature, so this exercises actual glyph synthesis.
+    const face = new FontFace(
+      "Caps QA Latin",
+      'url("/node_modules/@fontsource/carlito/files/carlito-latin-400-normal.woff2") format("woff2")',
+    );
+    await face.load();
+    document.fonts.add(face);
+    const probeElement = element("text", {
+      fontSize: 32,
+      fontFamily: "Caps QA Latin",
+      text: "mixed alphabet",
+      paragraphs: [{ runs: [{ text: "mixed alphabet", caps: "small" }] }],
+    });
+    const probe = document.createElement("div");
+    Object.assign(probe.style, textStyle(probeElement));
+    probe.innerHTML = renderToStaticMarkup(
+      React.createElement(TextContent, { element: probeElement }),
+    );
+    document.body.append(probe);
+    const probeSpan = probe.querySelector("[data-text-line] > span") as HTMLElement;
+    const synthesisCss = getComputedStyle(probeSpan).fontSynthesis;
+    const probeRange = document.createRange();
+    probeRange.selectNodeContents(probeSpan);
+    const smallWidth = probeRange.getBoundingClientRect().width;
+    probeSpan.style.fontVariantCaps = "normal";
+    const normalWidth = probeRange.getBoundingClientRect().width;
     const deck = blankDeck();
     deck.slides[0].elements = [e];
     const matches = findDocumentText(deck, "Straße", {
@@ -274,8 +297,10 @@ test("CSS capitals preserve Unicode source, logical selection/search offsets and
       })),
       allCss: getComputedStyle(first).textTransform,
       smallCss: getComputedStyle(small).fontVariantCaps,
-      withSynthesis,
-      withoutSynthesis,
+      probeFontStatus: face.status,
+      synthesisCss,
+      smallWidth,
+      normalWidth,
     };
   });
   expect(result.raw).toBe(result.source);
@@ -286,7 +311,9 @@ test("CSS capitals preserve Unicode source, logical selection/search offsets and
   expect(result.matches).toEqual([{ value: "Straße", start: 0, end: 6 }]);
   expect(result.allCss).toBe("uppercase");
   expect(result.smallCss).toBe("small-caps");
-  expect(result.withSynthesis).not.toBe(result.withoutSynthesis);
+  expect(result.probeFontStatus).toBe("loaded");
+  expect(result.synthesisCss).toBe("style small-caps");
+  expect(Math.abs(result.smallWidth - result.normalWidth)).toBeGreaterThan(1);
 });
 
 test("partial italic changes only Beta while capitalization, raw text, Undo/Redo and PPTX survive", async ({

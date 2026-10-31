@@ -32,6 +32,18 @@ jobs:
       - name: Build private Windows Setup
         if: runner.os == 'Windows'
         run: node scripts/package-win-setup.cjs
+      # Run first: the normal app QA deliberately leaves profile/sentinel files.
+      - name: Verify Windows file associations preserve other applications
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $qaProfileDirectory = Join-Path $env:APPDATA 'Slide Studio'
+          if (Test-Path $qaProfileDirectory) { throw 'Refusing registration QA with a pre-existing user profile' }
+          $report = Join-Path $PWD 'qa/results/windows-setup-native'
+          New-Item -ItemType Directory -Path $report -Force | Out-Null
+          ./scripts/qa-windows-file-registration.ps1 -Setup (Join-Path $PWD 'release/Slide-Studio-Setup-x64.exe') 2>&1 | Tee-Object -FilePath (Join-Path $report 'file-registration.log')
+          if (Test-Path $qaProfileDirectory) { throw 'Registration-only QA unexpectedly created a user profile' }
       - name: Install, exercise, reinstall and remove Windows package
         if: runner.os == 'Windows'
         shell: pwsh

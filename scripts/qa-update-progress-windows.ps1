@@ -97,8 +97,11 @@ try {
       } finally { $graphics.Dispose(); $bitmap.Dispose() }
     }
     if (Test-Path $log) {
-      $observed = Get-Content $log -Raw -Encoding utf8 | ConvertFrom-Json
-      if ($observed.status -eq 'failed') { throw "Update helper reported: $($observed.message)" }
+      $observed = $null
+      # The app atomically consumes this log after restarting; a diagnostic
+      # read may race that rename or the helper's initial write.
+      try { $observed = Get-Content $log -Raw -Encoding utf8 | ConvertFrom-Json } catch {}
+      if ($null -ne $observed -and $observed.status -eq 'failed') { throw "Update helper reported: $($observed.message)" }
     }
     if ([DateTime]::UtcNow -gt $deadline) { throw 'Update helper timed out.' }
     Start-Sleep -Milliseconds 150
@@ -106,8 +109,12 @@ try {
   $helper.WaitForExit()
   Assert-True ($helper.ExitCode -eq 0) "Update helper failed: $($helper.ExitCode)"
   Assert-True $sawProgress 'The real Windows update progress window was not observed.'
-  $resultFile = if (Test-Path $log) { $log } else { Join-Path $profile 'updates/last-install-seen.log' }
-  $result = Get-Content $resultFile -Raw -Encoding utf8 | ConvertFrom-Json
+  $result = $null
+  foreach ($candidate in @($log, (Join-Path $profile 'updates/last-install-seen.log'))) {
+    try { $result = [IO.File]::ReadAllText($candidate) | ConvertFrom-Json; break }
+    catch [IO.FileNotFoundException] { continue }
+  }
+  Assert-True ($null -ne $result) 'No installation result was retained.'
   Assert-True ($result.status -eq 'installed' -and $result.version -eq $Version) 'No verified install result.'
   Assert-True ($result.steps.Count -eq 5) 'Missing installation stages.'
   Assert-True (@($result.steps | Where-Object { -not $_.visible }).Count -eq 0) 'A progress stage was hidden.'
@@ -121,7 +128,9 @@ try {
     Start-Sleep -Milliseconds 150
   } while ([DateTime]::UtcNow -lt $deadline)
   Assert-True ($null -ne $restarted) 'Updated app was not restarted.'
-  Copy-Item $resultFile (Join-Path $report 'install-result.json')
+  # Preserve the already-validated snapshot instead of reopening a path that
+  # the restarted app is allowed to rename at any moment.
+  $result | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $report 'install-result.json') -Encoding utf8NoBOM
   [ordered]@{ version=$Version; actualWindowsPowerShell=$true; realSetup=$true; initialInstall=$true;
     progressWindowObserved=$sawProgress; visibleStages=$result.steps.Count; versionVerified=$true;
     userDataPreserved=$true; restarted=$true; limitation='Reinstalls the supplied version; an actual older-to-newer upgrade is not performed. JS tests cover newer-version selection and quit guards.' } |
@@ -139,7 +148,7 @@ try {
   if ($null -ne $helper) { [UpdateWindowProbe]::Describe($helper.Id) | ConvertTo-Json | Set-Content (Join-Path $report 'remaining-windows.json') -Encoding utf8NoBOM }
   foreach ($resultName in @('last-install.log','last-install-seen.log')) {
     $diagnostic = Join-Path $profile ('updates/' + $resultName)
-    if (Test-Path $diagnostic) { Copy-Item $diagnostic (Join-Path $report ($resultName + '.json')) }
+    if (Test-Path $diagnostic) { Copy-Item $diagnostic (Join-Path $report ($resultName + '.json')) -ErrorAction SilentlyContinue }
   }
   # These processes can only be the ones created above, on an initially clean CI runner.
   if ($null -ne $helper -and -not $helper.HasExited) { $helper.Kill(); $helper.WaitForExit() }

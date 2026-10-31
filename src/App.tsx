@@ -4,6 +4,8 @@ import {
   type TextUndoSession,
 } from "./text-undo";
 import { version as appVersion } from "../package.json";
+import UpdateDialog from "./UpdateDialog";
+import { useAppUpdates, updateLabels } from "./updates";
 import { isVideoFile, readVideo, VIDEO_ACCEPT } from "./video";
 import { isAudioFile, readAudio, AUDIO_ACCEPT } from "./audio";
 import { AUDIO_ICON } from "./audio-icon";
@@ -212,6 +214,7 @@ type History = {
 };
 type Tab = "home" | "insert" | "design" | "transitions" | "slideshow" | "view";
 type Modal =
+  | "updates"
   | "recovery"
   | "image-crop"
   | "fonts"
@@ -418,6 +421,7 @@ function LibraryContents({
 }
 
 export default function App() {
+  const updates = useAppUpdates();
   const printRendering = usePrintRendering();
   const [history, setHistory] = useState<History>(() => ({
     past: [],
@@ -3069,6 +3073,11 @@ export default function App() {
     window.addEventListener("paste", paste);
     return () => window.removeEventListener("paste", paste);
   });
+  const openUpdates = (check = false) => {
+    if (busy || savingPptx.current || printing.current || presentationActive.current || modal && modal !== "updates") return;
+    finish(); setEditing(null); setMenu(null); setModal("updates");
+    if (check) void updates.run("check");
+  };
   useEffect(() =>
     window.desktop?.onMenu((action) => {
       if (presentationActive.current) {
@@ -3097,6 +3106,8 @@ export default function App() {
       if (action === "export-pdf") void exportPdf();
       if (action === "print") void printDeck();
       if (action === "present") startPresent();
+      if (action === "updates-check") openUpdates(true);
+      if (action === "updates-manual") openUpdates();
     }),
   );
 
@@ -4136,6 +4147,11 @@ export default function App() {
                   <Keyboard size={16} />
                   키보드 단축키
                 </button>
+                {window.desktop?.getUpdateState && <>
+                  <hr/>
+                  <button onClick={() => openUpdates(true)}><LoaderCircle size={16}/>업데이트 확인…</button>
+                  <button onClick={() => openUpdates()}><FileDown size={16}/>수동 업데이트…</button>
+                </>}
                 <div className="file-current">Slide Studio v{appVersion}</div>
               </div>
             )}
@@ -5783,6 +5799,11 @@ export default function App() {
               가져오기 안내 ({warnings.length})
             </button>
           )}
+          {window.desktop?.getUpdateState && <button className={`update-status ${["checking", "downloading", "verifying", "ready", "installing", "error", "installed"].includes(updates.state?.phase || "") ? "active" : ""}`}
+            aria-label="업데이트 상태 보기" title="업데이트 상태 보기" onClick={() => openUpdates()}>
+            <LoaderCircle size={13} className={["checking", "downloading", "verifying"].includes(updates.state?.phase || "") ? "spin" : ""}/>
+            {updateLabels[updates.state?.phase || "idle"]}{updates.state?.phase === "downloading" ? ` ${updates.state.percent}%` : ""}
+          </button>}
           <span className="footer-spacer" />
           <button
             className={notesVisible ? "on" : ""}
@@ -6071,6 +6092,7 @@ export default function App() {
           </div>
         </div>
       )}
+      {modal === "updates" && <UpdateDialog updates={updates} onClose={() => setModal(null)} />}
       {modal === "recovery" && <RecoveryBackups blocked={autosaveBlocked} onRetry={retryRecovery} onClose={() => setModal(null)} />}
       {modal && ["new", "library", "shortcuts", "import"].includes(modal) && (
         <div

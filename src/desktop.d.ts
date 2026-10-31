@@ -1,10 +1,20 @@
 import type { RecentPresentationFile, PresentationFileContext, OpenPresentationFile } from "./types";
+import type { AppUpdateState } from "./updates";
 
 declare global {
   interface Window {
     desktop?: {
       readonly platform?: string;
       readonly windowSessionId?: string;
+      getUpdateState?(): Promise<AppUpdateState>;
+      checkUpdates?(): Promise<AppUpdateState>;
+      downloadUpdate?(): Promise<AppUpdateState>;
+      installUpdate?(): Promise<AppUpdateState>;
+      cancelUpdate?(): Promise<AppUpdateState>;
+      revealUpdate?(): Promise<AppUpdateState>;
+      openUpdatePage?(): Promise<AppUpdateState>;
+      setAutomaticUpdates?(enabled: boolean): Promise<AppUpdateState>;
+      onUpdateState?(callback: (state: AppUpdateState) => void): () => void;
       pasteTableClipboard?(): Promise<void>;
       editTextClipboard?(action: "copy" | "cut" | "paste"): Promise<void>;
       loadOfficeCalibriFonts?(): Promise<

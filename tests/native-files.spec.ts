@@ -4,6 +4,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import assert from 'node:assert/strict';
 
 test('native file transport accepts typed byte slices without expanding or leaking surrounding bytes', () => {
   const filename = path.resolve('electron/main.cjs');
@@ -101,12 +102,24 @@ for (const platform of ['win32', 'darwin']) {
     sandbox.installIPC();
     sandbox.installMenu();
     await sandbox.startWindow();
+    for (const command of ['get-update-state', 'check-updates', 'download-update', 'install-update', 'cancel-update', 'reveal-update', 'open-update-page']) {
+      const handler = handlers.get('slide-studio:' + command)!;
+      expect(handler).toBeTruthy();
+      await assert.rejects(handler({ sender: {}, senderFrame: contents.mainFrame }), /editor window/);
+      await assert.rejects(handler({ sender: contents, senderFrame: { url: contents.mainFrame.url } }), /editor window/);
+      await assert.rejects(handler({ sender: contents, senderFrame: contents.mainFrame }, 'C:\\untrusted.exe'), /인수가 필요하지 않습니다/);
+    }
+    await assert.rejects(handlers.get('slide-studio:set-automatic-updates')!({ sender: contents, senderFrame: contents.mainFrame }, 'true'), /올바르지 않습니다/);
+    const updateSnapshot = await handlers.get('slide-studio:get-update-state')!({ sender: contents, senderFrame: contents.mainFrame });
+    expect(updateSnapshot.phase).toBe('idle');
+    expect(updateSnapshot.file).toBeUndefined();
 
     const saveItem = installedMenu.find(item => item.label === 'File')?.submenu
       .find((item: any) => item.accelerator === 'CmdOrCtrl+S');
     expect(saveItem).toBeTruthy();
     const updateMenu = installedMenu.find(item => item.label === '도움말')?.submenu;
     expect(updateMenu?.find((item: any) => item.label === '업데이트 확인…')).toBeTruthy();
+    expect(updateMenu?.find((item: any) => item.label === '수동 업데이트…')).toBeTruthy();
     updateMenu?.find((item: any) => item.label === 'Slide Studio 정보').click();
     expect(aboutShown).toBe(1);
     saveItem.click();
@@ -188,12 +201,18 @@ for (const platform of ['win32', 'darwin']) {
 test('preload exposes an immutable platform and a narrow theme command', async () => {
   let bridge: any;
   const calls: unknown[] = [];
+  const subscriptions = new Map<string, (...args: any[]) => void>();
+  const removed: unknown[] = [];
   const sandbox = {
     process: { platform: 'win32' },
     window: { addEventListener() {} },
     require: () => ({
       contextBridge: { exposeInMainWorld(name: string, value: unknown) { expect(name).toBe('desktop'); bridge = value; } },
-      ipcRenderer: { invoke(...args: unknown[]) { calls.push(args); return Promise.resolve(); } },
+      ipcRenderer: {
+        invoke(...args: unknown[]) { calls.push(args); return Promise.resolve(); },
+        on(channel: string, callback: (...args: any[]) => void) { subscriptions.set(channel, callback); },
+        removeListener(channel: string, callback: unknown) { removed.push([channel, callback]); },
+      },
     }),
   };
   vm.runInNewContext(fs.readFileSync(path.resolve('electron/preload.cjs'), 'utf8'), sandbox);
@@ -204,6 +223,21 @@ test('preload exposes an immutable platform and a narrow theme command', async (
   await bridge.loadOfficeLightFont('ignored/path.ttf');
   await bridge.loadOfficeCalibriFonts('ignored/path.ttf');
   expect(calls).toEqual([['slide-studio:edit-text-clipboard', 'copy'], ['slide-studio:set-chrome-theme', 'light'], ['slide-studio:load-office-light-font'], ['slide-studio:load-office-calibri-fonts']]);
+  await bridge.getUpdateState('/private/ignored');
+  await bridge.checkUpdates('https://untrusted.example');
+  await bridge.downloadUpdate('/private/installer.exe');
+  await bridge.installUpdate(true);
+  await bridge.openUpdatePage('https://untrusted.example');
+  await bridge.setAutomaticUpdates(false);
+  expect(calls.slice(4)).toEqual([['slide-studio:get-update-state'], ['slide-studio:check-updates'], ['slide-studio:download-update'], ['slide-studio:install-update'], ['slide-studio:open-update-page'], ['slide-studio:set-automatic-updates', false]]);
+  const payloads: unknown[] = [];
+  const unsubscribe = bridge.onUpdateState((...args: unknown[]) => payloads.push(args));
+  const listener = subscriptions.get('slide-studio:update-state')!;
+  listener({ privileged: true }, { phase: 'downloading', percent: 42 });
+  expect(payloads).toEqual([[{ phase: 'downloading', percent: 42 }]]);
+  unsubscribe();
+  expect(removed).toEqual([['slide-studio:update-state', listener]]);
+  expect(() => bridge.onUpdateState(null)).toThrow();
   expect(bridge.invoke).toBeUndefined();
   expect(bridge.send).toBeUndefined();
 });

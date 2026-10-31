@@ -61,8 +61,16 @@ async function withCaptureOperation(event, task) {
 app.setName(PRODUCT_NAME);
 const customUserData=app.commandLine?.getSwitchValue?.('user-data-dir')||'';
 app.setPath('userData',customUserData&&path.isAbsolute(customUserData)?path.resolve(customUserData):path.join(app.getPath('appData'), PRODUCT_NAME));
-const updates = createStudioUpdater({ app, dialog, shell, Notification, id: 'slide', getWindow: () => mainWindow, platform: process.platform, arch: process.arch });
-updates.onChange(installMenu);
+const updates = createStudioUpdater({ app, dialog, shell, Notification, id: 'slide', getWindow: () => mainWindow, platform: process.platform, arch: process.arch,
+  onOpen: () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    mainWindow.show(); mainWindow.focus(); sendMenuAction('updates-manual'); return true;
+  },
+});
+updates.onChange(() => {
+  installMenu();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('slide-studio:update-state', updates.getState());
+});
 if (process.platform === 'win32') app.setAppUserModelId('local.slidestudio.app');
 
 function isTrustedURL(value) {
@@ -255,7 +263,8 @@ function installMenu() {
     { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' },
       ...(process.platform === 'darwin' ? [{ role: 'front' }] : [])] },
     { label: '도움말', submenu: [
-      ...updates.menuTemplate(),
+      ...updates.menuTemplate().map((item, index) => index === 0 ? { ...item, enabled: updates.getState().phase !== 'installing', click: () => sendMenuAction('updates-check') } : item),
+      { label: '수동 업데이트…', click: () => sendMenuAction('updates-manual') },
       { type: 'separator' },
       { label: 'Slide Studio 정보', click: () => app.showAboutPanel() },
     ] },
@@ -284,6 +293,30 @@ async function readPresentationFile(filename) {
 }
 
 function installIPC() {
+  const updateCommands = {
+    'get-update-state': () => updates.getState(),
+    'check-updates': () => updates.checkOnly(),
+    'download-update': () => updates.downloadUpdate(),
+    'install-update': () => updates.installNow(),
+    'cancel-update': () => updates.cancelDownload(),
+    'reveal-update': () => updates.revealDownload(),
+    'open-update-page': () => updates.openReleasePage(),
+  };
+  for (const [command, run] of Object.entries(updateCommands)) {
+    ipcMain.handle('slide-studio:' + command, async (event, ...args) => {
+      requireTrustedSender(event);
+      if (args.length) throw new TypeError('업데이트 요청에는 경로나 인수가 필요하지 않습니다.');
+      if (command === 'install-update' && (nativeOperationPending || captureOperationPending || presentationWindowController?.isPresenting)) throw new Error('열려 있는 창이나 발표를 마친 뒤 업데이트해 주세요.');
+      await run();
+      return updates.getState();
+    });
+  }
+  ipcMain.handle('slide-studio:set-automatic-updates', async (event, enabled, ...args) => {
+    requireTrustedSender(event);
+    if (typeof enabled !== 'boolean' || args.length) throw new TypeError('자동 업데이트 설정이 올바르지 않습니다.');
+    await updates.setAutomatic(enabled);
+    return updates.getState();
+  });
   ipcMain.handle('slide-studio:take-requested-file', (event, ...args) => {
     requireTrustedSender(event);
     if (args.length) throw new TypeError('파일 열기 요청에는 경로나 인수가 필요하지 않습니다.');

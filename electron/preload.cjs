@@ -5,6 +5,20 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', Object.freeze({
   platform: process.platform,
   windowSessionId: (process.argv || []).find(arg => arg.startsWith('--slide-studio-window-session='))?.split('=')[1],
+  getUpdateState: () => ipcRenderer.invoke('slide-studio:get-update-state'),
+  checkUpdates: () => ipcRenderer.invoke('slide-studio:check-updates'),
+  downloadUpdate: () => ipcRenderer.invoke('slide-studio:download-update'),
+  installUpdate: () => ipcRenderer.invoke('slide-studio:install-update'),
+  cancelUpdate: () => ipcRenderer.invoke('slide-studio:cancel-update'),
+  revealUpdate: () => ipcRenderer.invoke('slide-studio:reveal-update'),
+  openUpdatePage: () => ipcRenderer.invoke('slide-studio:open-update-page'),
+  setAutomaticUpdates: enabled => ipcRenderer.invoke('slide-studio:set-automatic-updates', enabled),
+  onUpdateState: callback => {
+    if (typeof callback !== 'function') throw new TypeError('An update callback is required.');
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('slide-studio:update-state', listener);
+    return () => ipcRenderer.removeListener('slide-studio:update-state', listener);
+  },
   pasteTableClipboard: () => ipcRenderer.invoke('slide-studio:paste-table-clipboard'),
   editTextClipboard: action => ipcRenderer.invoke('slide-studio:edit-text-clipboard', action),
   loadOfficeCalibriFonts: () => ipcRenderer.invoke('slide-studio:load-office-calibri-fonts'),

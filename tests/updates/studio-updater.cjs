@@ -6,7 +6,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { EventEmitter } = require('node:events');
 const { createHash } = require('node:crypto');
-const { createStudioUpdater, selectRelease, selectMacRelease, newer, readJSON, download, powershellCommand } = require('../../electron/studio-updater.cjs');
+const { createStudioUpdater, selectRelease, selectMacRelease, newer, readJSON, download, powershellCommand, readInstallResult } = require('../../electron/studio-updater.cjs');
 
 const bytes = Buffer.from('verified installer bytes');
 const sha256 = createHash('sha256').update(bytes).digest('hex');
@@ -115,7 +115,10 @@ test('Windows install waits for the real quit event after save/close guards', as
   f.app.emit('quit');
   assert.equal(f.launched.length,1);
   const command = Buffer.from(f.launched[0][1].at(-1),'base64').toString('utf16le');
-  assert.ok(command.includes('WaitForExit(120000)'));
+  assert.ok(command.includes('Wait-WithProgress $parent 120000'));
+  assert.ok(command.includes('[System.Windows.Forms.Application]::DoEvents()'));
+  assert.ok(command.includes("Show-Progress \"$($job.version) 버전을 설치하는 중…\""));
+  assert.ok(f.launched[0][1].includes('-STA'));
   assert.ok(command.includes('Get-FileHash'));
   assert.ok(!command.includes('Stop-Process') && !command.includes('taskkill') && !command.includes('ExecutionPolicy'));
 });
@@ -175,4 +178,94 @@ test('PowerShell job paths are data, including apostrophes and command character
   const command = Buffer.from(powershellCommand('param($JobFile)\nWrite-Output $JobFile',"C:\\O'Brien;$x\\job.json"),'base64').toString('utf16le');
   assert.ok(command.endsWith("-JobFile 'C:\\O''Brien;$x\\job.json'"));
   assert.throws(() => powershellCommand('x','bad\npath'));
+});
+
+test('manual check discovers a release without downloading, quitting or opening a modal', async t => {
+  const f = await fixture(t);
+  await f.updater.setAutomatic(false);
+  await f.updater.checkOnly();
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.updater.getState().phase, 'available');
+  assert.equal(f.updater.getState().automatic, false);
+  assert.equal(f.updater.getState().totalBytes, bytes.length);
+  assert.equal(f.dialogs.length, 0); assert.equal(f.quitCalls(), 0);
+});
+test('manual download reports bytes, verification and readiness without installing', async t => {
+  const f = await fixture(t);
+  const states = [];
+  f.updater.onChange(() => states.push(f.updater.getState()));
+  await f.updater.downloadUpdate();
+  assert.deepEqual([...new Set(states.map(s => s.phase))], ['checking', 'downloading', 'verifying', 'ready']);
+  assert.ok(states.some(s => s.phase === 'downloading' && s.receivedBytes === bytes.length && s.percent === 100));
+  assert.equal(f.updater.getState().downloaded, true);
+  assert.equal(f.dialogs.length, 0); assert.equal(f.quitCalls(), 0); assert.equal(f.launched.length, 0);
+  assert.ok(states.every((s, i) => i === 0 || s.revision > states[i - 1].revision));
+});
+test('canceling a stream removes partial downloads, reports cancellation and allows retry', async t => {
+  let complete = false, began;
+  const started = new Promise(resolve => { began = resolve; });
+  const f = await fixture(t, { fetchImpl: async (url, options) => {
+    if (url.includes('api.github.com')) return Response.json(release());
+    if (complete) return new Response(bytes);
+    return new Response(new ReadableStream({ start(controller) {
+      controller.enqueue(bytes.subarray(0, 5));
+      options.signal.addEventListener('abort', () => controller.error(options.signal.reason), { once: true });
+      began();
+    } }));
+  } });
+  const request = f.updater.downloadUpdate();
+  await started;
+  await f.updater.cancelDownload(); await request;
+  assert.equal(f.updater.getState().phase, 'cancelled');
+  assert.deepEqual(await fs.readdir(path.join(f.directory, 'updates', sha256)), []);
+  complete = true;
+  await f.updater.downloadUpdate();
+  assert.equal(f.updater.getState().phase, 'ready');
+});
+test('disabling automatic downloads does not abort an explicitly requested download', async t => {
+  let stream, began;
+  const started = new Promise(resolve => { began = resolve; });
+  const f = await fixture(t, { fetchImpl: async url => url.includes('api.github.com') ? Response.json(release()) :
+    new Response(new ReadableStream({ start(controller) { stream = controller; controller.enqueue(bytes.subarray(0, 5)); began(); } })) });
+  const request = f.updater.downloadUpdate(); await started;
+  await f.updater.setAutomatic(false);
+  stream.enqueue(bytes.subarray(5)); stream.close(); await request;
+  assert.equal(f.updater.getState().phase, 'ready');
+  assert.equal(f.updater.getState().automatic, false);
+});
+test('a failed fresh metadata check never reveals a previously cached installer', async t => {
+  let fail = false;
+  const f = await fixture(t, { fetchImpl: async url => {
+    if (fail) throw Error('Offline');
+    return url.includes('api.github.com') ? Response.json(release()) : new Response(bytes);
+  } });
+  await f.updater.downloadUpdate(); fail = true;
+  await f.updater.revealDownload();
+  assert.equal(f.updater.getState().phase, 'error');
+  assert.equal(f.updater.getState().error, 'Offline');
+  assert.equal(f.opened.length, 0);
+});
+test('automatic preference writes are ordered and reject nonboolean values', async t => {
+  const f = await fixture(t);
+  await Promise.all([f.updater.setAutomatic(false), f.updater.setAutomatic(true), f.updater.setAutomatic(false)]);
+  assert.equal(f.updater.getState().automatic, false);
+  assert.equal(JSON.parse(await fs.readFile(path.join(f.directory, 'updates/settings.json'), 'utf8')).automatic, false);
+  await assert.rejects(f.updater.setAutomatic('true'), TypeError);
+});
+test('install results are bounded, validated, shown once and checked against the running version', async t => {
+  const f = await fixture(t);
+  const file = path.join(f.directory, 'updates', 'last-install.log');
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const record = { status: 'installed', version: '1.4.3', completedAt: new Date().toISOString(), message: '설치 완료' };
+  await fs.writeFile(file, '\uFEFF' + JSON.stringify(record));
+  assert.deepEqual(await readInstallResult(file), record);
+  await f.updater.start();
+  assert.equal(f.updater.getState().phase, 'installed');
+  await assert.rejects(fs.stat(file), { code: 'ENOENT' });
+  await fs.writeFile(file, 'x'.repeat(8193)); assert.equal(await readInstallResult(file), null);
+  await fs.writeFile(file, JSON.stringify({ ...record, status: 'unknown' })); assert.equal(await readInstallResult(file), null);
+  await fs.writeFile(file, JSON.stringify({ ...record, version: '1.4.4' }));
+  await f.updater.start();
+  assert.equal(f.updater.getState().phase, 'error');
+  assert.match(f.updater.getState().error, /버전이 다릅니다/);
 });

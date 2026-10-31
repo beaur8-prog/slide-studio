@@ -119,7 +119,8 @@ test('Windows install waits for the real quit event after save/close guards', as
   assert.ok(command.includes('[System.Windows.Forms.Application]::DoEvents()'));
   assert.ok(command.includes("Show-Progress \"$($job.version) 버전을 설치하는 중…\""));
   assert.ok(f.launched[0][1].includes('-STA'));
-  assert.ok(command.includes('Get-FileHash'));
+  assert.ok(command.includes('[Security.Cryptography.SHA256]::Create()'));
+  assert.ok(command.includes('(Read-Sha256 $installer) -ne $job.sha256'));
   assert.ok(!command.includes('Stop-Process') && !command.includes('taskkill') && !command.includes('ExecutionPolicy'));
 });
 test('canceling document close cancels installation even if the user quits later', async t => {

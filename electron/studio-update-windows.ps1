@@ -6,6 +6,19 @@ $script:progressForm = $null
 $script:progressLabel = $null
 $script:progressBar = $null
 $script:steps = @()
+function Read-Sha256([string]$Filename) {
+  # Get-FileHash can be unavailable when Windows PowerShell inherits a module
+  # path from a different PowerShell installation. Use the built-in .NET API.
+  $stream = [IO.File]::OpenRead($Filename)
+  $hasher = $null
+  try {
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    return [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+  } finally {
+    if ($null -ne $hasher) { $hasher.Dispose() }
+    $stream.Dispose()
+  }
+}
 function Show-Progress([string]$Message, [bool]$Complete = $false) {
   $script:progressLabel.Text = $Message
   if ($Complete) { $script:progressBar.Style = 'Continuous'; $script:progressBar.Value = 100 }
@@ -65,7 +78,7 @@ try {
   if ($null -ne $parent -and -not (Wait-WithProgress $parent 120000)) { throw 'The editor has not exited.' }
   if (@(Get-Process -Name ($names[$job.id]) -ErrorAction SilentlyContinue).Count -ne 0) { throw 'Another editor instance is still running. Close it and try the update again.' }
   Show-Progress '설치 파일의 무결성을 확인하는 중…'
-  if ((Get-Item -LiteralPath $installer).Length -ne $job.bytes -or (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $job.sha256) { throw 'Installer checksum mismatch.' }
+  if ((Get-Item -LiteralPath $installer).Length -ne $job.bytes -or (Read-Sha256 $installer) -ne $job.sha256) { throw 'Installer checksum mismatch.' }
   $arguments = if ($job.id -eq 'slide') { @('/S') } else { @('/S','/currentuser') }
   Show-Progress "$($job.version) 버전을 설치하는 중…"
   $process = Start-Process -FilePath $installer -ArgumentList $arguments -PassThru

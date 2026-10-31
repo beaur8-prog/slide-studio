@@ -121,6 +121,8 @@ test('Windows install waits for the real quit event after save/close guards', as
   assert.ok(f.launched[0][1].includes('-STA'));
   assert.ok(command.includes('[Security.Cryptography.SHA256]::Create()'));
   assert.ok(command.includes('(Read-Sha256 $installer) -ne $job.sha256'));
+  assert.ok(command.includes('[StudioUpdateWindow]::ShowWindow($script:progressForm.Handle, 5)'));
+  assert.ok(command.includes('[StudioUpdateWindow]::IsWindowVisible($script:progressForm.Handle)'));
   assert.ok(!command.includes('Stop-Process') && !command.includes('taskkill') && !command.includes('ExecutionPolicy'));
 });
 test('canceling document close cancels installation even if the user quits later', async t => {

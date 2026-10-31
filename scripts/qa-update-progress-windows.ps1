@@ -67,8 +67,14 @@ try {
   $helper = Start-Process -FilePath $powershell -ArgumentList @('-NoLogo','-NoProfile','-STA','-NonInteractive','-EncodedCommand',$encoded) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $report 'helper-stdout.log') -RedirectStandardError (Join-Path $report 'helper-stderr.log')
   $deadline = [DateTime]::UtcNow.AddMinutes(4)
   $sawProgress = $false
+  $lastWindows = ''
   while (-not $helper.HasExited) {
     $helper.Refresh()
+    $windows = [UpdateWindowProbe]::Describe($helper.Id) | ConvertTo-Json
+    if ($windows -and $windows -ne $lastWindows) {
+      $lastWindows = $windows
+      Set-Content (Join-Path $report 'all-observed-windows.json') $windows -Encoding utf8NoBOM
+    }
     $progressWindow = [UpdateWindowProbe]::FindVisible($helper.Id, 'Slide Studio 업데이트')
     if ($progressWindow -ne [IntPtr]::Zero -and -not $sawProgress) {
       $sawProgress = $true

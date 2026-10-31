@@ -23,7 +23,7 @@ function Show-Progress([string]$Message, [bool]$Complete = $false) {
   $script:progressLabel.Text = $Message
   if ($Complete) { $script:progressBar.Style = 'Continuous'; $script:progressBar.Value = 100 }
   [System.Windows.Forms.Application]::DoEvents()
-  $script:steps += [ordered]@{ message = $Message; visible = $script:progressForm.Visible; at = [DateTime]::UtcNow.ToString('o') }
+  $script:steps += [ordered]@{ message = $Message; visible = ($script:progressForm.Visible -and [StudioUpdateWindow]::IsWindowVisible($script:progressForm.Handle)); at = [DateTime]::UtcNow.ToString('o') }
 }
 function Wait-WithProgress($Process, [int]$Milliseconds) {
   $deadline = [DateTime]::UtcNow.AddMilliseconds($Milliseconds)
@@ -48,6 +48,14 @@ try {
   if ((Split-Path -Parent $installer) -ne $directory -or [IO.Path]::GetExtension($installer) -ne '.exe') { throw 'Installer is outside the verified update directory.' }
   Add-Type -AssemblyName System.Windows.Forms
   Add-Type -AssemblyName System.Drawing
+  Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class StudioUpdateWindow {
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr window, int command);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
+}
+'@
   [System.Windows.Forms.Application]::EnableVisualStyles()
   $names = @{ sheet = 'Sheet Studio'; slide = 'Slide Studio'; word = 'Word Studio' }
   $script:progressForm = New-Object System.Windows.Forms.Form
@@ -71,6 +79,11 @@ try {
   $note.Text = '설치가 끝나면 앱을 다시 실행합니다. 잠시 기다려 주세요.'
   $script:progressForm.Controls.AddRange(@($script:progressLabel, $script:progressBar, $note))
   $script:progressForm.Show()
+  # The console is launched hidden. Windows may apply that startup visibility
+  # to the first Form.Show() too; an explicit second ShowWindow overrides it.
+  $null = [StudioUpdateWindow]::ShowWindow($script:progressForm.Handle, 5)
+  $script:progressForm.Activate()
+  if (-not [StudioUpdateWindow]::IsWindowVisible($script:progressForm.Handle)) { throw 'The update progress window could not be displayed.' }
   Show-Progress '편집기가 안전하게 종료되기를 기다리는 중…'
   # Never terminate the editor. The helper is started only on Electron's quit
   # event, after all editor windows and their save/recovery guards have closed.

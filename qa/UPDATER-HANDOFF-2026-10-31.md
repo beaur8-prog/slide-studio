@@ -20,4 +20,18 @@ Windows에서 **종료하고 업데이트**를 누르면 설치 도우미를 먼
 - Windows 실제 Electron 종료와 PowerShell 도우미의 연결을 확인하는 `scripts/qa-update-handoff-windows.cjs`를 추가했습니다. 한글·공백·작은따옴표·셸 특수문자가 있는 임시 경로에서 정상 설치, 종료 취소, 실행 차단, 도우미 변조를 검사합니다. 임시 EXE의 버전이 0.0.0에서 1.0.0으로 바뀌며, 편집기 프로세스가 살아 있으면 시험 설치 프로그램이 실패합니다.
 - 별도의 기존 Windows Setup 검사는 실제 설치 파일의 설치·진행 창·버전·재실행·사용자 자료 보존을 검사합니다. 이 검사는 제공한 동일 버전의 재설치이며, 실제 구버전 Slide Studio 바이너리에서 신버전으로 교체하는 시험은 아닙니다.
 
-Windows 실행 결과와 최종 설치 파일 정보는 빌드·검증 완료 후 아래에 기록합니다. 공개 릴리스 게시와 공개 다운로드·리토스 문서 변경은 이 작업에 포함하지 않습니다.
+## 완료한 빌드와 실행 시험
+
+- 구현 커밋: `05f4e2fe96355aec0dc4433d8915a7493e906219`.
+- [Windows 실제 Electron 연결 시험](https://github.com/beaur8-prog/slide-studio/actions/runs/41205156500/job/124548624534) **4개 모두 통과**. 준비 응답이 있는 상태에서 정상 종료하고, 시험 EXE의 버전 변경·다섯 단계 표시·재실행을 확인했습니다. 종료 취소·실행 차단·도우미 변조에서는 편집기가 열린 채로 남으며 설치되지 않았습니다. 실패 시 로그 폴더와 수동 설치 버튼도 확인했습니다.
+- [1.6.20 Windows 전체 검증](https://github.com/beaur8-prog/slide-studio/actions/runs/41205156500) **모두 통과**. Windows에서도 업데이트 29개·관련 UI 21개가 통과했고, 같은 구현 커밋으로 Windows에서 빌드한 실제 Setup의 첫 설치·도우미를 통한 재설치·다섯 단계의 창 표시·설치 버전·앱 재실행·사용자 자료 보존·정상 종료·제거 후 자료 보존을 확인했습니다.
+- 로컬 Windows Setup **빌드·검증 완료**. NSIS 아카이브 검사와 추출 파일 전체 SHA-256 대조, 버전 리소스·아이콘·현재 사용자 설치 권한을 확인했습니다. 최종 파일은 `artifacts/slide-studio-1.6.20/Slide-Studio-Setup-x64.exe`에 보관합니다.
+- 설치 파일: **110,283,383바이트**, SHA-256: `230ec81495a5dfaaf2997dad6113e691e368a6b204262d8af8e24b5f2c3f92b4`.
+- Windows·Mac 패키지에서 두 업데이트 파일을 추출해 구현 소스와 일치함을 확인했습니다. 두 플랫폼의 공통 `app.asar` SHA-256은 `a03f395924f334061acea77bcc7894fcb2050baf8ecb36ee3094111584a891e8`입니다.
+- Mac 앱의 임시 서명 검증을 통과했습니다. 실행 중이던 1.6.19가 저장된 기본 제목 슬라이드 한 장임을 확인하고 앱 메뉴로 정상 종료한 뒤 백업했습니다. `/Applications/Slide Studio.app`을 1.6.20으로 교체·실행해 버전 표시와 업데이트 창을 확인했고, 저장된 기본 편집 화면을 열어 두었습니다. 사용자 자료는 유지했습니다.
+- 이전 Mac 앱: `~/Library/Application Support/Slide Studio Backups/updater-handoff-1.6.20-20261031/Slide Studio.app`.
+- 원본 결과: `qa/results/updater-handoff-20261031/`, 사용자 작업 폴더 사본: `qa/updater-handoff-20261031/`.
+
+Windows CI의 Setup은 Windows에서 별도로 빌드했으므로 위 로컬 교차 빌드 파일과 바이트가 같지는 않습니다. CI 설치 파일 SHA-256은 `7c3e0fcf5a10eda390db2d02265b147e9ab8bf8251d28b576f57f70b085793c2`, CI `app.asar` SHA-256은 `efdb959a10c1870d525abb8c88668d2812ad654ac581b69523d0cf69afb81706`입니다. 로컬 파일은 아카이브·전체 추출 파일·버전 검증을 거쳤고, Windows 실행 시험은 같은 커밋을 CI에서 빌드한 파일로 수행했습니다.
+
+공개 릴리스 게시와 공개 다운로드·리토스 문서 변경은 이 작업에 포함하지 않습니다.

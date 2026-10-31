@@ -17,7 +17,7 @@ function release(id = 'word', platform = 'win32', arch = 'x64', version = '1.4.4
   return { tag_name: 'v' + version, draft: false, prerelease: false, assets: [{ name: filename, state: 'uploaded', size: bytes.length,
     digest: 'sha256:' + sha256, browser_download_url: `https://github.com/beaur8-prog/${id}-studio/releases/download/v${version}/${filename}` }] };
 }
-async function fixture(t, { platform = 'win32', answer = 1, fetchImpl } = {}) {
+async function fixture(t, { platform = 'win32', answer = 1, fetchImpl, helperMode = 'ready' } = {}) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'studio-update-test-'));
   const app = new EventEmitter();
   app.isPackaged = true; app.getVersion = () => '1.4.3'; app.getPath = () => directory;
@@ -32,7 +32,23 @@ async function fixture(t, { platform = 'win32', answer = 1, fetchImpl } = {}) {
     dialog: { showMessageBox: async (...args) => { dialogs.push(args.at(-1)); return { response: answer }; } },
     shell: { showItemInFolder: file => opened.push(file), openExternal: async url => opened.push(url) },
     fetchImpl: fetchImpl || (async url => { requests.push(url); const item = release('word', platform, platform === 'darwin' ? 'arm64' : 'x64'); return url.includes('api.github.com') ? Response.json(platform === 'darwin' ? [item] : item) : new Response(bytes); }),
-    launch: (...args) => { launched.push(args); return { on() {}, unref() {} }; },
+    helperReadyTimeout: helperMode === 'timeout' ? 150 : 5000,
+    launch: (...args) => {
+      launched.push(args);
+      const helper = new EventEmitter(); helper.unref = () => {};
+      const command = Buffer.from(/-EncodedCommand ([A-Za-z0-9+/=]+)$/.exec(args[1].at(-1))[1], 'base64').toString('utf16le');
+      const jobFile = /-JobFile '([^']*(?:''[^']*)*)'$/.exec(command)[1].replaceAll("''", "'");
+      setImmediate(async () => {
+        if (helperMode === 'error') { helper.emit('error', new Error('Helper launch blocked')); return; }
+        if (helperMode === 'exit') { helper.emit('exit', 9); return; }
+        if (helperMode === 'timeout') return;
+        if (helperMode === 'wrapperExit') helper.emit('exit', 0);
+        const job = JSON.parse(await fs.readFile(jobFile, 'utf8'));
+        await fs.writeFile(jobFile + '.ready', '\uFEFF' + JSON.stringify({ schema: 1, id: job.id,
+          parentPid: helperMode === 'invalid' ? job.parentPid + 1 : job.parentPid }));
+      });
+      return helper;
+    },
     logger: { warn: (...args) => warnings.push(args) },
   });
   t.after(async () => { updater.dispose(); await fs.rm(directory, { recursive: true, force: true }); });
@@ -107,18 +123,34 @@ test('corrupt/truncated/oversized downloads leave no installable partial file', 
     assert.deepEqual(await fs.readdir(path.join(directory,sha256)),[]);
   }
 });
-test('Windows install waits for the real quit event after save/close guards', async t => {
+test('Windows acknowledges a waiting helper before requesting a normal editor quit', async t => {
   const f = await fixture(t,{ answer:0 });
+  const quit = f.app.quit;
+  let acknowledgedAtQuit = false;
+  f.app.quit = () => {
+    const directory = path.join(f.directory, 'updates', sha256);
+    acknowledgedAtQuit = require('node:fs').readdirSync(directory).some(name => name.endsWith('.ready'));
+    quit();
+  };
   await f.updater.check(true);
   assert.equal(f.quitCalls(),1);
-  assert.equal(f.launched.length,0,'must not run an installer while the editor is alive');
-  f.app.emit('quit');
+  assert.equal(acknowledgedAtQuit,true,'the helper must acknowledge before save/close guards run');
   assert.equal(f.launched.length,1);
-  const command = Buffer.from(f.launched[0][1].at(-1),'base64').toString('utf16le');
-  assert.ok(command.includes('Wait-WithProgress $parent 120000'));
+  f.app.emit('quit');
+  assert.equal(f.launched.length,1,'quit must not launch a second helper');
+  const directory = path.join(f.directory, 'updates', sha256);
+  const command = await fs.readFile(path.join(directory, (await fs.readdir(directory)).find(name => name.endsWith('.ps1'))), 'utf8');
+  assert.ok(command.includes('Wait-WithProgress $parent 120000 $true'));
   assert.ok(command.includes('[System.Windows.Forms.Application]::DoEvents()'));
   assert.ok(command.includes("Show-Progress \"$($job.version) 버전을 설치하는 중…\""));
-  assert.ok(f.launched[0][1].includes('-STA'));
+  assert.match(f.launched[0][0], /cmd\.exe$/);
+  assert.match(f.launched[0][1].at(-1), /^start "" \/b .* -STA /);
+  assert.ok(f.launched[0][1].at(-1).length < 8191);
+  assert.equal(f.launched[0][2].detached,false);
+  assert.equal(f.launched[0][2].windowsHide,true);
+  assert.equal(f.launched[0][2].windowsVerbatimArguments,true);
+  const bootstrap = Buffer.from(/-EncodedCommand ([A-Za-z0-9+/=]+)$/.exec(f.launched[0][1].at(-1))[1], 'base64').toString('utf16le');
+  assert.ok(bootstrap.includes(createHash('sha256').update(command).digest('hex')));
   assert.ok(command.includes('[Security.Cryptography.SHA256]::Create()'));
   assert.ok(command.includes('(Read-Sha256 $installer) -ne $job.sha256'));
   assert.ok(command.includes('[StudioUpdateWindow]::ShowWindow($script:progressForm.Handle, 5)'));
@@ -130,8 +162,30 @@ test('canceling document close cancels installation even if the user quits later
   await f.updater.check(true);
   await f.updater.cancelInstall();
   f.app.emit('quit');
-  assert.equal(f.launched.length,0);
+  assert.equal(f.launched.length,1,'later quit cannot restart a cancelled helper');
+  assert.deepEqual((await fs.readdir(path.join(f.directory,'updates',sha256))).filter(name => /\.(json|ready|ps1)$/.test(name)),[]);
   assert.equal(f.updater.getState().phase,'ready');
+});
+test('a successful console wrapper exit still waits for helper readiness', async t => {
+  const f = await fixture(t,{ answer:0, helperMode:'wrapperExit' });
+  await f.updater.check(true);
+  assert.equal(f.quitCalls(),1); assert.equal(f.launched.length,1);
+  assert.equal(f.opened.length,0);
+});
+for (const helperMode of ['error','exit','timeout','invalid']) test('helper startup ' + helperMode + ' keeps the editor open with logs and manual installation', async t => {
+  const f = await fixture(t,{ answer:0, helperMode });
+  await f.updater.check(true);
+  assert.equal(f.quitCalls(),0);
+  assert.equal(f.updater.getState().phase,'error');
+  assert.equal(f.updater.getState().downloaded,true);
+  assert.equal(f.updater.getState().lastInstall.status,'failed');
+  assert.equal(f.opened.length,1); assert.match(f.opened[0], /setup\.exe$/);
+  assert.ok(f.dialogs.some(d => d.type === 'warning' && d.buttons.includes('설치 파일 보기') && d.detail.includes(path.join(f.directory,'updates'))));
+  const log = JSON.parse(await fs.readFile(path.join(f.directory,'updates/last-install.log'),'utf8'));
+  assert.equal(log.status,'failed'); assert.equal(log.version,'1.4.4');
+  assert.ok(log.message.length > 0);
+  await fs.access(path.join(f.directory,'updates/helper-startup.log'));
+  assert.deepEqual((await fs.readdir(path.join(f.directory,'updates',sha256))).filter(name => /\.(json|ready|ps1)$/.test(name)),[]);
 });
 test('deferring an update never quits the app or launches an installer', async t => {
   const f = await fixture(t,{ answer:1 });

@@ -43,7 +43,7 @@ export default function UpdateDialog({ updates, onClose }: { updates: ReturnType
         {phase === "downloading" && <p>{size(state?.receivedBytes || 0)} / {size(state?.totalBytes || 0)}</p>}
         {phase === "verifying" && <p>다운로드한 파일의 크기와 SHA-256을 확인하고 있습니다.</p>}
         {phase === "ready" && <p>{state?.filename} · 파일 검증을 마쳤습니다. 설치를 시작할 수 있습니다.</p>}
-        {phase === "installing" && <p>문서 저장·종료 확인을 기다리고 있습니다. 종료가 취소되면 설치도 취소됩니다.</p>}
+        {phase === "installing" && <p>설치 도우미 시작과 문서 저장·종료 확인을 기다리고 있습니다. 종료가 취소되면 설치도 취소됩니다.</p>}
         {phase === "cancelled" && <p>업데이트 확인 또는 다운로드를 취소했습니다. 편집은 계속할 수 있습니다.</p>}
         {phase === "manual" && <p>이 실행 환경에서는 공식 다운로드 페이지에서 설치 파일을 받아 직접 설치해 주세요.</p>}
         {phase === "installed" && <p>{state?.lastInstall?.version} 버전 설치를 마치고 앱을 다시 실행했습니다.</p>}

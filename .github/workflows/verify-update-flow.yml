@@ -9,6 +9,31 @@ on:
 permissions:
   contents: read
 jobs:
+  handoff:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    env:
+      STUDIO_DISABLE_UPDATES: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node node_modules/electron/install.js
+      - name: Verify packaged Electron quit, acknowledgement, cancellation and failed helper startup
+        run: node scripts/qa-update-handoff-windows.cjs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: update-handoff-windows
+          retention-days: 7
+          # Disposable fixture reports only; no app, installer or user documents.
+          path: |
+            qa/results/update-handoff-windows/**/*.json
+            qa/results/update-handoff-windows/**/*.log
+            qa/results/update-handoff-windows/**/*.png
   updates:
     runs-on: windows-latest
     timeout-minutes: 25

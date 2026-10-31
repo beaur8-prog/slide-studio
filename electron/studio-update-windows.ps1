@@ -1,7 +1,10 @@
 param([Parameter(Mandatory=$true)][string]$JobFile)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-$job = Get-Content -LiteralPath $JobFile -Raw -Encoding UTF8 | ConvertFrom-Json
+$job = $null
+$readyFile = "$JobFile.ready"
+$helperReady = $false
+$editorExited = $false
 $script:progressForm = $null
 $script:progressLabel = $null
 $script:progressBar = $null
@@ -25,9 +28,10 @@ function Show-Progress([string]$Message, [bool]$Complete = $false) {
   [System.Windows.Forms.Application]::DoEvents()
   $script:steps += [ordered]@{ message = $Message; visible = ($script:progressForm.Visible -and [StudioUpdateWindow]::IsWindowVisible($script:progressForm.Handle)); at = [DateTime]::UtcNow.ToString('o') }
 }
-function Wait-WithProgress($Process, [int]$Milliseconds) {
+function Wait-WithProgress($Process, [int]$Milliseconds, [bool]$AllowCancel = $false) {
   $deadline = [DateTime]::UtcNow.AddMilliseconds($Milliseconds)
   while (-not $Process.HasExited) {
+    if ($AllowCancel -and -not (Test-Path -LiteralPath $JobFile)) { return $false }
     if ([DateTime]::UtcNow -ge $deadline) { return $false }
     [System.Windows.Forms.Application]::DoEvents()
     Start-Sleep -Milliseconds 120
@@ -36,12 +40,15 @@ function Wait-WithProgress($Process, [int]$Milliseconds) {
   return $true
 }
 function Write-Result([string]$Status, [string]$Message) {
-  if ($job.PSObject.Properties['log']) {
+  if ($null -ne $job -and $job.PSObject.Properties['log']) {
     [ordered]@{ status = $Status; version = $job.version; message = $Message; completedAt = [DateTime]::UtcNow.ToString('o'); steps = $script:steps } |
       ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $job.log -Encoding UTF8
   }
 }
 try {
+  Write-Output 'Studio update helper started.'
+  if (-not (Test-Path -LiteralPath $JobFile)) { return }
+  $job = Get-Content -LiteralPath $JobFile -Raw -Encoding UTF8 | ConvertFrom-Json
   if ($job.schema -ne 1 -or $job.id -notin @('sheet','slide','word') -or $job.sha256 -notmatch '^[a-f0-9]{64}$' -or $job.version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid update job.' }
   $directory = [IO.Path]::GetFullPath((Split-Path -Parent $JobFile))
   $installer = [IO.Path]::GetFullPath($job.installer)
@@ -85,11 +92,26 @@ public static class StudioUpdateWindow {
   $script:progressForm.Activate()
   if (-not [StudioUpdateWindow]::IsWindowVisible($script:progressForm.Handle)) { throw 'The update progress window could not be displayed.' }
   Show-Progress '편집기가 안전하게 종료되기를 기다리는 중…'
-  # Never terminate the editor. The helper is started only on Electron's quit
-  # event, after all editor windows and their save/recovery guards have closed.
+  Write-Result 'waiting' '설치 도우미가 준비되어 편집기 종료를 기다립니다.'
+  @{ schema = 1; id = $job.id; parentPid = $job.parentPid } | ConvertTo-Json -Compress | Set-Content -LiteralPath $readyFile -Encoding UTF8
+  $helperReady = $true
+  # Acknowledge startup first, then wait for the editor's normal, cancellable
+  # close. Never terminate the editor or install after its request is removed.
   $parent = Get-Process -Id $job.parentPid -ErrorAction SilentlyContinue
-  if ($null -ne $parent -and -not (Wait-WithProgress $parent 120000)) { throw 'The editor has not exited.' }
+  if ($null -ne $parent -and -not (Wait-WithProgress $parent 120000 $true)) {
+    if (-not (Test-Path -LiteralPath $JobFile)) { return }
+    throw 'The editor has not exited.'
+  }
+  if (-not (Test-Path -LiteralPath $JobFile)) { return }
+  $editorExited = $true
+  $deadline = [DateTime]::UtcNow.AddSeconds(10)
+  while (@(Get-Process -Name ($names[$job.id]) -ErrorAction SilentlyContinue).Count -ne 0 -and [DateTime]::UtcNow -lt $deadline) {
+    if (-not (Test-Path -LiteralPath $JobFile)) { return }
+    [System.Windows.Forms.Application]::DoEvents()
+    Start-Sleep -Milliseconds 120
+  }
   if (@(Get-Process -Name ($names[$job.id]) -ErrorAction SilentlyContinue).Count -ne 0) { throw 'Another editor instance is still running. Close it and try the update again.' }
+  if (-not (Test-Path -LiteralPath $JobFile)) { return }
   Show-Progress '설치 파일의 무결성을 확인하는 중…'
   if ((Get-Item -LiteralPath $installer).Length -ne $job.bytes -or (Read-Sha256 $installer) -ne $job.sha256) { throw 'Installer checksum mismatch.' }
   $arguments = if ($job.id -eq 'slide') { @('/S') } else { @('/S','/currentuser') }
@@ -108,11 +130,14 @@ public static class StudioUpdateWindow {
 } catch {
   $failure = $_.Exception.Message
   Write-Result 'failed' $failure
-  if ($null -ne $script:progressForm) {
+  Write-Error $_ -ErrorAction Continue
+  if ($helperReady -and $editorExited -and $null -ne $script:progressForm) {
     [System.Windows.Forms.MessageBox]::Show($script:progressForm, "업데이트를 완료하지 못했습니다.`n`n$failure`n`n앱을 다시 실행한 뒤 업데이트를 다시 확인해 주세요.", '업데이트 오류', 'OK', 'Warning') | Out-Null
   }
   exit 1
 } finally {
   if ($null -ne $script:progressForm) { $script:progressForm.Close(); $script:progressForm.Dispose() }
   Remove-Item -LiteralPath $JobFile -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $readyFile -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath "$JobFile.ps1" -Force -ErrorAction SilentlyContinue
 }

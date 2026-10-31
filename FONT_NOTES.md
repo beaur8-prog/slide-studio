@@ -5,6 +5,18 @@ redistribute Microsoft fonts. Source names and point sizes stay in the editable
 model and exported PPTX; substitute names and metric adjustments are only used
 when rendering in Slide Studio.
 
+## Document font diagnosis (development 1.6.18)
+
+**File → 원본 글꼴 추가 → 이 문서의 사용 글꼴** lists source families used in
+actual text and table cells and whether the app can use them or needs a fallback.
+Korean/English family aliases are tried before substitution. **다시 확인** clears
+the bounded availability cache after fonts are added during the session. The
+check is cancellable, ignores results for a replaced document and has bounded
+concurrency/timeouts; it never downloads fonts or changes the document/Undo state.
+This is a family-level diagnosis, not proof that every weight, style or character
+uses the same original face. A family with “Medium” in its name can be visually
+heavier than its substitute even when the source has no explicit bold property.
+
 ## Bundled fonts and provenance
 
 - **Carlito**, unchanged Fontsource 5.3.0 files, is the Calibri substitute.

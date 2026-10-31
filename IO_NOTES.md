@@ -1,5 +1,10 @@
 # Presentation file compatibility
 
+Development 1.6.18 adds the layout and preservation changes recorded in
+[the Web PowerPoint comparison](qa/LAYOUT-COMPATIBILITY-2026-10-31.md).
+The comparison covers 17 public native-object files and 62 slides; it does not
+establish full PowerPoint compatibility. Public installers are updated separately.
+
 The development editor now includes table-aware document find/replace, nondestructive
 picture crop/fit/fill/replacement, a selection pane, and format painting. Search
 and selection navigation do not author document changes. Replacing all text,
@@ -37,6 +42,10 @@ Native PPTX import/export validates known model fields directly, without a
 whole-document JSON encode/decode copy. Compact JSON length is counted with
 escaping so the 200 MiB model limit and all existing asset/geometry checks
 remain enforced. Legacy JSON input still checks its original file length.
+Raster, video and audio validation checks the entire base64 syntax and exact
+decoded size, but decodes only the header needed for format identification.
+Original media bytes are unchanged. This removes redundant binary-string copies;
+large recovery JSON parsing and serialization can still cause high memory peaks.
 
 Slide Studio saves user files as PowerPoint (.pptx). The separate .slide save
 command has been removed. Existing .slide files remain readable so users can
@@ -45,6 +54,13 @@ IndexedDB; this local recovery is separate from a saved PPTX file. Native open,
 save and PDF dialogs start in the last successfully opened/saved document folder,
 remembered across app launches. Cancelled/failed operations and PDF output do not
 change that document folder. Deleted folders fall back to Documents.
+
+Unreadable recovery records are quarantined before new autosaves can replace
+them. If preservation fails, autosave remains blocked while manual PPTX saving
+stays available. File → 보관된 복구 데이터 can download the retained raw record;
+unknown versions/fields and Blob bytes use a recovery ZIP, not a PPTX file.
+Download preflight counts UTF-8 JSON, Blob bytes and ZIP overhead before reading
+large Blobs, with a 256 MiB output limit. Cancelling leaves the original record.
 
 Legacy JSON loading validates object kinds, IDs, slide and object limits, finite geometry,
 font sizes, opacity, colors, embedded raster image signatures, rich paragraphs,
@@ -183,8 +199,9 @@ inherited ones. Stretched backgrounds retain source cropping and opacity in the
 editor, thumbnails, slideshow, and print view. PPTX export writes a native
 `p:bgPr/a:blipFill`, rather than adding an editable full-slide picture. Background
 assets share the 16 MiB image and 100 MiB combined asset limits; external image
-URLs are never fetched. Tiled backgrounds, offset stretch fill rectangles, and
-unsupported background image formats still fall back with an import warning.
+URLs are never fetched. Bounded tile scale/DPI, offset, mirroring/alignment,
+stretch fill rectangles and two-color duotone are previewed while native source
+data is preserved. Unsupported formats/effects still fall back with a warning.
 Empty title/subtitle placeholders are not literal document text; external editors
 may display their own editing hints such as “Click to add Title”.
 
@@ -249,7 +266,11 @@ has not been verified on this Mac.
 Imported classic DrawingML charts retain their original chart XML, cached data,
 embedded XLSX workbooks, and supported chart styles/color parts. The editor
 previews line, column/bar, area, pie/doughnut, scatter and simple combinations
-as vector graphics. Move, resize, rotate, duplicate, group, print/PDF and native
+as vector graphics. Basic 2D radar standard/marker/filled charts are also
+previewed with verified nonnegative linear axes. Negative, logarithmic or
+reversed radar axes and unsupported combinations retain native data and show
+a limitation notice. Automatic chart styles, spacing and plot geometry remain
+approximate. Move, resize, rotate, duplicate, group, print/PDF and native
 PPTX save/reopen preserve the chart; data editing of externally authored charts
 is done in PowerPoint.
 Part names/relationships are remapped per exported object so copied charts do
@@ -260,8 +281,11 @@ Each chart package is limited to 128 parts / 16 MiB; previews to 64 series,
 10,000 points per series and 100,000 points total. Charts count toward the
 100 MiB embedded-asset budget.
 
-SmartArt without saved drawing geometry, object animations and standalone audio
-do not gain editable/playing representations in this app. SVG and supported
+SmartArt without saved drawing geometry and complex object animations do not
+gain editable/playing representations in this app. Embedded MP3, PCM WAV and
+AAC M4A audio have slide-show playback and simple start/loop/volume/across-slide
+controls; complex sound-effect timing is preserved rather than reconstructed.
+SVG and supported
 EMF/WMF artwork now have scalable picture representations as described above. Their native
 source data can nevertheless survive PPTX saving. Imports needing preservation
 retain one bounded source archive in the local model/autosave, with hashes and
@@ -278,6 +302,10 @@ remapped; deleted-object animations and unreachable assets are removed. Changed
 video playback uses the new settings. Explicitly choosing None/Fade overrides a
 preserved unsupported transition. Presentation-level settings belong to their
 original document; copying a slide does not copy its custom show definitions.
+Master parts that would share a theme receive independent, byte-identical theme
+parts, while images/fonts remain shared. This addresses a reproduced Web
+PowerPoint repair prompt and does not clone already independent themes on every
+save. Export validates the final ZIP directory against the import limits.
 
 Some edits still require a compatibility decision: edited SmartArt/extension
 content may become individual objects; opaque members of a moved/resized group
@@ -298,7 +326,11 @@ rather than a full PowerPoint rendering, animation or SmartArt engine.
 Imports never fetch relationships from the network or execute archive contents.
 Limits: 256 MiB archive (also enforced by the browser/native file dialog), 200 MiB total declared and actually read uncompressed data,
 5,000 ZIP entries, 24 MiB per part, 8 MiB XML part, 16 MiB raster image, 20 MiB video, 100 MiB combined embedded raster/video data, 500 slides,
-1,000 objects per slide, and 10,000 objects per deck. Archive paths and duplicate
+1,000 outer objects per slide, and 10,000 weighted objects per deck. For the
+deck-wide limit, a table costs its outer object plus every cell, including
+merged-grid cells. Over-budget edits fail
+without discarding the current document, in-progress cell text or Undo history.
+Archive paths and duplicate
 entries are checked before decompression; actual output is counted while
 streaming. Encrypted, multi-disk, and ZIP64 archives and XML DTD/entities are
 rejected. Files are interpreted in memory and never extracted to disk.

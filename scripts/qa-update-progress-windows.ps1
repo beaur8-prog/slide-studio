@@ -34,12 +34,16 @@ try {
     ConvertTo-Json | Set-Content $jobFile -Encoding utf8NoBOM
   $encoded = & node -e 'const fs=require("node:fs");const {powershellCommand}=require("./electron/studio-updater.cjs");process.stdout.write(powershellCommand(fs.readFileSync("electron/studio-update-windows.ps1","utf8"),process.argv[1]));' $jobFile
   Assert-True ($LASTEXITCODE -eq 0) 'Cannot encode the real update helper.'
-  $helper = Start-Process -FilePath $powershell -ArgumentList @('-NoLogo','-NoProfile','-STA','-NonInteractive','-EncodedCommand',$encoded) -WindowStyle Hidden -PassThru
+  $helper = Start-Process -FilePath $powershell -ArgumentList @('-NoLogo','-NoProfile','-STA','-NonInteractive','-EncodedCommand',$encoded) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $report 'helper-stdout.log') -RedirectStandardError (Join-Path $report 'helper-stderr.log')
   $deadline = [DateTime]::UtcNow.AddMinutes(4)
   $sawProgress = $false
   while (-not $helper.HasExited) {
     $helper.Refresh()
     if ($helper.MainWindowTitle -eq 'Slide Studio 업데이트' -and $helper.MainWindowHandle -ne 0) { $sawProgress = $true }
+    if (Test-Path $log) {
+      $observed = Get-Content $log -Raw -Encoding utf8 | ConvertFrom-Json
+      if ($observed.status -eq 'failed') { throw "Update helper reported: $($observed.message)" }
+    }
     if ([DateTime]::UtcNow -gt $deadline) { throw 'Update helper timed out.' }
     Start-Sleep -Milliseconds 150
   }
@@ -76,6 +80,10 @@ try {
   Assert-True ((Get-FileHash $sentinel -Algorithm SHA256).Hash -eq $before) 'Uninstall changed preserved user data.'
   Write-Output 'PASS: real Windows update progress, five visible phases, verified installation, restart and preserved user data.'
 } finally {
+  foreach ($resultName in @('last-install.log','last-install-seen.log')) {
+    $diagnostic = Join-Path $profile ('updates/' + $resultName)
+    if (Test-Path $diagnostic) { Copy-Item $diagnostic (Join-Path $report ($resultName + '.json')) }
+  }
   # These processes can only be the ones created above, on an initially clean CI runner.
   if ($null -ne $helper -and -not $helper.HasExited) { $helper.Kill(); $helper.WaitForExit() }
   if ($null -ne $waiter -and -not $waiter.HasExited) { $waiter.Kill(); $waiter.WaitForExit() }

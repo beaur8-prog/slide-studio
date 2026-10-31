@@ -1,6 +1,11 @@
 name: Verify manual updates and visible Windows installation
 on:
   workflow_dispatch:
+    inputs:
+      published_fixture:
+        description: Use checksum-verified v1.6.16 Setup to diagnose the current helper without rebuilding
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -23,13 +28,27 @@ jobs:
       - name: Verify update controls and document protection
         run: npx playwright test tests/updates-ui.spec.ts tests/native-files.spec.ts tests/windows-ui.spec.ts tests/user-document-protection.spec.ts --reporter=line,json --output=qa/results/update-ui-artifacts
       - run: choco install nsis --no-progress -y
+        if: inputs.published_fixture != true
       - run: npm run build
+        if: inputs.published_fixture != true
       - run: node scripts/package-win.cjs
+        if: inputs.published_fixture != true
       - run: node scripts/package-win-setup.cjs
+        if: inputs.published_fixture != true
+      - name: Acquire a verified published installer for helper diagnosis
+        if: inputs.published_fixture == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory release -Force | Out-Null
+          gh release download v1.6.16 --repo beaur8-prog/slide-studio --pattern Slide-Studio-Setup-x64.exe --dir release
+          gh api repos/beaur8-prog/slide-studio/releases/tags/v1.6.16 | Set-Content release/fixture-release.json -Encoding utf8NoBOM
+          node -e 'const fs=require("node:fs");const {selectRelease,verifyFile}=require("./electron/studio-updater.cjs");const asset=selectRelease(JSON.parse(fs.readFileSync("release/fixture-release.json","utf8")),{id:"slide",currentVersion:"0.0.0",platform:"win32",arch:"x64"});verifyFile("release/Slide-Studio-Setup-x64.exe",asset).then(()=>fs.writeFileSync("release/fixture.json",JSON.stringify({version:asset.version}))).catch(error=>{console.error(error);process.exitCode=1;});'
       - name: Exercise the real Windows installation progress helper
         shell: pwsh
         run: |
-          $version = node -p 'require("./package.json").version'
+          $version = if (Test-Path release/fixture.json) { node -p 'require("./release/fixture.json").version' } else { node -p 'require("./package.json").version' }
           ./scripts/qa-update-progress-windows.ps1 -Setup (Join-Path $PWD 'release/Slide-Studio-Setup-x64.exe') -Version $version
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
@@ -42,3 +61,4 @@ jobs:
             qa/results/update-ui-artifacts/**/*.png
             qa/results/update-ui-artifacts/**/trace.zip
             qa/results/update-native-windows/*.json
+            qa/results/update-native-windows/*.log

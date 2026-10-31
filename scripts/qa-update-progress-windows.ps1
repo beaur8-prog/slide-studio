@@ -14,6 +14,36 @@ New-Item -ItemType Directory -Path $work | Out-Null
 $exe = Join-Path $install 'Slide Studio.exe'
 $helper = $null
 $waiter = $null
+Add-Type @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class UpdateWindowProbe {
+  public delegate bool Callback(IntPtr window, IntPtr data);
+  [DllImport("user32.dll")] static extern bool EnumWindows(Callback callback, IntPtr data);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder text, int count);
+  [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left,Top,Right,Bottom; }
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out Rect rect);
+  public static IntPtr FindVisible(int process, string title) {
+    IntPtr result=IntPtr.Zero;
+    EnumWindows((window,data)=>{ uint owner; GetWindowThreadProcessId(window,out owner);
+      var text=new StringBuilder(512); GetWindowText(window,text,512);
+      if(owner==process && IsWindowVisible(window) && text.ToString()==title) { result=window; return false; }
+      return true; },IntPtr.Zero);
+    return result;
+  }
+  public static string[] Describe(int process) {
+    var result=new List<string>();
+    EnumWindows((window,data)=>{ uint owner; GetWindowThreadProcessId(window,out owner);
+      if(owner==process) { var text=new StringBuilder(512); GetWindowText(window,text,512); result.Add(window+" visible="+IsWindowVisible(window)+" title="+text); }
+      return true; },IntPtr.Zero);
+    return result.ToArray();
+  }
+}
+'@
 function Assert-True([bool]$Value, [string]$Message) { if (-not $Value) { throw $Message } }
 try {
   $initial = Start-Process -FilePath $Setup -ArgumentList '/S' -PassThru
@@ -39,7 +69,20 @@ try {
   $sawProgress = $false
   while (-not $helper.HasExited) {
     $helper.Refresh()
-    if ($helper.MainWindowTitle -eq 'Slide Studio 업데이트' -and $helper.MainWindowHandle -ne 0) { $sawProgress = $true }
+    $progressWindow = [UpdateWindowProbe]::FindVisible($helper.Id, 'Slide Studio 업데이트')
+    if ($progressWindow -ne [IntPtr]::Zero -and -not $sawProgress) {
+      $sawProgress = $true
+      [UpdateWindowProbe]::Describe($helper.Id) | ConvertTo-Json | Set-Content (Join-Path $report 'observed-windows.json') -Encoding utf8NoBOM
+      Add-Type -AssemblyName System.Drawing
+      $bounds = New-Object UpdateWindowProbe+Rect
+      $null = [UpdateWindowProbe]::GetWindowRect($progressWindow, [ref]$bounds)
+      $bitmap = New-Object System.Drawing.Bitmap(($bounds.Right-$bounds.Left), ($bounds.Bottom-$bounds.Top))
+      $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+      try {
+        $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size)
+        $bitmap.Save((Join-Path $report 'progress-window.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+      } finally { $graphics.Dispose(); $bitmap.Dispose() }
+    }
     if (Test-Path $log) {
       $observed = Get-Content $log -Raw -Encoding utf8 | ConvertFrom-Json
       if ($observed.status -eq 'failed') { throw "Update helper reported: $($observed.message)" }
@@ -68,7 +111,7 @@ try {
   Copy-Item $resultFile (Join-Path $report 'install-result.json')
   [ordered]@{ version=$Version; actualWindowsPowerShell=$true; realSetup=$true; initialInstall=$true;
     progressWindowObserved=$sawProgress; visibleStages=$result.steps.Count; versionVerified=$true;
-    userDataPreserved=$true; restarted=$true; limitation='Reinstalls the freshly built version; an actual older binary is not installed. JS tests cover newer-version selection and quit guards.' } |
+    userDataPreserved=$true; restarted=$true; limitation='Reinstalls the supplied version; an actual older-to-newer upgrade is not performed. JS tests cover newer-version selection and quit guards.' } |
     ConvertTo-Json | Set-Content (Join-Path $report 'results.json') -Encoding utf8NoBOM
   $null = $restarted.CloseMainWindow()
   Assert-True ($restarted.WaitForExit(30000)) 'Disposable empty app did not close.'
@@ -80,6 +123,7 @@ try {
   Assert-True ((Get-FileHash $sentinel -Algorithm SHA256).Hash -eq $before) 'Uninstall changed preserved user data.'
   Write-Output 'PASS: real Windows update progress, five visible phases, verified installation, restart and preserved user data.'
 } finally {
+  if ($null -ne $helper) { [UpdateWindowProbe]::Describe($helper.Id) | ConvertTo-Json | Set-Content (Join-Path $report 'remaining-windows.json') -Encoding utf8NoBOM }
   foreach ($resultName in @('last-install.log','last-install-seen.log')) {
     $diagnostic = Join-Path $profile ('updates/' + $resultName)
     if (Test-Path $diagnostic) { Copy-Item $diagnostic (Join-Path $report ($resultName + '.json')) }

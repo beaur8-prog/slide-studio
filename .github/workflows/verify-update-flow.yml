@@ -62,3 +62,4 @@ jobs:
             qa/results/update-ui-artifacts/**/trace.zip
             qa/results/update-native-windows/*.json
             qa/results/update-native-windows/*.log
+            qa/results/update-native-windows/*.png

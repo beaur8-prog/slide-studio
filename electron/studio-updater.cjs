@@ -355,7 +355,9 @@ function createStudioUpdater({ app, dialog, shell, Notification, id, getWindow, 
       while (Date.now() < deadline) {
         if (pendingJob !== job || disposed) return false;
         if (failure) break;
-        const installResult = await readInstallResult(log);
+        let installResult;
+        try { installResult = await readInstallResult(log); }
+        catch (error) { if (error.code !== 'EBUSY') throw error; } // PowerShell may still hold its result file open.
         if (installResult?.status === 'failed' && installResult.version === ready.asset.version) throw new Error(installResult.message);
         try {
           const acknowledgement = JSON.parse((await fs.readFile(job + '.ready', 'utf8')).replace(/^\uFEFF/, ''));

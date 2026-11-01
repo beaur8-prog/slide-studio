@@ -122,6 +122,8 @@ async function exists(file) { return fs.access(file).then(() => true, () => fals
           assert.equal(detail.editorStillOpen, true);
           if (mode !== 'cancel') {
             assert(detail.buttons.includes('설치 파일 보기')); assert(detail.detail.includes(path.join(folder, 'profile/updates')));
+            if (mode === 'unregistered') assert.match(detail.detail,/Cannot identify the running Slide installation/);
+            if (mode === 'wrong-path') assert.match(detail.detail,/outside the supported current-user installation/);
             assert.equal(JSON.parse((await fs.readFile(path.join(folder, 'profile/updates/last-install.log'), 'utf8')).replace(/^\uFEFF/, '')).status, 'failed');
           }
           results.push({ id, mode, editorKeptOpen: true, noInstallation: true });

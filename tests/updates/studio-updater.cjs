@@ -199,6 +199,23 @@ test('deferring an update never quits the app or launches an installer', async t
   f.app.emit('quit');
   assert.equal(f.quitCalls(),0); assert.equal(f.launched.length,0);
 });
+test('a temporarily locked helper result is retried without losing the installation diagnosis', async t => {
+  const f = await fixture(t,{ answer:0, helperMode:'unregistered' });
+  const open = fs.open;
+  let sawBusy = false;
+  t.mock.method(fs,'open',async (file,...args) => {
+    if (!sawBusy && String(file).endsWith('last-install.log')) {
+      sawBusy = true;
+      throw Object.assign(new Error('result is still being written'),{code:'EBUSY'});
+    }
+    return open(file,...args);
+  });
+  await f.updater.check(true);
+  assert.equal(sawBusy,true);
+  assert.equal(f.quitCalls(),0);
+  assert.match(f.updater.getState().lastInstall.message,/installation registration does not match/);
+  assert.ok(f.dialogs.some(d => d.type==='warning' && /installation registration does not match/.test(d.detail)));
+});
 test('portable Windows apps offer Setup without overwriting their running folder', async t => {
   const f = await fixture(t,{ answer:0 });
   await fs.rm(path.join(f.directory,'Uninstall Word Studio.exe'));

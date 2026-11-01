@@ -11,6 +11,8 @@ const { powershellCommand } = require('../electron/studio-updater.cjs');
 if (process.platform !== 'win32' || process.env.GITHUB_ACTIONS !== 'true') throw Error('Requires a disposable Windows CI runner');
 const root = path.resolve(__dirname, '..');
 const report = path.join(root, 'qa/results/update-handoff-windows');
+const install = path.join(process.env.LOCALAPPDATA, 'Programs', 'Slide Studio');
+const registry = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SlideStudio';
 const ps = path.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function poll(check, timeout = 30000) { const end = Date.now() + timeout; while (Date.now() < end) { if (await check()) return; await delay(100); } throw Error('Timed out waiting for fixture'); }
@@ -19,10 +21,14 @@ async function exists(file) { return fs.access(file).then(() => true, () => fals
 (async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "studio handoff 한글 O'Brien; & "));
   await fs.mkdir(report, { recursive: true });
+  if (await exists(install)) throw Error('Refusing to touch an existing Slide installation');
+  execFileSync(ps, ['-NoProfile','-NonInteractive','-EncodedCommand', powershellCommand(
+    `param($JobFile)\nif (Test-Path -LiteralPath '${registry}') { throw 'Pre-existing Slide installation registration' }`, directory)], {stdio:'inherit'});
+  await fs.mkdir(install, { recursive:true });
   const assembly = version => `using System; using System.IO; using System.Reflection; [assembly: AssemblyVersion("${version}.0")] [assembly: AssemblyInformationalVersion("${version}")] `;
   await fs.writeFile(path.join(directory, 'old.cs'), assembly('0.0.0') + 'public class OldApp { public static void Main() {} }');
   await fs.writeFile(path.join(directory, 'payload.cs'), assembly('1.0.0') + 'public class NewApp { public static void Main() { File.WriteAllText(Path.Combine(Environment.GetEnvironmentVariable("STUDIO_HANDOFF_FIXTURE_ROOT"), "reopened"), "yes"); } }');
-  await fs.writeFile(path.join(directory, 'installer.cs'), 'using System; using System.IO; using System.Diagnostics; public class Setup { public static void Main() { try { var parent = Process.GetProcessById(int.Parse(Environment.GetEnvironmentVariable("STUDIO_HANDOFF_PARENT_PID"))); if (!parent.HasExited) throw new Exception("Editor is still running"); } catch (ArgumentException) {} var root = Environment.GetEnvironmentVariable("STUDIO_HANDOFF_FIXTURE_ROOT"); File.Copy(Path.Combine(root, "payload.exe"), Environment.GetEnvironmentVariable("STUDIO_HANDOFF_TARGET_EXE"), true); File.WriteAllText(Path.Combine(root, "installed"), "yes"); } }');
+  await fs.writeFile(path.join(directory, 'installer.cs'), 'using System; using System.IO; using System.Diagnostics; public class Setup { public static void Main() { try { var parent = Process.GetProcessById(int.Parse(Environment.GetEnvironmentVariable("STUDIO_HANDOFF_PARENT_PID"))); if (!parent.HasExited) throw new Exception("Editor is still running"); } catch (ArgumentException) {} var root = Environment.GetEnvironmentVariable("STUDIO_HANDOFF_FIXTURE_ROOT"); File.Copy(Path.Combine(root, "payload.exe"), Environment.GetEnvironmentVariable("STUDIO_HANDOFF_TARGET_EXE"), true); using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SlideStudio",true)){key.SetValue("DisplayVersion","1.0.0");} File.WriteAllText(Path.Combine(Path.GetDirectoryName(Environment.GetEnvironmentVariable("STUDIO_HANDOFF_TARGET_EXE")),".slide-studio-install"),"1.0.0"); File.WriteAllText(Path.Combine(root, "installed"), "yes"); } }');
   const compile = `param([string]$JobFile)\n$ErrorActionPreference = 'Stop'\nforeach ($name in @('old','payload','installer')) { Add-Type -Path (Join-Path $JobFile "$name.cs") -OutputAssembly (Join-Path $JobFile "$name.exe") -OutputType WindowsApplication }`;
   execFileSync(ps, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', powershellCommand(compile, directory)], { stdio: 'inherit', timeout: 60000 });
   const runtime = path.dirname(require('electron'));
@@ -67,19 +73,28 @@ async function exists(file) { return fs.access(file).then(() => true, () => fals
       });
       if(mode==='cancel') win.on('close', event=>{if(!canceled){event.preventDefault();canceled=true;void updater.cancelInstall().then(()=>{write('cancelled.json',{editorStillOpen:!win.isDestroyed()});setTimeout(()=>{win.destroy();app.quit();},1000);});}});
       await updater.check(true);
-      if(mode==='blocked'||mode==='tampered'){write('blocked-complete.json',{phase:updater.getState().phase});win.destroy();app.quit();}
+      if(mode==='blocked'||mode==='tampered'||mode==='unregistered'||mode==='wrong-path'){write('blocked-complete.json',{phase:updater.getState().phase});win.destroy();app.quit();}
     }).catch(error=>{write('fixture-error.json',{error:String(error.stack)});app.exit(1);});
   `;
   await fs.writeFile(path.join(appDirectory, 'main.cjs'), nativeMain);
   const results = [];
   try {
-    for (const [id, mode] of [['slide', 'install'], ['slide', 'cancel'], ['slide', 'blocked'], ['slide', 'tampered']]) {
+    for (const [id, mode] of [['slide', 'install'], ['slide', 'cancel'], ['slide', 'blocked'], ['slide', 'tampered'], ['slide', 'unregistered'], ['slide', 'wrong-path']]) {
       const name = id + '-' + mode, folder = path.join(directory, name), product = { sheet: 'Sheet Studio', slide: 'Slide Studio', word: 'Word Studio' }[id];
       await fs.mkdir(folder);
       for (const file of ['old.exe', 'payload.exe', 'installer.exe']) await fs.copyFile(path.join(directory, file), path.join(folder, file));
-      const target = path.join(folder, product + '.exe');
+      const targetFolder = mode === 'wrong-path' ? folder : install;
+      const target = path.join(targetFolder, product + '.exe');
       await fs.copyFile(path.join(folder, 'old.exe'), target);
-      await fs.writeFile(path.join(folder, 'Uninstall ' + product + '.exe'), 'disposable uninstaller marker');
+      await fs.writeFile(path.join(targetFolder, 'Uninstall.exe'), 'disposable uninstaller marker');
+      await fs.writeFile(path.join(targetFolder, '.slide-studio-install'), '0.0.0');
+      const registration = `param($JobFile)\nRemove-Item -LiteralPath '${registry}' -Recurse -Force -ErrorAction SilentlyContinue\n` + (mode === 'unregistered' ? '' :
+        `New-Item -Path '${registry}' -Force | Out-Null\n` +
+        `New-ItemProperty -LiteralPath '${registry}' -Name DisplayName -Value 'Slide Studio' -Force | Out-Null\n` +
+        `New-ItemProperty -LiteralPath '${registry}' -Name InstallLocation -Value $JobFile -Force | Out-Null\n` +
+        `New-ItemProperty -LiteralPath '${registry}' -Name DisplayVersion -Value '0.0.0' -Force | Out-Null\n` +
+        `New-ItemProperty -LiteralPath '${registry}' -Name UninstallString -Value ('"' + (Join-Path $JobFile 'Uninstall.exe') + '"') -Force | Out-Null`);
+      execFileSync(ps, ['-NoProfile','-NonInteractive','-EncodedCommand',powershellCommand(registration,targetFolder)], {stdio:'inherit'});
       const binary = path.join(runtime, product + '.exe'); await fs.copyFile(path.join(runtime, 'electron.exe'), binary);
       const env = { ...process.env, STUDIO_HANDOFF_FIXTURE_ROOT: folder, STUDIO_HANDOFF_TARGET_EXE: target, STUDIO_HANDOFF_ID: id, STUDIO_HANDOFF_MODE: mode }; delete env.ELECTRON_RUN_AS_NODE;
       const child = spawn(binary, [], { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -119,5 +134,9 @@ async function exists(file) { return fs.access(file).then(() => true, () => fals
       console.log('Verified native updater handoff:', name);
     }
     await fs.writeFile(path.join(report, 'results.json'), JSON.stringify({ platform: process.platform, passed: true, results }, null, 2) + '\n');
-  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+  } finally {
+    execFileSync(ps, ['-NoProfile','-NonInteractive','-EncodedCommand',powershellCommand(`param($JobFile)\nRemove-Item -LiteralPath '${registry}' -Recurse -Force -ErrorAction SilentlyContinue`,directory)], {stdio:'inherit'});
+    await fs.rm(install, {recursive:true,force:true});
+    await fs.rm(directory, { recursive: true, force: true });
+  }
 })().catch(error => { console.error(error); process.exitCode = 1; });

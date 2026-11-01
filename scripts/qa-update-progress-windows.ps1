@@ -1,8 +1,10 @@
-param([Parameter(Mandatory=$true)][string]$Setup, [Parameter(Mandatory=$true)][string]$Version)
+param([Parameter(Mandatory=$true)][string]$Setup, [Parameter(Mandatory=$true)][string]$Version,
+      [string]$BaselineSetup = '', [string]$BaselineVersion = '')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') { throw 'Update installation QA runs only on a disposable Windows CI runner.' }
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid QA version.' }
+if ($BaselineSetup -and ($BaselineVersion -notmatch '^\d+\.\d+\.\d+$' -or $BaselineVersion -eq $Version)) { throw 'Expected a distinct baseline version for an actual upgrade.' }
 $install = Join-Path $env:LOCALAPPDATA 'Programs/Slide Studio'
 $profile = Join-Path $env:APPDATA 'Slide Studio'
 $registry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SlideStudio'
@@ -46,8 +48,13 @@ public static class UpdateWindowProbe {
 '@
 function Assert-True([bool]$Value, [string]$Message) { if (-not $Value) { throw $Message } }
 try {
-  $initial = Start-Process -FilePath $Setup -ArgumentList '/S' -PassThru
+  $initialSetup = if ($BaselineSetup) { $BaselineSetup } else { $Setup }
+  $initial = Start-Process -FilePath $initialSetup -ArgumentList '/S' -PassThru
+  $null = $initial.Handle
   Assert-True ($initial.WaitForExit(120000) -and $initial.ExitCode -eq 0) 'Initial install failed.'
+  $initialVersion = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
+  $expectedInitial = if ($BaselineSetup) { $BaselineVersion } else { $Version }
+  Assert-True ($initialVersion -eq $expectedInitial) 'Baseline app version mismatch.'
   New-Item -ItemType Directory -Path (Join-Path $profile 'updates') -Force | Out-Null
   Set-Content (Join-Path $profile 'updates/settings.json') '{"automatic":false}' -Encoding utf8NoBOM
   $sentinel = Join-Path $profile 'user-data-sentinel.txt'
@@ -119,6 +126,9 @@ try {
   Assert-True ($result.steps.Count -eq 5) 'Missing installation stages.'
   Assert-True (@($result.steps | Where-Object { -not $_.visible }).Count -eq 0) 'A progress stage was hidden.'
   Assert-True ((Get-Item $exe).VersionInfo.ProductVersion -eq $Version) 'Installed version mismatch.'
+  $entry = Get-ItemProperty -LiteralPath $registry
+  Assert-True ($entry.InstallLocation -ieq $install -and $entry.DisplayVersion -eq $Version) 'Install registration moved or was not updated.'
+  Assert-True (([IO.File]::ReadAllText((Join-Path $install '.slide-studio-install'))).Trim() -eq $Version) 'Installation marker was not updated.'
   Assert-True ((Get-FileHash $sentinel -Algorithm SHA256).Hash -eq $before) 'Update changed user data.'
   $deadline = [DateTime]::UtcNow.AddSeconds(30)
   $restarted = $null
@@ -128,12 +138,20 @@ try {
     Start-Sleep -Milliseconds 150
   } while ([DateTime]::UtcNow -lt $deadline)
   Assert-True ($null -ne $restarted) 'Updated app was not restarted.'
+  $main = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'Slide Studio.exe' -and $_.ExecutablePath -ieq $exe -and $_.CommandLine -notmatch '--type=' })
+  Assert-True ($main.Count -eq 1) "Expected one updated editor process, found $($main.Count)."
+  $desktop = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'Slide Studio.lnk'
+  $shell = New-Object -ComObject WScript.Shell
+  $shortcutTarget = $shell.CreateShortcut($desktop).TargetPath
+  & node -e 'const fs=require("node:fs");const a=fs.statSync(process.argv[1],{bigint:true}),b=fs.statSync(process.argv[2],{bigint:true});if(a.dev!==b.dev||a.ino!==b.ino)throw Error("Shortcut targets a different file");' $shortcutTarget $exe
+  Assert-True ($LASTEXITCODE -eq 0) 'Desktop shortcut does not target the updated app.'
   # Preserve the already-validated snapshot instead of reopening a path that
   # the restarted app is allowed to rename at any moment.
   $result | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $report 'install-result.json') -Encoding utf8NoBOM
   [ordered]@{ version=$Version; actualWindowsPowerShell=$true; realSetup=$true; initialInstall=$true;
     progressWindowObserved=$sawProgress; visibleStages=$result.steps.Count; versionVerified=$true;
-    userDataPreserved=$true; restarted=$true; limitation='Reinstalls the supplied version; an actual older-to-newer upgrade is not performed. JS tests cover newer-version selection and quit guards.' } |
+    userDataPreserved=$true; restarted=$true; fromVersion=$initialVersion; actualVersionUpgrade=($initialVersion -ne $Version);
+    registrationAndDirectoryPreserved=$true; desktopShortcutTargetVerified=$true; mainProcesses=$main.Count } |
     ConvertTo-Json | Set-Content (Join-Path $report 'results.json') -Encoding utf8NoBOM
   $null = $restarted.CloseMainWindow()
   Assert-True ($restarted.WaitForExit(30000)) 'Disposable empty app did not close.'

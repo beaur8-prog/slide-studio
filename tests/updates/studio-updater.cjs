@@ -44,6 +44,11 @@ async function fixture(t, { platform = 'win32', answer = 1, fetchImpl, helperMod
         if (helperMode === 'timeout') return;
         if (helperMode === 'wrapperExit') helper.emit('exit', 0);
         const job = JSON.parse(await fs.readFile(jobFile, 'utf8'));
+        if (helperMode === 'unregistered') {
+          await fs.writeFile(job.log, JSON.stringify({ status:'failed', version:job.version,
+            message:'Slide installation registration does not match this app.', completedAt:new Date().toISOString() }));
+          return;
+        }
         await fs.writeFile(jobFile + '.ready', '\uFEFF' + JSON.stringify({ schema: 1, id: job.id,
           parentPid: helperMode === 'invalid' ? job.parentPid + 1 : job.parentPid }));
       });
@@ -172,7 +177,7 @@ test('a successful console wrapper exit still waits for helper readiness', async
   assert.equal(f.quitCalls(),1); assert.equal(f.launched.length,1);
   assert.equal(f.opened.length,0);
 });
-for (const helperMode of ['error','exit','timeout','invalid']) test('helper startup ' + helperMode + ' keeps the editor open with logs and manual installation', async t => {
+for (const helperMode of ['error','exit','timeout','invalid','unregistered']) test('helper startup ' + helperMode + ' keeps the editor open with logs and manual installation', async t => {
   const f = await fixture(t,{ answer:0, helperMode });
   await f.updater.check(true);
   assert.equal(f.quitCalls(),0);
@@ -184,6 +189,7 @@ for (const helperMode of ['error','exit','timeout','invalid']) test('helper star
   const log = JSON.parse(await fs.readFile(path.join(f.directory,'updates/last-install.log'),'utf8'));
   assert.equal(log.status,'failed'); assert.equal(log.version,'1.4.4');
   assert.ok(log.message.length > 0);
+  if (helperMode === 'unregistered') assert.match(log.message, /installation registration does not match/);
   await fs.access(path.join(f.directory,'updates/helper-startup.log'));
   assert.deepEqual((await fs.readdir(path.join(f.directory,'updates',sha256))).filter(name => /\.(json|ready|ps1)$/.test(name)),[]);
 });

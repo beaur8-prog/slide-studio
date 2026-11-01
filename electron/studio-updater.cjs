@@ -355,6 +355,8 @@ function createStudioUpdater({ app, dialog, shell, Notification, id, getWindow, 
       while (Date.now() < deadline) {
         if (pendingJob !== job || disposed) return false;
         if (failure) break;
+        const installResult = await readInstallResult(log);
+        if (installResult?.status === 'failed' && installResult.version === ready.asset.version) throw new Error(installResult.message);
         try {
           const acknowledgement = JSON.parse((await fs.readFile(job + '.ready', 'utf8')).replace(/^\uFEFF/, ''));
           if (acknowledgement.schema !== 1 || acknowledgement.parentPid !== pid || acknowledgement.id !== id) throw new Error('업데이트 설치 도우미 응답이 올바르지 않습니다.');

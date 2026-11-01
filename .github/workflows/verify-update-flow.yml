@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       published_fixture:
-        description: Use checksum-verified v1.6.16 Setup to diagnose the current helper without rebuilding
+        description: Use checksum-verified latest published Setup to diagnose the current helper without rebuilding
         type: boolean
         default: false
 permissions:
@@ -71,10 +71,12 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory release/baseline -Force | Out-Null
-          gh release download v1.6.16 --repo beaur8-prog/slide-studio --pattern Slide-Studio-Setup-x64.exe --dir release/baseline
+          gh api repos/beaur8-prog/slide-studio/releases/latest | Set-Content release/baseline/release.json -Encoding utf8NoBOM
+          if ($LASTEXITCODE) { throw 'Cannot read the published baseline release.' }
+          $tag = (Get-Content release/baseline/release.json -Raw | ConvertFrom-Json).tag_name
+          gh release download $tag --repo beaur8-prog/slide-studio --pattern Slide-Studio-Setup-x64.exe --dir release/baseline
           if ($LASTEXITCODE) { throw 'Baseline installer download failed.' }
-          gh api repos/beaur8-prog/slide-studio/releases/tags/v1.6.16 | Set-Content release/baseline/release.json -Encoding utf8NoBOM
-          node -e 'const fs=require("node:fs");const {selectRelease,verifyFile}=require("./electron/studio-updater.cjs");const asset=selectRelease(JSON.parse(fs.readFileSync("release/baseline/release.json","utf8")),{id:"slide",currentVersion:"0.0.0",platform:"win32",arch:"x64"});verifyFile("release/baseline/Slide-Studio-Setup-x64.exe",asset).catch(error=>{console.error(error);process.exitCode=1;});'
+          node -e 'const fs=require("node:fs");const {selectRelease,verifyFile}=require("./electron/studio-updater.cjs");const asset=selectRelease(JSON.parse(fs.readFileSync("release/baseline/release.json","utf8")),{id:"slide",currentVersion:"0.0.0",platform:"win32",arch:"x64"});verifyFile("release/baseline/Slide-Studio-Setup-x64.exe",asset).then(()=>fs.writeFileSync("release/baseline/fixture.json",JSON.stringify({version:asset.version}))).catch(error=>{console.error(error);process.exitCode=1;});'
           if ($LASTEXITCODE) { throw 'Baseline installer checksum mismatch.' }
       - name: Acquire a verified published installer for helper diagnosis
         if: inputs.published_fixture == true
@@ -83,14 +85,17 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory release -Force | Out-Null
-          gh release download v1.6.16 --repo beaur8-prog/slide-studio --pattern Slide-Studio-Setup-x64.exe --dir release
-          gh api repos/beaur8-prog/slide-studio/releases/tags/v1.6.16 | Set-Content release/fixture-release.json -Encoding utf8NoBOM
+          gh api repos/beaur8-prog/slide-studio/releases/latest | Set-Content release/fixture-release.json -Encoding utf8NoBOM
+          if ($LASTEXITCODE) { throw 'Cannot read the published fixture release.' }
+          $tag = (Get-Content release/fixture-release.json -Raw | ConvertFrom-Json).tag_name
+          gh release download $tag --repo beaur8-prog/slide-studio --pattern Slide-Studio-Setup-x64.exe --dir release
+          if ($LASTEXITCODE) { throw 'Fixture installer download failed.' }
           node -e 'const fs=require("node:fs");const {selectRelease,verifyFile}=require("./electron/studio-updater.cjs");const asset=selectRelease(JSON.parse(fs.readFileSync("release/fixture-release.json","utf8")),{id:"slide",currentVersion:"0.0.0",platform:"win32",arch:"x64"});verifyFile("release/Slide-Studio-Setup-x64.exe",asset).then(()=>fs.writeFileSync("release/fixture.json",JSON.stringify({version:asset.version}))).catch(error=>{console.error(error);process.exitCode=1;});'
       - name: Exercise the real Windows installation progress helper
         shell: pwsh
         run: |
           $version = if (Test-Path release/fixture.json) { node -p 'require("./release/fixture.json").version' } else { node -p 'require("./package.json").version' }
-          $baseline = if (Test-Path release/baseline/Slide-Studio-Setup-x64.exe) { @{BaselineSetup=(Join-Path $PWD 'release/baseline/Slide-Studio-Setup-x64.exe'); BaselineVersion='1.6.16'} } else { @{} }
+          $baseline = if (Test-Path release/baseline/Slide-Studio-Setup-x64.exe) { @{BaselineSetup=(Join-Path $PWD 'release/baseline/Slide-Studio-Setup-x64.exe'); BaselineVersion=(node -p 'require("./release/baseline/fixture.json").version')} } else { @{} }
           ./scripts/qa-update-progress-windows.ps1 -Setup (Join-Path $PWD 'release/Slide-Studio-Setup-x64.exe') -Version $version @baseline
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: success() && inputs.published_fixture != true

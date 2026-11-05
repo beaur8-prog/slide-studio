@@ -403,7 +403,10 @@ test("native shapes resolve matrix styles and partial placeholder lines through 
     ),
   );
   expect(result.warnings).toContain(
-    "도형의 패턴·그림 채우기는 가져오지 않습니다.",
+    "도형의 패턴 채우기는 가져오지 않습니다.",
+  );
+  expect(result.warnings).toContain(
+    "도형의 그림 채우기에서 내장 그림을 읽을 수 없습니다. 원본 PPTX에는 보존합니다.",
   );
   for (const [index, round] of result.rounds.entries()) {
     expect(round).toHaveLength(11);

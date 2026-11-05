@@ -2,6 +2,10 @@ name: Verify editor core on Windows and Linux
 on:
   workflow_dispatch:
     inputs:
+      native_history_only:
+        description: Recheck unchanged native history after other editor cases pass
+        type: boolean
+        default: false
       windows_only:
         description: Verify only Windows for a Windows-only release
         type: boolean
@@ -28,18 +32,22 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Verify bounded public corpus acquisition
+        if: inputs.native_history_only != true
         run: >-
           node --test
           tests/corpus/fetch-layout-samples.mjs
           tests/corpus/fetch-workplace-samples.mjs
       - name: Fetch pinned layout regression samples
+        if: inputs.native_history_only != true
         run: node scripts/fetch-layout-samples.mjs
       - name: Fetch hash-verified public workplace samples
+        if: inputs.native_history_only != true
         run: node scripts/fetch-workplace-samples.mjs
       # Electron 42 ships an explicit installer rather than an npm postinstall.
       - name: Install checksum-verified native Electron runtime
         run: node node_modules/electron/install.js
       - run: npx playwright install --with-deps chromium
+        if: inputs.native_history_only != true
       - name: Install isolated Linux desktop
         if: runner.os == 'Linux'
         run: sudo apt-get install -y xvfb
@@ -47,6 +55,7 @@ jobs:
         id: build
         run: npm run build
       - name: Verify editing, recovery and layout behavior
+        if: inputs.native_history_only != true
         run: >-
           npx playwright test
           tests/file-contexts.spec.ts
@@ -97,48 +106,51 @@ jobs:
           tests/pptx-xml-order.spec.ts
           --reporter=line,json --output=qa/results/editor-core-artifacts
       - name: Exercise real Windows production app with disposable files
-        if: always() && steps.build.outcome == 'success' && runner.os == 'Windows'
+        if: always() && steps.build.outcome == 'success' && inputs.native_history_only != true && runner.os == 'Windows'
         env:
           QA_APP_ROOT: ${{ github.workspace }}
         run: node scripts/qa-save-native.cjs node_modules/electron/dist/electron.exe qa/results/editor-core-native
+      - name: Recheck native menu history in an isolated Windows app
+        if: inputs.native_history_only == true
+        run: npx playwright test tests/native-menu-history.spec.ts --reporter=line,json --output=qa/results/editor-core-artifacts
       - name: Verify Linux native menu history and picture outlines
-        if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
+        if: always() && steps.build.outcome == 'success' && inputs.native_history_only != true && runner.os == 'Linux'
         run: xvfb-run --auto-servernum npx playwright test tests/native-menu-history.spec.ts tests/picture-outline.spec.ts --grep native --reporter=line --output=qa/results/editor-core-native-history
       - name: Exercise real Linux production app with disposable files
-        if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
+        if: always() && steps.build.outcome == 'success' && inputs.native_history_only != true && runner.os == 'Linux'
         env:
           QA_APP_ROOT: ${{ github.workspace }}
           QA_NO_SANDBOX: '1'
         run: xvfb-run --auto-servernum node scripts/qa-save-native.cjs node_modules/electron/dist/electron qa/results/editor-core-native
       - name: Verify Windows native paragraph justification and saved XML
-        if: always() && steps.build.outcome == 'success' && runner.os == 'Windows'
+        if: always() && steps.build.outcome == 'success' && inputs.native_history_only != true && runner.os == 'Windows'
         env:
           QA_APP_ROOT: ${{ github.workspace }}
         run: node scripts/qa-justify-native.cjs node_modules/electron/dist/electron.exe qa/results/editor-core-justify
       - name: Verify Linux native paragraph justification and saved XML
-        if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
+        if: always() && steps.build.outcome == 'success' && inputs.native_history_only != true && runner.os == 'Linux'
         env:
           QA_APP_ROOT: ${{ github.workspace }}
           QA_NO_SANDBOX: '1'
         run: xvfb-run --auto-servernum node scripts/qa-justify-native.cjs node_modules/electron/dist/electron qa/results/editor-core-justify
       - name: Verify real Windows recovery preservation and download
-        if: always() && steps.build.outcome == 'success' && runner.os == 'Windows'
+        if: always() && steps.build.outcome == 'success' && inputs.native_history_only != true && runner.os == 'Windows'
         env:
           QA_APP_ROOT: ${{ github.workspace }}
         run: node scripts/qa-recovery-download-native.cjs node_modules/electron/dist/electron.exe qa/results/editor-core-recovery
       - name: Verify real Linux recovery preservation and download
-        if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
+        if: always() && steps.build.outcome == 'success' && inputs.native_history_only != true && runner.os == 'Linux'
         env:
           QA_APP_ROOT: ${{ github.workspace }}
           QA_NO_SANDBOX: '1'
         run: xvfb-run --auto-servernum node scripts/qa-recovery-download-native.cjs node_modules/electron/dist/electron qa/results/editor-core-recovery
       - name: Verify Windows MP3 AAC WAV playback and PDF with synthetic media
-        if: always() && steps.build.outcome == 'success' && runner.os == 'Windows'
+        if: always() && steps.build.outcome == 'success' && inputs.native_history_only != true && runner.os == 'Windows'
         env:
           QA_APP_ROOT: ${{ github.workspace }}
         run: node scripts/qa-audio-native.cjs node_modules/electron/dist/electron.exe tests/fixtures/media/native-audio.pptx qa/results/editor-core-audio
       - name: Verify Linux MP3 AAC WAV playback and PDF with synthetic media
-        if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
+        if: always() && steps.build.outcome == 'success' && inputs.native_history_only != true && runner.os == 'Linux'
         env:
           QA_APP_ROOT: ${{ github.workspace }}
           QA_NO_SANDBOX: '1'
@@ -162,5 +174,6 @@ jobs:
             qa/results/editor-core-audio/*.png
             qa/results/editor-core-artifacts/**/*.png
             qa/results/editor-core-artifacts/**/trace.zip
+            qa/results/editor-core-native-history/**/*.json
             qa/results/editor-core-native-history/**/*.png
             qa/results/editor-core-native-history/**/trace.zip

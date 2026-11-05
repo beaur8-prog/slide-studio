@@ -284,7 +284,7 @@ test("table helpers preserve cells and reject malformed or oversized project dat
       { ...table, padding: -1 },
       { ...table, borderWidth: 13 },
       { ...table, header: "false" },
-      { ...table, align: "justify" },
+      { ...table, align: "dist" },
       { ...table, fill: "url(https://example.com)" },
       { ...table, columnWidths: [0, 1] },
       { ...table, rowHeights: [1] },
@@ -326,6 +326,9 @@ test("table helpers preserve cells and reject malformed or oversized project dat
       injected: "ignored",
       cells: table.cells.map((row) => [...row]),
     });
+    const supportedAlignments = ["left", "center", "right", "justify"].map(
+      (align) => validateTable({ ...table, align }).align,
+    );
     return {
       enlarged: enlarged.cells,
       added: added.cells,
@@ -334,6 +337,7 @@ test("table helpers preserve cells and reject malformed or oversized project dat
       rejected,
       projectRejected,
       unknownCopied: "injected" in safe,
+      supportedAlignments,
     };
   });
   expect(result.enlarged).toEqual([
@@ -351,6 +355,7 @@ test("table helpers preserve cells and reject malformed or oversized project dat
   expect(result.restored.type).toBe("table");
   expect(result.restored.table?.cells).toEqual(result.removed);
   expect(result.rejected.every(Boolean)).toBe(true);
+  expect(result.supportedAlignments).toEqual(["left", "center", "right", "justify"]);
   expect(result.projectRejected).toBe(true);
   expect(result.unknownCopied).toBe(false);
 });

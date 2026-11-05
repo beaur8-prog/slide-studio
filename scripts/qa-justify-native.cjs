@@ -41,7 +41,7 @@ const sha256 = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
     const environment = await app.evaluate(({ app }) => ({
       version: app.getVersion(), platform: process.platform, architecture: process.arch,
       electron: process.versions.electron, chrome: process.versions.chrome,
-      appPath: app.getAppPath(),
+      appPath: app.getAppPath(), packaged: app.isPackaged,
     }));
     assert.equal(environment.version, require("../package.json").version);
     await app.evaluate(({ dialog }) => {
@@ -82,7 +82,7 @@ const sha256 = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
     ));
     await open(fixture);
     await expect.poll(alignments).toEqual(["left", "justify"]);
-    results.push("packaged-import-keeps-direct-justification");
+    results.push("production-import-keeps-direct-justification");
     await english().first().dblclick();
     const editor = page.getByRole("textbox", { name: "슬라이드 텍스트 편집", exact: true });
     await editor.evaluate(host => {
@@ -136,6 +136,80 @@ const sha256 = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
     await idle();
     assert((await fs.readFile(pdf)).subarray(0, 5).equals(Buffer.from("%PDF-")));
     results.push("production-pdf-output-completes-after-justification");
+
+    await page.getByRole("button", { name: "도형", exact: true }).click();
+    await page.getByRole("button", { name: "사각형", exact: true }).click();
+    const shape = page.locator('.editable-slide [data-type="shape"].selected');
+    const shapeId = await shape.getAttribute("data-element-id");
+    const readShape = () => page.evaluate(id => new Promise((resolve, reject) => {
+      const request = indexedDB.open("slide-studio", 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        const read = db.transaction("documents").objectStore("documents").get("current");
+        read.onerror = () => { db.close(); reject(read.error); };
+        read.onsuccess = async () => {
+          const record = read.result;
+          db.close();
+          try {
+            const deck = record?.format === "slide-studio-recovery-json"
+              ? JSON.parse(await record.data.text()) : record;
+            resolve(deck?.slides[0].elements.find(item => item.id === id));
+          } catch (error) { reject(error); }
+        };
+      };
+    }), shapeId);
+    await shape.dblclick();
+    await editor.press("ControlOrMeta+A");
+    await editor.pressSequentially("Alpha");
+    await expect.poll(async () => (await readShape())?.text).toBe("Alpha");
+    const geometry = value => Object.fromEntries(
+      ["type", "shape", "x", "y", "width", "height", "fill", "stroke", "strokeWidth"]
+        .map(key => [key, value[key]]),
+    );
+    const originalShape = geometry(await readShape());
+    // Start a fresh editor session with Alpha as its initial content, so the
+    // first measured typing action cannot coalesce with fixture preparation.
+    await editor.press("Escape");
+    await shape.dblclick();
+    await editor.press("ArrowRight");
+    for (let index = 0; index < 14; index++) {
+      await editor.pressSequentially(` ${index}`);
+      await page.getByRole("button", {
+        name: index % 2 === 0 ? "양쪽 맞춤" : "왼쪽 정렬", exact: true,
+      }).click();
+    }
+    for (let index = 0; index < 28; index++) {
+      await menu("Undo");
+      const live = await editor.evaluate(host =>
+        getComputedStyle(host.querySelector("[data-text-line]") || host).textAlign,
+      );
+      await expect.poll(async () => {
+        const item = await readShape();
+        return item?.paragraphs?.[0]?.align ?? item?.align ?? "left";
+      }, { message: `Native shape Undo ${index + 1} must agree with saved alignment` }).toBe(live);
+    }
+    assert.deepEqual(geometry(await readShape()), originalShape);
+    await justify.click();
+    await editor.press("Escape");
+    await expect(justify).toHaveAttribute("aria-pressed", "true");
+    const shapeFile = path.join(output, "shape-justify-save.pptx");
+    await queue("save", { canceled: false, filePath: shapeFile });
+    await menu("Save PowerPoint As…");
+    await expect.poll(async () => !!(await fs.stat(shapeFile).catch(() => null))).toBe(true);
+    await idle();
+    const shapeBytes = await fs.readFile(shapeFile), shapeZip = await JSZip.loadAsync(shapeBytes);
+    const shapeXml = await shapeZip.file("ppt/slides/slide1.xml").async("string");
+    const savedShape = [...shapeXml.matchAll(/<p:sp(?:\s[^>]*)?>[\s\S]*?<\/p:sp>/g)]
+      .map(match => match[0]).find(xml => /<a:t>Alpha<\/a:t>/.test(xml));
+    assert(savedShape && /<a:prstGeom\b[^>]*\bprst="rect"/.test(savedShape));
+    assert(/<a:pPr\b[^>]*\balgn="just"/.test(savedShape));
+    saved.push({ kind: "shape", file: path.basename(shapeFile), bytes: shapeBytes.length, sha256: sha256(shapeBytes) });
+    await open(shapeFile);
+    const reopenedShape = page.locator('.editable-slide [data-type="shape"]').filter({ hasText: /^Alpha$/ });
+    await expect(reopenedShape).toHaveCount(1);
+    await expect(reopenedShape.locator("[data-text-line]")).toHaveCSS("text-align", "justify");
+    results.push("shape-long-native-undo-keeps-visual-and-saved-alignment-geometry-and-roundtrip");
     assert.equal(sha256(await fs.readFile(fixture)), originalHash);
     assert.deepEqual(errors, []);
     await page.screenshot({ path: path.join(output, "finished.png") });

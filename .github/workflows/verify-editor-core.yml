@@ -75,6 +75,8 @@ jobs:
           tests/smartart-text-layout.spec.ts
           tests/web-layout-text.spec.ts
           tests/paragraph-justify.spec.ts
+          tests/shape-format-controls.spec.ts
+          tests/table-insert.spec.ts
           tests/text-caps.spec.ts
           tests/picture-placeholder.spec.ts
           tests/picture-duotone.spec.ts

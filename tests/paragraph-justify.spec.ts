@@ -9,29 +9,30 @@ const sourceBytes = Array.from(
 const editor = (page: Page) =>
   page.getByRole("textbox", { name: "슬라이드 텍스트 편집", exact: true });
 
-async function openText(page: Page, paragraphs: unknown[], text: string) {
+async function openText(page: Page, paragraphs: unknown[], text: string, kind: "text" | "shape" = "text") {
   await page.goto(baseURL);
   await expect(page.locator(".save-indicator")).toHaveText("저장됨");
   await page.evaluate(
-    async ({ paragraphs, text }) => {
+    async ({ paragraphs, text, kind }) => {
       const { blankDeck, element } = await import("/src/model.ts");
       const { saveAutosave } = await import("/src/storage.ts");
       const deck = blankDeck();
       deck.slides[0].elements = [
-        element("text", {
+        element(kind, {
           x: 100,
           y: 100,
           width: 700,
           height: 350,
           fontFamily: "Arial",
           fontSize: 28,
+          ...(kind === "shape" ? { shape: "ellipse", fill: "#D0E0FF", stroke: "#123456", strokeWidth: 3 } : {}),
           text,
           paragraphs,
         }),
       ];
       await saveAutosave(deck);
     },
-    { paragraphs, text },
+    { paragraphs, text, kind },
   );
   await page.reload();
   await expect(page.getByTestId("slide-element")).toHaveCount(1);
@@ -612,9 +613,9 @@ test("aligning the later soft-break segment changes its whole paragraph and undo
   await expect.poll(alignments).toEqual(["left", "right"]);
 });
 
-test("alignment remains consistent with the live paragraph after a long mixed typing and undo session", async ({ page }) => {
+for (const kind of ["text", "shape"] as const) test(`${kind} alignment remains consistent with the live paragraph after a long mixed typing and undo session`, async ({ page }) => {
   test.setTimeout(90000);
-  await openText(page, [{ align: "left", runs: [{ text: "Alpha" }] }], "Alpha");
+  await openText(page, [{ align: "left", runs: [{ text: "Alpha" }] }], "Alpha", kind);
   await editor(page).press("ArrowRight");
   for (let i = 0; i < 14; i++) {
     await editor(page).pressSequentially(` ${i}`);
@@ -631,13 +632,70 @@ test("alignment remains consistent with the live paragraph after a long mixed ty
     await expect.poll(async () => (await savedText(page)).paragraphs?.[0].align,
       { message: `Undo ${i + 1} must save the alignment shown in the editor` }).toBe(live.align);
   }
+  if (kind === "shape") expect(await savedText(page)).toMatchObject({
+    type: "shape", shape: "ellipse", x: 100, y: 100, width: 700, height: 350,
+    fill: "#D0E0FF", stroke: "#123456", strokeWidth: 3,
+  });
 });
 
-test("justified wrapped lines reach the right edge while their final line keeps natural width", async ({
+test("object selection reports uniform paragraph alignment and leaves mixed alignment unpressed", async ({ page }) => {
+  await openText(page, [
+    { align: "left", runs: [{ text: "Alpha Beta" }] },
+    { align: "left", runs: [{ text: "Second paragraph" }] },
+  ], "Alpha Beta\nSecond paragraph");
+  const justify = page.getByRole("button", { name: "양쪽 맞춤", exact: true });
+  await editor(page).press("ControlOrMeta+A");
+  await justify.click();
+  await editor(page).press("Escape");
+  await expect(justify).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("slide-element").dblclick();
+  await selectSubstring(page, "Beta");
+  await page.getByRole("button", { name: "왼쪽 정렬", exact: true }).click();
+  await editor(page).press("Escape");
+  for (const name of ["왼쪽 정렬", "가운데 정렬", "오른쪽 정렬", "양쪽 맞춤"])
+    await expect(page.getByRole("button", { name, exact: true })).toHaveAttribute("aria-pressed", "false");
+  await justify.click(); // Whole-object alignment makes both paragraphs uniform.
+  await expect(justify).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(async () => (await savedText(page)).paragraphs?.map(p => p.align)).toEqual(["justify", "justify"]);
+});
+
+test("shape partial text formatting and paragraph alignment retain independent fill and outline after saving", async ({ page }) => {
+  await openText(page, [{ align: "left", runs: [{ text: "Alpha Beta Gamma" }] }],
+    "Alpha Beta Gamma", "shape");
+  await selectSubstring(page, "Beta");
+  await page.getByRole("button", { name: "기울임", exact: true }).click();
+  await page.getByRole("button", { name: "양쪽 맞춤", exact: true }).click();
+  expect(await page.evaluate(() => getSelection()?.toString())).toBe("Beta");
+  const italic = async () => (await savedText(page)).paragraphs?.flatMap(p => p.runs)
+    .filter(r => r.italic).map(r => r.text).join("");
+  await expect.poll(italic).toBe("Beta");
+  await editor(page).press("ControlOrMeta+z");
+  await expect.poll(async () => (await savedText(page)).paragraphs?.[0].align).toBe("left");
+  await expect.poll(italic).toBe("Beta");
+  await editor(page).press("ControlOrMeta+Shift+z");
+  await expect.poll(async () => (await savedText(page)).paragraphs?.[0].align).toBe("justify");
+  await editor(page).press("Escape");
+  await expect(page.locator(".save-indicator")).toHaveText("저장됨");
+  const reopened = await page.evaluate(async () => {
+    const { loadAutosave } = await import("/src/storage.ts");
+    const { exportPptx, importPptx } = await import("/src/io.ts");
+    return (await importPptx(await exportPptx((await loadAutosave())!))).deck.slides[0].elements[0];
+  });
+  expect(reopened).toMatchObject({ type: "shape", shape: "ellipse", strokeWidth: 3,
+    text: "Alpha Beta Gamma", paragraphs: [{ align: "justify" }] });
+  expect(reopened.fill?.toLowerCase()).toBe("#d0e0ff");
+  expect(reopened.stroke?.toLowerCase()).toBe("#123456");
+  expect(reopened.paragraphs?.flatMap(p => p.runs).filter(r => r.italic).map(r => r.text).join("")).toBe("Beta");
+});
+
+for (const [language, text] of [
+  ["English", "Alpha teams compare the spacing between words when a paragraph wraps across several lines. Short end."],
+  ["Korean", "한글 본문은 자동 줄바꿈 뒤에도 문단의 좌우 폭을 유지해야 합니다. English 123 숫자와 한글을 함께 사용해 글자 간격을 확인합니다. 마지막 줄은 자연 너비로 둡니다."],
+] as const) test(`${language} justified wrapped lines reach the right edge while their final line keeps natural width`, async ({
   page,
 }, info) => {
   await page.goto(baseURL);
-  const result = await page.evaluate(async () => {
+  const result = await page.evaluate(async (text) => {
     const { default: React } = await import(
       "/node_modules/.vite/deps/react.js"
     );
@@ -646,8 +704,6 @@ test("justified wrapped lines reach the right edge while their final line keeps 
     } = await import("/node_modules/.vite/deps/react-dom_client.js");
     const { ElementVisual } = await import("/src/SlideCanvas.tsx");
     const { element } = await import("/src/model.ts");
-    const text =
-      "Alpha teams compare the spacing between words when a paragraph wraps across several lines. Short end.";
     const measurements = [];
     for (const align of ["left", "justify"]) {
       const source = element("text", {
@@ -707,7 +763,7 @@ test("justified wrapped lines reach the right edge while their final line keeps 
       host.remove();
     }
     return measurements;
-  });
+  }, text);
   await info.attach("glyph-geometry", {
     body: JSON.stringify(result, null, 2),
     contentType: "application/json",

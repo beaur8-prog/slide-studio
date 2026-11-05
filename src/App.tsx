@@ -143,7 +143,7 @@ import {
   type InlineFormat,
 } from "./text-formatting";
 import { captureTextSelection, restoreTextSelection, selectedTextElement, textRangeAtOffsets } from "./text-selection";
-import { TEXT_ALIGN_EVENT, type TextAlignmentDetail } from "./text-alignment";
+import { TEXT_ALIGN_EVENT, uniformTextAlignment, type TextAlignmentDetail } from "./text-alignment";
 import TextContextMenu from "./TextContextMenu";
 import type { TextMenuSelection } from "./text-selection";
 import ObjectContextMenu, { type ObjectMenuAction } from "./ObjectContextMenu";
@@ -4347,7 +4347,7 @@ export default function App() {
                       active={
                         (editing
                           ? inlineTextStyle.align
-                          : selectedTextStyle?.align) === align
+                          : textCapable ? uniformTextAlignment(selectedTextStyle) : undefined) === align
                       }
                       disabled={!textCapable}
                       onClick={() => setTextStyle("align", align)}

@@ -3,6 +3,16 @@ import type { SlideElement, TextAlignment, TextParagraph } from "./types";
 export const TEXT_ALIGN_EVENT = "slide-studio:align-paragraphs";
 export type TextAlignmentDetail = { align: TextAlignment; applied?: boolean };
 
+/** A selected text object can override its base alignment per paragraph. */
+export function uniformTextAlignment(
+  element?: Pick<SlideElement, "align" | "paragraphs">,
+): TextAlignment | undefined {
+  if (!element) return;
+  const align = element.paragraphs?.[0]?.align ?? element.align ?? "left";
+  return element.paragraphs?.some(p => (p.align ?? element.align ?? "left") !== align)
+    ? undefined : align;
+}
+
 /** Alignment belongs to a paragraph, even when the caret is after a soft break.
  * Preserve inline runs and inherited properties outside the selected paragraphs. */
 export function alignTextParagraphs(

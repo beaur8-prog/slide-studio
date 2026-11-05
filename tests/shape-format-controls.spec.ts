@@ -14,7 +14,7 @@ test("inspector has one close action, preserves the selected shape and fits its 
   const panel = page.locator(".inspector");
   await expect(panel.locator(".inspector-heading")).toContainText("개체 서식");
   await expect(panel.locator(".inspector-heading button")).toHaveCount(1);
-  for (const width of [970, 1080, 1100, 1200, 1250, 1280, 1540]) {
+  for (const width of [970, 1000, 1001, 1040, 1041, 1080, 1100, 1150, 1151, 1180, 1200, 1201, 1250, 1251, 1280, 1540]) {
     await page.setViewportSize({ width, height: 900 });
     const bounds = await panel.evaluate(el => ({
       width: el.getBoundingClientRect().width,

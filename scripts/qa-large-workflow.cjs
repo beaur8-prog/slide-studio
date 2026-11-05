@@ -4,6 +4,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { performance } = require('node:perf_hooks');
+const { createHash } = require('node:crypto');
+const os = require('node:os');
 const PptxGenJS = require('pptxgenjs');
 const sharp = require('sharp');
 const { chromium, expect } = require('@playwright/test');
@@ -92,7 +94,11 @@ async function runFile(browser, filename, label, slides) {
   page.setDefaultTimeout(180000);
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  const metrics = { label, filename, bytes: (await fs.stat(filename)).size, slides, stages: {}, errors, output_warnings: [] };
+  const metrics = { label, filename, bytes: (await fs.stat(filename)).size, slides,
+    sha256: createHash('sha256').update(await fs.readFile(filename)).digest('hex'),
+    environment: { platform: process.platform, arch: process.arch, osRelease: os.release(),
+      browser: await browser.version(), baseURL, sourceCommit: process.env.QA_SOURCE_COMMIT || null },
+    stages: {}, errors, output_warnings: [] };
   // Large source packages can exceed the documented preservation budget.
   // Record the actual loss warning and explicitly approve this disposable QA
   // copy, rather than silently dismissing it and waiting forever for a download.
@@ -224,10 +230,15 @@ async function runFile(browser, filename, label, slides) {
 
 (async () => {
   await fs.mkdir(output, { recursive: true });
-  const generated = requested === 'corpus' ? null : await fixture();
+  assert(['all', 'generated', 'corpus', 'corpus-151'].includes(requested),
+    'Choose all, generated, corpus (70 slides), or corpus-151 (151 slides).');
+  const generated = ['corpus', 'corpus-151'].includes(requested) ? null : await fixture();
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   try {
     if (generated) await runFile(browser, generated, `mixed-${count}`, count);
-    if (requested !== 'generated') await runFile(browser, path.join(root, 'qa/samples/cmu-lecture-1.pptx'), 'cmu-70', 70);
+    if (requested === 'corpus-151')
+      await runFile(browser, path.join(root, 'qa/samples/cmu-lecture-3.pptx'), 'cmu-151', 151);
+    else if (requested !== 'generated')
+      await runFile(browser, path.join(root, 'qa/samples/cmu-lecture-1.pptx'), 'cmu-70', 70);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -24,6 +24,7 @@ async function desktop(profile: string, documents: string) {
   >();
   const dialogs: { kind: string; options: any }[] = [];
   const replies: any[] = [];
+  const preferences: unknown[][] = [];
   const frame = { url: pathToFileURL(path.resolve("dist/index.html")).href };
   const contents = {
     mainFrame: frame,
@@ -55,6 +56,9 @@ async function desktop(profile: string, documents: string) {
                 handlers.set(name, callback),
               on() {},
             },
+            systemPreferences: {
+              setUserDefault: (...args: unknown[]) => preferences.push(args),
+            },
             dialog: Object.fromEntries(
               ["Open", "Save", "MessageBox"].map((kind) => [
                 kind === "MessageBox" ? "showMessageBox" : `show${kind}Dialog`,
@@ -76,6 +80,7 @@ async function desktop(profile: string, documents: string) {
   return {
     dialogs,
     replies,
+    preferences,
     open: () => handlers.get("slide-studio:open-file")!(event),
     save: (name = "저장한 발표.pptx", extensions = ["pptx"]) =>
       handlers.get("slide-studio:save-file")!(event, {
@@ -107,6 +112,8 @@ test("native open and save start in the document folder and remember it across r
     const app = await desktop(profile, documents);
     await app.open();
     expect(app.dialogs.at(-1)!.options.defaultPath).toBe(documents);
+    expect(app.preferences).toEqual(process.platform === "darwin"
+      ? [["NSOSPLastRootDirectory", "string", profile]] : []);
     app.replies.push({ canceled: false, filePaths: [input] });
     expect((await app.open()).name).toBe("원본.pptx");
     await app.open();
@@ -115,7 +122,8 @@ test("native open and save start in the document folder and remember it across r
     expect(app.dialogs.at(-1)!.options.defaultPath).toBe(
       path.join(source, "저장한 발표.pptx"),
     );
-    expect(app.dialogs.at(-1)!.options.filters[0].extensions).toEqual(["pptx"]);
+    expect(app.dialogs.at(-1)!.options.filters).toEqual(process.platform === "darwin"
+      ? [] : [{ name: "PowerPoint Presentation", extensions: ["pptx"] }]);
     const output = path.join(destination, "새 이름.pptx");
     app.replies.push({ canceled: false, filePath: output });
     expect(await app.save()).toBe(output);

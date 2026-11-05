@@ -232,7 +232,10 @@ export function applyTextFormatRanges(
   element: SlideElement,
   ranges: TextFormatRange[],
 ): SlideElement {
-  if (element.type !== "text" || !ranges.length) return element;
+  // Shape text shares the same editable text frame and native history. Keep
+  // its geometry/fill intact while reading the live paragraph and run styles.
+  if ((element.type !== "text" && element.type !== "shape") || !ranges.length)
+    return element;
   const source: TextParagraph[] =
     element.paragraphs ??
     (element.text ?? "").split("\n").map((text) => ({ runs: [{ text }] }));

@@ -43,6 +43,9 @@ export async function nativeDesktop(profile: string, documents: string) {
                 handlers.set(name, callback),
               on() {},
             },
+            // Cocoa panel preparation uses this Electron API before showing
+            // the mocked dialog. Never write to the host's actual defaults.
+            systemPreferences: { setUserDefault() {} },
             dialog: Object.fromEntries(
               ["Open", "Save", "MessageBox"].map((kind) => [
                 kind === "MessageBox" ? "showMessageBox" : `show${kind}Dialog`,

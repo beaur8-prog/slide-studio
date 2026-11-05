@@ -1,6 +1,11 @@
 name: Verify editor core on Windows and Linux
 on:
   workflow_dispatch:
+    inputs:
+      windows_only:
+        description: Verify only Windows for a Windows-only release
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -8,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-24.04]
+        os: ${{ inputs.windows_only && fromJSON('["windows-latest"]') || fromJSON('["windows-latest", "ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:

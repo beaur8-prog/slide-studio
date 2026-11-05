@@ -52,11 +52,17 @@ test.afterEach(async () => {
     // acknowledgement before exiting; Electron then closes its renderer children.
     const child = app.process();
     if (child.exitCode === null) {
+      const exited = new Promise<number | null>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("Disposable history app did not exit")), 5000);
+        child.once("exit", code => { clearTimeout(timer); resolve(code); });
+      });
       await app.evaluate(({ app }) => {
         setTimeout(() => app.exit(0), 100);
         return true;
       });
-      await app.close();
+      // Do not race BrowserContext.close against Electron's scheduled exit.
+      // The process-exit event closes its protocol connection and child renderers.
+      expect(await exited).toBe(0);
     }
   }
   if (profile) await fs.rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })

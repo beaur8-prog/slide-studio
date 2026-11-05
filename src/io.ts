@@ -51,7 +51,7 @@ import { restoreLayoutXml } from "./pptx-export-layout";
 import { inheritTableCellStyle, readTableDiagonalBorders, writeTableDiagonalBorders, tableDiagonalBordersMatch, fallbackTableDiagonalElements, resolveTableStyleReferences, defaultTableGridStyle } from "./pptx-table-style";
 import { resolveTableRowHeights } from "./table-layout";
 import { MAX_SLIDES, MAX_SLIDE_ELEMENTS, MAX_ELEMENTS } from "./document-limits";
-import { writeBackgroundImage } from "./pptx-background";
+import { writeBackgroundImage, writeShapeImageFill } from "./pptx-background";
 import { writeGroups } from "./object-groups";
 import { rasterMime } from "./image-editing";
 import { safeSvgImage } from "./svg-image";
@@ -613,6 +613,12 @@ export function validateDeck(input: unknown): Deck {
           }
           if (source.fill !== undefined)
             el.fill = colorValue(source.fill, `${elLabel} 채우기`, true);
+          if (source.imageFill !== undefined) {
+            if (el.type !== "shape") fail(`${elLabel}: 그림 채우기는 도형에서만 사용할 수 있습니다.`);
+            el.imageFill = validateBackgroundImage(source.imageFill, `${elLabel} 채우기`);
+            imageBytes += el.imageFill.src.length * 0.75;
+            if (imageBytes > MAX_EXPANDED / 2) fail("내장 이미지·채우기의 합계가 100 MB를 초과합니다.");
+          }
           if (source.stroke !== undefined)
             el.stroke = colorValue(source.stroke, `${elLabel} 윤곽선`, true);
           if (source.strokeWidth !== undefined)
@@ -939,6 +945,7 @@ export async function exportPptx(input: Deck, options: {onWarning?: (message:str
       slide.addImage({ data: source.backgroundImage.src, x: 0, y: 0, w: deck.width / 96, h: deck.height / 96, objectName: backgroundNames[slideIndex] });
     if (source.notes) slide.addNotes(source.notes);
     for (const el of source.elements) {
+      if (el.imageFill) slide.addImage({ data: el.imageFill.src, x: 0, y: 0, w: 1, h: 1, objectName: `ss-image-fill-${el.id}` });
       const linkedSlide = el.hyperlink?.slideId
         ? deck.slides.findIndex((slide) => slide.id === el.hyperlink!.slideId)
         : -1;
@@ -1176,6 +1183,8 @@ export async function exportPptx(input: Deck, options: {onWarning?: (message:str
     }
     preserveObjectLinks(doc, slide.elements);
     restoreLayoutXml(doc, slide.elements);
+    for (const element of slide.elements) if (element.imageFill)
+      writeShapeImageFill(doc, { ...element.imageFill, opacity: (element.imageFill.opacity ?? 1) * element.opacity * (element.fillOpacity ?? 1) }, element.id, `ss-image-fill-${element.id}`);
     restoreInsertFields(doc, slide.elements);
     restoreTableXml(doc, slide.elements);
     const relationshipPath = `ppt/slides/_rels/slide${index + 1}.xml.rels`;
@@ -1631,6 +1640,18 @@ export async function importPptx(
       if (candidate !== blip) triedVector = true;
     }
   };
+  const readPictureNode = async (node: Element, imageRels: Relationship[]) => {
+    // Mac Office can wrap the entire blipFill in AlternateContent: its Choice
+    // is a PDF, while the embedded PNG lives in Fallback. Do not mistake the
+    // missing direct child for a linked/missing picture, or read Choice's crop.
+    const fills = [child(node, "blipFill"), ...children(node, "AlternateContent").flatMap(content =>
+      [child(content, "Fallback"), ...children(content, "Choice")].flatMap(branch => children(branch, "blipFill")))];
+    for (const fill of fills) {
+      if (!fill) continue;
+      const blip = child(fill, "blip"), src = await readPicture(blip, imageRels);
+      if (src) return { fill, blip, src };
+    }
+  };
   let count = 0;
   const tableStyles = await readXml(
     presentationRels.find((r) => r.type.endsWith("/tableStyles"))?.path ??
@@ -1829,6 +1850,7 @@ export async function importPptx(
       if (el.type === "image" || el.type === "video" || el.type === "audio")
         embeddedAssetBytes +=
           ((el.src?.length ?? 0) + (el.poster?.length ?? 0)) * 0.75;
+      if (el.imageFill) embeddedAssetBytes += el.imageFill.src.length * 0.75;
       slide.elements.push(el);
     };
     const readFill = (
@@ -1847,8 +1869,8 @@ export async function importPptx(
         );
         if (gradient)
           return { color: gradient.stops[0].color, opacity: 1, gradient };
-        if (child(properties, "pattFill") || child(properties, "blipFill"))
-          warn("도형의 패턴·그림 채우기는 가져오지 않습니다.");
+        if (child(properties, "pattFill"))
+          warn("도형의 패턴 채우기는 가져오지 않습니다.");
         const fillRef = child(child(node, "style"), "fillRef");
         const themedFill = resolveThemeStyleReference(
           fillRef,
@@ -1868,10 +1890,9 @@ export async function importPptx(
             return { color: gradient.stops[0].color, opacity: 1, gradient };
         }
         if (
-          themedFill?.localName === "pattFill" ||
-          themedFill?.localName === "blipFill"
+          themedFill?.localName === "pattFill"
         )
-          warn("도형의 패턴·그림 채우기는 가져오지 않습니다.");
+          warn("도형의 패턴 채우기는 가져오지 않습니다.");
         const reference = readColor(fillRef, theme);
         if (reference && fillRef?.getAttribute("idx") !== "0") return reference;
       }
@@ -2029,7 +2050,7 @@ export async function importPptx(
       });
     };
 
-    const parseShape = (node: Element, parent: Transform): void => {
+    const parseShape = async (node: Element, parent: Transform, sourceRelationships: Relationship[]): Promise<void> => {
       const layoutShape = inheritedShape(node, layout);
       const masterShape = inheritedShape(layoutShape ?? node, master);
       const chain = [node, layoutShape, masterShape];
@@ -2055,6 +2076,28 @@ export async function importPptx(
         child(geometryProperties, "prstGeom")?.getAttribute("prst") ??
         (node.localName === "cxnSp" ? "line" : "rect");
       const fill = readFill(chain);
+      let imageFill: SlideElement["imageFill"];
+      for (const owner of chain) {
+        if (!owner) continue;
+        const ownFill = Array.from(child(owner, "spPr")?.children ?? []).find(n => ["noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"].includes(n.localName));
+        const themed = !ownFill && resolveThemeStyleReference(child(child(owner, "style"), "fillRef"), first(themeDoc, "fmtScheme"), n => readColor(n, theme), "fill");
+        const paint = ownFill || themed;
+        if (!paint) continue;
+        if (paint.localName !== "blipFill") break;
+        const ownerRels = themed && themePath ? await relationships(themePath) : owner.ownerDocument === layout ? layoutRels : owner.ownerDocument === master ? masterRels : sourceRelationships;
+        const src = await readPicture(child(paint, "blip"), ownerRels);
+        if (!src) { warn("도형의 그림 채우기에서 내장 그림을 읽을 수 없습니다. 원본 PPTX에는 보존합니다."); break; }
+        const placement = readDrawingmlImageFill(paint, src, n => readColor(n, theme));
+        if (unsupportedDrawingmlImageEffects(paint) || (!placement && (child(paint, "tile") || child(child(paint, "blip"), "duotone"))))
+          warn("일부 도형 그림 채우기 효과는 단순화되며 원본 PPTX에는 보존합니다.");
+        const crop = ["t", "r", "b", "l"].map(key => clamp(attrNumber(child(paint, "srcRect"), key) / 100000, -10, 10)) as [number, number, number, number];
+        if (crop[0] + crop[2] >= 0.999 || crop[1] + crop[3] >= 0.999) {
+          warn("유효한 표시 영역이 없는 도형의 그림 채우기는 원본 PPTX에만 보존합니다.");
+          break;
+        }
+        imageFill = validateBackgroundImage({ src, crop, opacity: placement?.opacity ?? clamp(attrNumber(child(child(paint, "blip"), "alphaModFix"), "amt", 100000) / 100000, 0, 1), ...(placement ? { placement: { width: placement.width, height: placement.height, dpi: placement.dpi, fill: placement.fill, ...(placement.tile ? { tile: placement.tile } : {}), ...(placement.duotone ? { duotone: placement.duotone } : {}) } } : {}) }, "도형 그림 채우기");
+        break;
+      }
       const line = readLine(chain);
       const effect = chain
           .map((n) => child(child(n, "spPr"), "effectLst"))
@@ -2135,12 +2178,13 @@ export async function importPptx(
       const isTextBox =
         child(child(node, "nvSpPr"), "cNvSpPr")?.getAttribute("txBox") === "1";
       const pureText =
+        !imageFill && (
         (isTextBox && preset === "rect" && !paths) ||
         (!paths &&
           Boolean(body) &&
           preset === "rect" &&
           fill.color === "transparent" &&
-          (line.color === "transparent" || line.width === 0));
+          (line.color === "transparent" || line.width === 0)));
       let shape: ShapeKind =
         preset === "line" || preset === "straightConnector1"
           ? line.arrow
@@ -2225,10 +2269,11 @@ export async function importPptx(
               })()
             : {}),
           opacity: 1,
-          fillOpacity: fill.opacity,
+          fillOpacity: imageFill ? 1 : fill.opacity,
           strokeOpacity: line.opacity,
           fill: fill.color,
           gradient: fill.gradient,
+          imageFill,
           shadow,
           strokeDash: line.dash,
           strokeCap: line.cap,
@@ -2307,6 +2352,7 @@ export async function importPptx(
         warn("위치 정보를 찾을 수 없는 이미지를 제외했습니다.");
         return;
       }
+      const picture = await readPictureNode(node, pictureRelationships);
       const media = first(node, "media"),
         legacyVideo = first(node, "videoFile");
       const legacyAudio = first(node, "audioFile") ?? first(node, "wavAudioFile");
@@ -2325,7 +2371,7 @@ export async function importPptx(
             audioCache.set(relationship.path,src);
           }
           if (src) {
-            const poster = (await readPicture(first(child(node,"blipFill"),"blip"),pictureRelationships)) ?? AUDIO_ICON;
+            const poster = picture?.src ?? AUDIO_ICON;
             if (embeddedAssetBytes + (src.length + poster.length) * 0.75 <= MAX_EXPANDED / 2) {
               addElement({ id:uid(), type:"audio", ...geometry, opacity:1, src, poster,
                 ...readAudioPlayback(doc,node),
@@ -2360,7 +2406,7 @@ export async function importPptx(
             videoCache.set(relationship.path, src);
           }
           if (src) {
-            let poster = await readPicture(first(child(node, "blipFill"), "blip"), pictureRelationships);
+            let poster = picture?.src;
             poster ??= EMPTY_POSTER;
             if (
               embeddedAssetBytes + (src.length + poster.length) * 0.75 <=
@@ -2393,13 +2439,13 @@ export async function importPptx(
           "외부 연결·지원하지 않는 동영상 또는 크기 제한을 넘는 영상은 정지 미리보기로 가져옵니다. 내장 MP4·WebM은 한 개당 20 MiB, 이미지·동영상 합계 100 MiB까지 지원합니다.",
         );
       }
-      const blip = first(child(node, "blipFill"), "blip");
-      const src = await readPicture(blip, pictureRelationships);
+      const blip = picture?.blip;
+      const src = picture?.src;
       if (!src) {
         warn("변환할 수 없는 그림이나 내장 데이터가 없는 연결 이미지를 제외했습니다. PNG/JPEG/GIF/WebP/TIFF 및 지원하는 SVG/EMF/WMF 그림을 표시합니다.");
         return;
       }
-      const cropNode = first(node, "srcRect");
+      const cropNode = child(picture?.fill, "srcRect");
       const crop: [number, number, number, number] = ["t", "r", "b", "l"].map(
         (k) => attrNumber(cropNode, k, 0) / 100000,
       ) as [number, number, number, number];
@@ -2977,7 +3023,7 @@ export async function importPptx(
         if (!sourceTop && ["sp","cxnSp","pic","grpSp","graphicFrame","AlternateContent","contentPart"].includes(node.localName))
           slide.pptxSource!.nodes.push({...top, count: 0, signature: "0".repeat(64)});
         if (node.localName === "sp" || node.localName === "cxnSp")
-          parseShape(node, parent);
+          await parseShape(node, parent, sourceRelationships);
         else if (node.localName === "pic")
           await parseImage(node, parent, sourceRelationships);
         else if (node.localName === "grpSp") {
@@ -3117,6 +3163,29 @@ export async function importPptx(
               );
             } else
               warn("저장된 도형 배치가 없는 SmartArt는 가져오지 않습니다.");
+          } else if (first(node, "oleObj")) {
+            // An embedded/linked worksheet or Photoshop object may contain a
+            // perfectly ordinary cached PNG/EMF. Display only that picture;
+            // neither open the attachment nor follow its external relation.
+            const preview = first(node, "pic");
+            if (preview) {
+              const tree = node.ownerDocument.createElementNS(node.namespaceURI, "p:spTree");
+              const copy = preview.cloneNode(true) as Element;
+              if (!inheritedTransform([copy])) {
+                const frame = child(node, "xfrm");
+                if (frame) {
+                  let properties = child(copy, "spPr");
+                  if (!properties) { properties = node.ownerDocument.createElementNS(node.namespaceURI, "p:spPr"); copy.append(properties); }
+                  const transform = node.ownerDocument.createElementNS("http://schemas.openxmlformats.org/drawingml/2006/main", "a:xfrm");
+                  for (const attribute of Array.from(frame.attributes)) transform.setAttribute(attribute.name, attribute.value);
+                  for (const child of Array.from(frame.children)) transform.append(child.cloneNode(true));
+                  properties.insertBefore(transform, properties.firstChild);
+                }
+              }
+              tree.append(copy);
+              await walk(tree, parent, depth + 1, sourceRelationships, false, sourcePart, top);
+              warn("첨부 개체는 저장된 정지 미리보기 그림으로 가져옵니다. OLE 첨부 파일은 실행하거나 저장하지 않습니다.");
+            } else warn("정지 미리보기 그림이 없는 첨부 개체를 제외했습니다.");
           } else warn("지원하지 않는 그래픽·미디어 개체를 제외했습니다.");
         } else if (node.localName === "AlternateContent") {
           const fallback = child(node, "Fallback");

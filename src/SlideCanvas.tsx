@@ -1,5 +1,6 @@
 import { GradientDefs, gradientCss } from "./gradient";
 import { CustomShape } from "./CustomShape";
+import { ShapeImageFill } from "./ShapeImageFill";
 import { VideoVisual } from "./VideoVisual";
 import { ImageVisual } from "./ImageVisual";
 import { ChartVisual } from "./ChartVisual";
@@ -154,7 +155,7 @@ export const ElementVisual = memo(function ElementVisual({
     return <ArtworkVisual element={element} onTextHeight={onTextHeight} />;
   return (
     <>
-      <ArtworkVisual element={element} />
+      <ArtworkVisual element={element} playing={playMedia} />
       {element.text !== undefined && (
         <div className="shape-text-frame" style={shapeTextFrame(element)}>
           <StaticText element={shapeTextElement(element)} />
@@ -167,9 +168,11 @@ export const ElementVisual = memo(function ElementVisual({
 function ArtworkVisual({
   element: e,
   onTextHeight,
+  playing = false,
 }: {
   element: SlideElement;
   onTextHeight?: (id: string, height: number) => void;
+  playing?: boolean;
 }) {
   const gradientId = "fill-" + useId().replace(/[^a-z0-9]/gi, "");
   if (e.type === "table") return <TableVisual element={e} />;
@@ -203,7 +206,7 @@ function ArtworkVisual({
       </div>
     );
   }
-  if (e.shape === "custom" && e.paths) return <CustomShape element={e} />;
+  if (e.shape === "custom" && e.paths) return <CustomShape element={e} playing={playing} />;
   if ((e.shape === "line" || e.shape === "arrow") && (e.lineStart || e.lineEnd))
     return <LineShape element={e} />;
   if (e.shape === "line" || e.shape === "arrow")
@@ -241,8 +244,9 @@ function ArtworkVisual({
       style={{ transform: `scale(${e.flipH ? -1 : 1},${e.flipV ? -1 : 1})` }}
     >
       <GradientDefs gradient={e.gradient} id={gradientId} />
+      <ShapeImageFill element={e} id={`${gradientId}-image`} playing={playing} />
       <g
-        fill={e.gradient ? `url(#${gradientId})` : (e.fill ?? "none")}
+        fill={e.imageFill ? `url(#${gradientId}-image)` : e.gradient ? `url(#${gradientId})` : (e.fill ?? "none")}
         fillOpacity={e.fillOpacity}
         stroke={e.stroke ?? "none"}
         strokeOpacity={e.strokeOpacity}

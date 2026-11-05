@@ -125,6 +125,7 @@ const paint = (e: SlideElement) =>
       "strokeDash",
       "strokeCap",
       "gradient",
+      "imageFill",
       "shadow",
       "lineStart",
       "lineEnd",
@@ -966,6 +967,10 @@ export async function writePreservedPptx(
               continue;
             }
           } else {
+            if (relType.endsWith("/hyperlink") && raw.startsWith("#")) {
+              warn("지원하지 않는 문서 내부 책갈피 링크를 제외했습니다.");
+              continue;
+            }
             const resolved = resolvePart(part, raw);
             if (!resolved) throw Error("원본 PPTX 첨부 경로가 잘못되었습니다.");
             // Keep only the current layout in a cloned master's layout list.
@@ -1181,6 +1186,11 @@ export async function writePreservedPptx(
             }
             target = raw;
           } else {
+            if (type.endsWith("/hyperlink") && raw.startsWith("#")) {
+              drop(node, attribute);
+              warn("지원하지 않는 문서 내부 책갈피 링크를 제외했습니다.");
+              continue;
+            }
             const resolved = resolvePart(part, raw);
             if (resolved) {
               target = type.endsWith("/slide")
@@ -1396,6 +1406,19 @@ export async function writePreservedPptx(
         )
       )
         continue;
+      if (all(original.node, "oleObj").length) {
+        // Keep the generated, inert preview image. Replacing it with the
+        // original frame (or removing it as inherited artwork) would let
+        // cleanActive delete the visible preview together with its attachment.
+        if (meta && ref.source === meta.source && ref.part !== meta.path) {
+          const k = ref.source + ":" + ref.part;
+          if (!removed.has(k)) removed.set(k, new Set());
+          removed.get(k)!.add(ref.index);
+        }
+        used.add(sourceKey!);
+        warn("첨부 개체의 정지 미리보기는 그림으로 저장하며 OLE 첨부 파일은 포함하지 않습니다.");
+        continue;
+      }
       // SmartArt and some alternate-content fallbacks are exposed as several
       // editable siblings. Compare the whole binding before deciding that the
       // native compound object was edited; a single fragment is not that edit.

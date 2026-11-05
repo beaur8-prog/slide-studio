@@ -1,0 +1,428 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Read-only object-presence audit. Includes intentionally invalid legacy regression samples; not a list of all supported documents.",
+  "repository": "https://github.com/apache/poi",
+  "repositoryCommit": "6327f056ba3cfdae326a0261a236460592b80f5c",
+  "samples": [
+    {
+      "file": "2411-Performance_Up.pptx",
+      "bytes": 648274,
+      "sha256": "a387861a0066ad11ba85aba9572830c1ec1ab9a24380728ead34d2b5b26662c0",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/2411-Performance_Up.pptx"
+    },
+    {
+      "file": "45541_Footer.pptx",
+      "bytes": 307913,
+      "sha256": "5e81b8c682c0b9b574d8dae72a0f1822f20a70436e251d981e295c98076b059a",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/45541_Footer.pptx"
+    },
+    {
+      "file": "45541_Header.pptx",
+      "bytes": 308041,
+      "sha256": "fda10ff5e22a0222a40a69ddd6d00b29dc8081eff499ccf2b5df0579395a0df2",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/45541_Header.pptx"
+    },
+    {
+      "file": "45545_Comment.pptx",
+      "bytes": 308394,
+      "sha256": "0295a51f63150e3ee680154d07dab88062ba2306030b790561f85436f3ded7c8",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/45545_Comment.pptx"
+    },
+    {
+      "file": "49386-null_dates.pptx",
+      "bytes": 17124,
+      "sha256": "64ef06e6d3869a8eea90ea28ddf35f20ff59578d09d04611343f32aa56ac196e",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/49386-null_dates.pptx"
+    },
+    {
+      "file": "51187.pptx",
+      "bytes": 45681,
+      "sha256": "a1728e7e6c4cf6470fd2d5cf044b6db008ddb75f512c390ab5bc71bbcf37a909",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/51187.pptx"
+    },
+    {
+      "file": "54542_cropped_bitmap.pptx",
+      "bytes": 100030,
+      "sha256": "fa219615dae3cd01f62e8449f7b477bebadd53d3cfba3348ada6377098d8c65e",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/54542_cropped_bitmap.pptx"
+    },
+    {
+      "file": "56812.pptx",
+      "bytes": 58308,
+      "sha256": "36545b1502bc7149de9ec537ae2a7e83e6c8baf24c7f72e9944d863c41072b65",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/56812.pptx"
+    },
+    {
+      "file": "60042.pptx",
+      "bytes": 31458,
+      "sha256": "d72533cdc38a93dd87c5fa7268b185d3b871daf4c4693627a09bc0dc80a04f04",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/60042.pptx"
+    },
+    {
+      "file": "60810.pptx",
+      "bytes": 874522,
+      "sha256": "61afceb0365523ceba6fc00a525157148c2ddbdb3b5d843992ac3c107e9921bf",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/60810.pptx"
+    },
+    {
+      "file": "61515.pptx",
+      "bytes": 29270,
+      "sha256": "469ccfe059370656a241f08c89d4b2d81ac2ba9eb12835f6b3b573cc56bccc3d",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/61515.pptx"
+    },
+    {
+      "file": "63200.pptx",
+      "bytes": 36778,
+      "sha256": "9729b1032278541ffa549b86a51336fd6063c309f3fc25ba68af376d03a92e69",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/63200.pptx"
+    },
+    {
+      "file": "ArtisticEffectSample.pptx",
+      "bytes": 972788,
+      "sha256": "55c9b01d60efc8245f5d28097e702e1921e06aebfab522b6de574dcb435d66b7",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/ArtisticEffectSample.pptx"
+    },
+    {
+      "file": "Divino_Revelado.pptx",
+      "bytes": 523999,
+      "sha256": "bf2f960bee0b06969534f7fe3cad57e50427f7e7e73ce26383cd6e5afa7d30cb",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/Divino_Revelado.pptx"
+    },
+    {
+      "file": "EmbeddedAudio.pptx",
+      "bytes": 90047,
+      "sha256": "c5ae4274e2bf5504a56aef9c8d7c5d2381ece69c9bf68f7749ad5eae3e675edb",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/EmbeddedAudio.pptx"
+    },
+    {
+      "file": "EmbeddedVideo.pptx",
+      "bytes": 201418,
+      "sha256": "7940e3b1a339db11f00b65399a2fe77e0e85a5da3a30ac8d6c8a0a77527b2ab2",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/EmbeddedVideo.pptx"
+    },
+    {
+      "file": "KEY02.pptx",
+      "bytes": 2282394,
+      "sha256": "426b532f79586c354750ba41f7ce6b0a3e153263b2a6db15c885a0c20e0fa6c4",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/KEY02.pptx"
+    },
+    {
+      "file": "LIBRE_OFFICE-100610-0.pptx",
+      "bytes": 743904,
+      "sha256": "3691e1902a2590f34ed9b846a84469d9095e1556f7d3d81cb1c4a429145fd596",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/LIBRE_OFFICE-100610-0.pptx"
+    },
+    {
+      "file": "OverlappingRelations.pptx",
+      "bytes": 38135,
+      "sha256": "1ea1c979983ddafa798da32f7fd12a72b6262478aae1c7e021354226e0a8790f",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/OverlappingRelations.pptx"
+    },
+    {
+      "file": "SampleShow.pptx",
+      "bytes": 39083,
+      "sha256": "bfb4b2f07c9233afd2f32aa5781d849d0c7d225bf03721a10becf487b481d828",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/SampleShow.pptx"
+    },
+    {
+      "file": "SmartArt.pptx",
+      "bytes": 41382,
+      "sha256": "b97e4c6d2ee1dd4094f50f9043820610268dd452d7717c537f5456636adcc353",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/SmartArt.pptx"
+    },
+    {
+      "file": "aascu.org_hbcu_leadershipsummit_cooper_.pptx",
+      "bytes": 612132,
+      "sha256": "0089e34825a40c63c3001b866a0f769fceaae7f0748a8f444db513305d9baa70",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/aascu.org_hbcu_leadershipsummit_cooper_.pptx"
+    },
+    {
+      "file": "aascu.org_workarea_downloadasset.aspx_id=5864.pptx",
+      "bytes": 403643,
+      "sha256": "5df09eff2c5fbb2bea72971421dc5507d68cab10ce3af8791969fdee35e76991",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/aascu.org_workarea_downloadasset.aspx_id%3D5864.pptx"
+    },
+    {
+      "file": "ae.ac.uaeu.faculty_nafaachbili_GeomLec1.pptx",
+      "bytes": 830765,
+      "sha256": "cfdb76d2090c69e5437d19e50ff5c02527e7d1b76b7a17cbb9794b3d5b9f9d79",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/ae.ac.uaeu.faculty_nafaachbili_GeomLec1.pptx"
+    },
+    {
+      "file": "alterman_security.pptx",
+      "bytes": 955496,
+      "sha256": "71000335a83a16ded97f6d43c1e49ccfee71becf3338cb9b87296466be9ebbd4",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/alterman_security.pptx"
+    },
+    {
+      "file": "aptia.pptx",
+      "bytes": 398175,
+      "sha256": "c212ee4e7f66b2aaf42eef65babfafea62d9022e7fdc9739c8ea9593f20f0b70",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/aptia.pptx"
+    },
+    {
+      "file": "at.ecodesign.www_downloads_Vertiefungsvortrag_elektronik.pptx",
+      "bytes": 1949517,
+      "sha256": "4c9630fe85061c2bcb9d5638ad810fc18e8d7ae301a96d446f72b40995773578",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/at.ecodesign.www_downloads_Vertiefungsvortrag_elektronik.pptx"
+    },
+    {
+      "file": "au.asn.aes.www_conferences_2011_presentations_Fri_20Room4Level4_20930_20Maloney.pptx",
+      "bytes": 536086,
+      "sha256": "426582c9408e74cd061f2b4dc01fd6b8ddfbb55dda4fdf419e3dca313d107a7f",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/au.asn.aes.www_conferences_2011_presentations_Fri_20Room4Level4_20930_20Maloney.pptx"
+    },
+    {
+      "file": "backgrounds.pptx",
+      "bytes": 63442,
+      "sha256": "6d1e661c87b072a701e02e28f9d2c9bb43c6bfe0ad5acd02811a0382bab769b7",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/backgrounds.pptx"
+    },
+    {
+      "file": "bug54570.pptx",
+      "bytes": 50589,
+      "sha256": "e25fddd8775e7c0c8088ae55ceb2bef09c337f8a8fce97e4b10e2f891986648c",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug54570.pptx"
+    },
+    {
+      "file": "bug58144-headers-footers-2007.pptx",
+      "bytes": 42035,
+      "sha256": "63e0db239ef3083b8537705941247af195b200e83535f8d92c246e774f771289",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug58144-headers-footers-2007.pptx"
+    },
+    {
+      "file": "bug59273.potx",
+      "bytes": 617839,
+      "sha256": "a69207b33c69e171dd35fab165e498802a46759bca24f5eb614deb3503aa5ee6",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug59273.potx"
+    },
+    {
+      "file": "bug60499.pptx",
+      "bytes": 40792,
+      "sha256": "fb15c4bb4db27e7ccbd31d59a2a30583359707f062dd800bc1c14031bb4094cb",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug60499.pptx"
+    },
+    {
+      "file": "bug60715.pptx",
+      "bytes": 74295,
+      "sha256": "d560102b417036323dd21781b13e86b326e3d4d13ece3419aaf7c55a9c22b8d4",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug60715.pptx"
+    },
+    {
+      "file": "bug60993.pptx",
+      "bytes": 21942,
+      "sha256": "ad54b71b1deeec29d9e5e6d8d81ae4590b5ffafb906ea738aebe347336189364",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug60993.pptx"
+    },
+    {
+      "file": "bug62513.pptx",
+      "bytes": 384775,
+      "sha256": "cd841112bd5b53f21e8434d080af8b2eeca78a07bc820e9ea0b97a0962c85c79",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug62513.pptx"
+    },
+    {
+      "file": "bug62736.pptx",
+      "bytes": 50926,
+      "sha256": "7066ae7ebe852c8f24ee370cbc5aae90e683e5d78495221bdfb46fd830905f51",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug62736.pptx"
+    },
+    {
+      "file": "bug63290.pptx",
+      "bytes": 31877,
+      "sha256": "f1a70ccb1187a6168a6844cfd181172730095329e49b5cb1d15a9b58f98adea9",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug63290.pptx"
+    },
+    {
+      "file": "bug64693.pptx",
+      "bytes": 881432,
+      "sha256": "8cfe77cee329d0186fcb2827b5ad49371b3b7833ab6181e63de6b923e96ec275",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug64693.pptx"
+    },
+    {
+      "file": "bug65228.pptx",
+      "bytes": 333114,
+      "sha256": "96ba120b25d18416746ab3388c7e4cdbf883585b7e3ea74c5904a53dc5b75488",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug65228.pptx"
+    },
+    {
+      "file": "bug65523.pptx",
+      "bytes": 50285,
+      "sha256": "a37c15125aa21ac5226bac07f4459a200cf8070040c06093c1dc1db19e28c12c",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug65523.pptx"
+    },
+    {
+      "file": "bug65551.pptx",
+      "bytes": 34383,
+      "sha256": "45f9ddb5ef78d4da97c220dbf5e1aedcafcfddf338222ef958545c773d19e27c",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug65551.pptx"
+    },
+    {
+      "file": "bug65673.pptx",
+      "bytes": 35014,
+      "sha256": "4a9a363ec7ddad02eaab1e3649ef79fdabd4e0e3a879f9c4c7a345565c2e88c0",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug65673.pptx"
+    },
+    {
+      "file": "bug68703.pptx",
+      "bytes": 60711,
+      "sha256": "f232d0dc390c741855b4395f74a11d2610243fffd8699f72dd3185ad5f930852",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bug68703.pptx"
+    },
+    {
+      "file": "ca.ubc.cs.people_~emhill_presentations_HowWeRefactor.pptx",
+      "bytes": 2059644,
+      "sha256": "54ef61cc914b0bb017f70eabe956a3e25948172ba989772dcfd6a69c2ad1620e",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/ca.ubc.cs.people_%7Eemhill_presentations_HowWeRefactor.pptx"
+    },
+    {
+      "file": "chart-slide-bg.pptx",
+      "bytes": 57330,
+      "sha256": "1e57296fdac894c239ed47e4fc9521da59ab26c34f4d28ec2036f0befbc5fd74",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/chart-slide-bg.pptx"
+    },
+    {
+      "file": "chart-texture-bg.pptx",
+      "bytes": 55730,
+      "sha256": "ae762899957805da751059c50ae8e770fb97ce5905e6a177b7c9644c4b173d45",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/chart-texture-bg.pptx"
+    },
+    {
+      "file": "copy-slide-demo.pptx",
+      "bytes": 31301,
+      "sha256": "3c72f8c73785f45b3698477edba39f0f1bffbff54826566bc368fda453abf300",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/copy-slide-demo.pptx"
+    },
+    {
+      "file": "crop-to-0.pptx",
+      "bytes": 10314,
+      "sha256": "5d6aa3a226c6257592e3d97d4a4a4e4832c16411116d97e70676f38dc5a525c5",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/crop-to-0.pptx"
+    },
+    {
+      "file": "customGeo.pptx",
+      "bytes": 1046067,
+      "sha256": "9baa7f4554cbaddfcebcc431432268ea34f20c02787172bb0a7d12d640e7e84f",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/customGeo.pptx"
+    },
+    {
+      "file": "ececapstonespring2012.pptx",
+      "bytes": 178541,
+      "sha256": "dfbe5d5ba7ca5f718858250dedb30c1da3e3a28cb1ecfebd9ca96d4e58fa7051",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/ececapstonespring2012.pptx"
+    },
+    {
+      "file": "highlight-test-case.pptx",
+      "bytes": 36284,
+      "sha256": "b1c38080db134799830ee3e01ca2fcd292feb1c1ba0abd3187f3a3807aac34d6",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/highlight-test-case.pptx"
+    },
+    {
+      "file": "keyframes.pptx",
+      "bytes": 389330,
+      "sha256": "bc9dd90cee7318ef1637c4e6175d44756004e67c7cb68c2e320f62ff2e7ce6a0",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/keyframes.pptx"
+    },
+    {
+      "file": "layouts.pptx",
+      "bytes": 62901,
+      "sha256": "9c3d53afa3115de2ba72ec77637a616aeed505a6ff3b30a46db871c4edd32be5",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/layouts.pptx"
+    },
+    {
+      "file": "minimal-gradient-fill-issue.pptx",
+      "bytes": 36775,
+      "sha256": "366cebcd2b63501069daa129cda91232781e4e3f492b6afa050cd11db8ac7e93",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/minimal-gradient-fill-issue.pptx"
+    },
+    {
+      "file": "missing-blip-fill.pptx",
+      "bytes": 40732,
+      "sha256": "00b19b1ba0f3b399dd3c3c0de906b8cfeca5cda9425d481c2d75f5d74790c004",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/missing-blip-fill.pptx"
+    },
+    {
+      "file": "picture-transparency.pptx",
+      "bytes": 11793,
+      "sha256": "0ce76411a6e2fe3a5b8acf42722b973131a91b93cb5c3118a5a9c481b063e386",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/picture-transparency.pptx"
+    },
+    {
+      "file": "pptx2svg.pptx",
+      "bytes": 149172,
+      "sha256": "7cd49d4a9d6004e4de9c6a3e01a76119f1c8045ae91c9fc534d411347babdd3d",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/pptx2svg.pptx"
+    },
+    {
+      "file": "prProps.pptx",
+      "bytes": 30976,
+      "sha256": "b6d031d7cd670a007489465c57a0f233c497e89aed62a0a9f7d916cf173c86ad",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/prProps.pptx"
+    },
+    {
+      "file": "present1.pptx",
+      "bytes": 34047,
+      "sha256": "e9aaf62bb1851c62f63dd109a9bccf3a1776c832efe75ebbb5729c992c5bad48",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/present1.pptx"
+    },
+    {
+      "file": "rain.pptx",
+      "bytes": 32694,
+      "sha256": "3deeca41f8a70fd617414507c17881feb8357f1a2eb52147ad1ddd76d729c125",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/rain.pptx"
+    },
+    {
+      "file": "sample.pptx",
+      "bytes": 47215,
+      "sha256": "108d7219130a8460298896f45ff777dfe52b8b5527a4b4628b10731ed01d6a8e",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/sample.pptx"
+    },
+    {
+      "file": "sample_pptx_grouping_issues.pptx",
+      "bytes": 39436,
+      "sha256": "a8639e12e763a01d889a6178e154c21db2dd4275f8f35ac81a458f81e26b2c18",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/sample_pptx_grouping_issues.pptx"
+    },
+    {
+      "file": "smartart-simple.pptx",
+      "bytes": 71102,
+      "sha256": "238ff6433dac00b2722edb9a29d97f56ab4f3c9c37f33a73d6f53baf494916aa",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/smartart-simple.pptx"
+    },
+    {
+      "file": "table_test.pptx",
+      "bytes": 28935,
+      "sha256": "b9c3eb4b198ef3e53a4ff1a5ef4118a5ce6ba1760592c553abf665b37dcac5f8",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table_test.pptx"
+    },
+    {
+      "file": "templatePPTWithOnlyOneText.pptx",
+      "bytes": 33671,
+      "sha256": "aafbbdd776c49e44fcb9392227c96ff1053a036fa6d612739890c5ae5a9eafff",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/templatePPTWithOnlyOneText.pptx"
+    },
+    {
+      "file": "testPPT.pptx",
+      "bytes": 36518,
+      "sha256": "730a6ade20208eaad375160949db37b2ffb52af4d3704b51976ff45564bff83b",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/testPPT.pptx"
+    },
+    {
+      "file": "text-highlight.pptx",
+      "bytes": 31851,
+      "sha256": "e048faad93f2e271294b4b4bf2228a95c038d9efbfdee43528d5ef8732049012",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/text-highlight.pptx"
+    },
+    {
+      "file": "tika-2605.pptx",
+      "bytes": 625680,
+      "sha256": "0b8ce6084798af3e3a70a72fada352a5fdcc479d4e310421738128062cb27449",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/tika-2605.pptx"
+    },
+    {
+      "file": "with_japanese.pptx",
+      "bytes": 48011,
+      "sha256": "f0b1efbfbd70f7ee2395dc2505639f99449971ba404a6ec8cf1b97d82cf45c10",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/with_japanese.pptx"
+    }
+  ]
+}

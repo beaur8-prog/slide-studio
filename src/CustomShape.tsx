@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { GradientDefs } from "./gradient";
+import { ShapeImageFill } from "./ShapeImageFill";
 import type { LineEnd, SlideElement } from "./types";
 
 const shades = {
@@ -9,7 +10,7 @@ const shades = {
   lightenLess: [0.8, 0.2],
 } as const;
 
-export function CustomShape({ element: e }: { element: SlideElement }) {
+export function CustomShape({ element: e, playing = false }: { element: SlideElement; playing?: boolean }) {
   const id = "shape-" + useId().replace(/[^a-z0-9]/gi, "");
   return (
     <svg
@@ -101,6 +102,7 @@ export function CustomShape({ element: e }: { element: SlideElement }) {
             key={i}
             transform={`scale(${e.width / p.width},${e.height / p.height})`}
           >
+            {e.imageFill && <ShapeImageFill element={e} id={`${id}-image-${i}`} width={p.width} height={p.height} playing={playing} />}
             {open && (
               <defs>
                 {marker(e.lineStart, "start")}
@@ -111,7 +113,9 @@ export function CustomShape({ element: e }: { element: SlideElement }) {
               d={p.d}
               fill={
                 p.fill
-                  ? e.gradient
+                  ? e.imageFill
+                    ? `url(#${id}-image-${i})`
+                    : e.gradient
                     ? `url(#${id})`
                     : (e.fill ?? "none")
                   : "none"

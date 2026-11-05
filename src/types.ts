@@ -271,6 +271,7 @@ export interface SlideElement {
   strokeDash?: number[];
   strokeCap?: "butt" | "round" | "square";
   gradient?: GradientFill;
+  imageFill?: Slide["backgroundImage"];
   shadow?: ObjectShadow;
   lineStart?: LineEnd;
   lineEnd?: LineEnd;

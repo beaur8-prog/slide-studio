@@ -88,6 +88,7 @@ export function shapeTextElement(e: SlideElement): SlideElement {
     autoHeight: false,
     text: e.text ?? "",
     gradient: undefined,
+    imageFill: undefined,
     fill: "transparent",
     strokeWidth: 0,
     borders: undefined,

@@ -80,6 +80,8 @@ jobs:
           tests/text-caps.spec.ts
           tests/picture-placeholder.spec.ts
           tests/picture-outline.spec.ts
+          tests/picture-presence.spec.ts
+          tests/shape-picture-fill.spec.ts
           tests/picture-duotone.spec.ts
           tests/chart-layout-compatibility.spec.ts
           tests/chart-picture-fill.spec.ts

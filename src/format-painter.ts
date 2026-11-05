@@ -35,6 +35,7 @@ export interface FormatSample {
     | "strokeDash"
     | "strokeCap"
     | "gradient"
+    | "imageFill"
     | "borders"
     | "lineStart"
     | "lineEnd"
@@ -93,6 +94,7 @@ export function captureObjectFormat(
           strokeDash: structuredClone(element.strokeDash),
           strokeCap: element.strokeCap,
           gradient: structuredClone(element.gradient),
+          imageFill: structuredClone(element.imageFill),
           borders: structuredClone(element.borders),
           lineStart: structuredClone(element.lineStart),
           lineEnd: structuredClone(element.lineEnd),
@@ -278,6 +280,7 @@ export function applyObjectFormat(
   if (["text", "shape"].includes(element.type)) {
     if (sample.appearance)
       Object.assign(next, structuredClone(sample.appearance));
+    if (element.type === "text") next.imageFill = undefined;
     if (sample.text) {
       next = patchText(next, sample.text);
       if (next.paragraphs)

@@ -172,7 +172,17 @@ matching the observed Windows PowerPoint table layout; explicit point/percentage
 spacing keeps its source value. Embedded TIFF images
 are converted locally to PNG with a 16-million-pixel decode limit. Supported
 numeric DrawingML custom paths, image crop/flip, and AlternateContent fallback
-objects are rendered. SmartArt with a saved `diagramDrawing` part is imported as
+objects are rendered. Mac pictures whose entire `blipFill` is wrapped in
+AlternateContent use their embedded raster fallback, including that branch's
+crop. OLE frames with an embedded cached picture display and save the inert
+preview only; the attachment is neither executed nor copied into the output.
+Inherited and grouped previews keep the visible picture through repeated saves.
+Shape picture fills retain their crop, alpha, stretch/tile placement and supported
+duotone, clipped to preset/custom shape geometry. Their original bitmap or safe
+vector source remains available after geometry/outline edits and regeneration.
+Solid/no-fill controls replace the picture fill and Undo restores it. Pattern
+fills and unsupported bitmap effects still have fidelity limits.
+SmartArt with a saved `diagramDrawing` part is imported as
 individual shapes, lines and text, using the source relationships and geometry;
 there is no SmartArt layout engine or automatic reflow. Source formulas stored as raster images remain images,
 not editable equations. Safe custom paths are reconstructed from numeric commands;

@@ -2,7 +2,7 @@ import type { Slide } from "./types";
 
 const A = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const P = "http://schemas.openxmlformats.org/presentationml/2006/main";
-const child = (node: Element | undefined, name: string) =>
+const child = (node: Element | null | undefined, name: string) =>
   Array.from(node?.children ?? []).find((n) => n.localName === name);
 
 // Let PptxGenJS package the image and its relationship, then move that image's
@@ -27,6 +27,12 @@ export function writeBackgroundImage(
   }
   bg.replaceChildren();
   const props = doc.createElementNS(P, "p:bgPr");
+  props.append(nativeImageFill(doc, fill, image), doc.createElementNS(A, "a:effectLst"));
+  bg.append(props);
+  picture.remove();
+}
+
+function nativeImageFill(doc: Document, fill: Element, image: NonNullable<Slide["backgroundImage"]>) {
   const backgroundFill = doc.createElementNS(A, "a:blipFill");
   for (const node of Array.from(fill.childNodes))
     backgroundFill.append(node.cloneNode(true));
@@ -95,7 +101,14 @@ export function writeBackgroundImage(
       child(backgroundFill, "stretch") ?? child(backgroundFill, "tile") ?? null,
     );
   }
-  props.append(backgroundFill, doc.createElementNS(A, "a:effectLst"));
-  bg.append(props);
+  return backgroundFill;
+}
+
+export function writeShapeImageFill(doc: Document, image: NonNullable<Slide["backgroundImage"]>, shapeName: string, pictureName: string) {
+  const named = (name: string) => Array.from(doc.getElementsByTagNameNS(P, "cNvPr")).find(n => n.getAttribute("name") === name)?.parentElement?.parentElement;
+  const shape = named(shapeName), picture = named(pictureName), props = child(shape, "spPr"), fill = child(picture, "blipFill");
+  if (!picture || !props || !fill) throw Error("도형의 그림 채우기를 PPTX에 저장할 수 없습니다.");
+  for (const n of Array.from(props.children)) if (["noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"].includes(n.localName)) n.remove();
+  props.insertBefore(nativeImageFill(doc, fill, image), Array.from(props.children).find(n => ["ln", "effectLst", "effectDag", "scene3d", "sp3d", "extLst"].includes(n.localName)) ?? null);
   picture.remove();
 }

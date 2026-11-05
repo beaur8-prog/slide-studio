@@ -981,7 +981,7 @@ export default function App() {
     }));
   };
   const setShapeFill = (fill: string) =>
-    updateSelectedShapes((element) => ({ ...element, fill, gradient: undefined }));
+    updateSelectedShapes((element) => ({ ...element, fill, gradient: undefined, imageFill: undefined }));
   const setShapeStroke = (stroke: string) =>
     updateSelectedShapes((element) => ({
       ...element,
@@ -4304,7 +4304,7 @@ export default function App() {
                   </label>
                   <label>
                     <input type="checkbox" aria-label="도형 채우기 없음"
-                      checked={shapeStyleTarget?.fill === "transparent"}
+                      checked={shapeStyleTarget?.fill === "transparent" && !shapeStyleTarget.imageFill}
                       disabled={shapeStylesDisabled}
                       onChange={(event) => setShapeFill(event.target.checked ? "transparent" : DEFAULT_SHAPE_FILL)} />
                     채우기 없음
@@ -5536,7 +5536,7 @@ export default function App() {
                       <label className="check-field">
                         <input
                           type="checkbox"
-                          checked={selectedElement.fill === "transparent"}
+                          checked={selectedElement.fill === "transparent" && !selectedElement.imageFill}
                           onChange={(e) => setShapeFill(e.target.checked ? "transparent" : DEFAULT_SHAPE_FILL)}
                         />
                         채우기 없음

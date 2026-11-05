@@ -48,16 +48,19 @@ test.beforeEach(async ({}, testInfo) => {
 });
 test.afterEach(async () => {
   if (app) {
-    // Only the disposable process launched above owns this unsaved test profile.
-    // An IPC call that exits Electron cannot reliably acknowledge its own reply.
+    // Only this disposable app owns the unsaved fixture profile. Return the IPC
+    // acknowledgement before exiting; Electron then closes its renderer children.
     const child = app.process();
     if (child.exitCode === null) {
-      const exited = new Promise(resolve => child.once("exit", resolve));
-      child.kill();
-      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 3000))]);
+      await app.evaluate(({ app }) => {
+        setTimeout(() => app.exit(0), 100);
+        return true;
+      });
+      await app.close();
     }
   }
-  if (profile) await fs.rm(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  if (profile) await fs.rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    .catch(error => console.warn("Disposable history profile cleanup:", String(error)));
 });
 const menu = (label: string) =>
   app.evaluate(({ Menu, BrowserWindow }, label) => {

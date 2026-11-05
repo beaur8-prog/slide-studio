@@ -5,6 +5,15 @@ Development 1.6.18 adds the layout and preservation changes recorded in
 The comparison covers 17 public native-object files and 62 slides; it does not
 establish full PowerPoint compatibility. Public installers are updated separately.
 
+Development 1.6.23 adds ordinary DrawingML paragraph justification (`algn="just"`)
+to text, shape text and table cells, including validation, editing, clipboard and
+PPTX export. Home's justify control and Ctrl/Cmd+J act on the selected paragraphs
+and retain the original text selection. Distributed, Thai and low-compression
+justification remain outside this support slice. Explicit soft-break line spacing
+and fresh Microsoft-rendered fixtures still require comparison; preserving `just`
+on save is not proof of identical typography. See the
+[first layout work record](qa/LAYOUT-FIRST-BLOCK-2026-11-05.md).
+
 The development editor now includes table-aware document find/replace, nondestructive
 picture crop/fit/fill/replacement, a selection pane, and format painting. Search
 and selection navigation do not author document changes. Replacing all text,

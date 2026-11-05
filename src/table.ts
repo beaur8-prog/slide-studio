@@ -171,7 +171,7 @@ export function validateTableCellFormat(value: unknown): TableCellFormat {
     format.fontFamily = source.fontFamily;
   }
   if (has("align")) {
-    if (!["left", "center", "right"].includes(source.align as string))
+    if (!["left", "center", "right", "justify"].includes(source.align as string))
       throw new Error("표 셀 가로 정렬이 올바르지 않습니다.");
     format.align = source.align as TableCellFormat["align"];
   }
@@ -243,7 +243,7 @@ export function validateTable(value: unknown): TableData {
   )
     throw new Error("표 글꼴이 올바르지 않습니다.");
   if (
-    !["left", "center", "right"].includes(source.align as string) ||
+    !["left", "center", "right", "justify"].includes(source.align as string) ||
     !["top", "middle", "bottom"].includes(source.verticalAlign as string)
   )
     throw new Error("표 정렬이 올바르지 않습니다.");

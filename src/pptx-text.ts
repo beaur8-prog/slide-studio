@@ -275,7 +275,11 @@ export function readTextBody(body: Element, ctx: Context): SlideElement {
       ...(bulletPrefix ? { bulletPrefix } : {}),
       ...(numberStyle ? { numbering: numberStyle } : {}),
       ...(level > 1 || pPr?.hasAttribute("lvl") ? { level: level - 1 } : {}),
-      align: align === "ctr" ? "center" : align === "r" ? "right" : "left",
+      align:
+        align === "ctr" ? "center"
+          : align === "r" ? "right"
+            : align === "just" ? "justify"
+              : "left",
       fontSize: size,
       ...(linePt
         ? {

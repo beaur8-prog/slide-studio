@@ -24,11 +24,11 @@ export function tableToClipboard(table){
     if(covered.has(`${r},${c}`))return '';
     const s=cell.style||{},m=anchors.get(`${r},${c}`),span=m?.columnSpan||1;
     const font=typeof s.fontFamily==='string'&&!/[;{}<>"\\]/.test(s.fontFamily)?s.fontFamily:'Arial';
-    let css=`border:0 solid transparent;padding:4px;background-color:${colorHex(s.background,'#ffffff')};color:${colorHex(s.color)};font-family:${font};font-size:${number(s.fontSize,11,1,4096)}pt;font-weight:${s.bold?'bold':'normal'};font-style:${s.italic?'italic':'normal'};text-decoration:${s.underline?'underline':'none'};text-align:${['left','center','right'].includes(s.align)?s.align:'left'};vertical-align:${['top','middle','bottom'].includes(s.verticalAlign)?s.verticalAlign:'middle'};white-space:pre-wrap;`;
+    let css=`border:0 solid transparent;padding:4px;background-color:${colorHex(s.background,'#ffffff')};color:${colorHex(s.color)};font-family:${font};font-size:${number(s.fontSize,11,1,4096)}pt;font-weight:${s.bold?'bold':'normal'};font-style:${s.italic?'italic':'normal'};text-decoration:${s.underline?'underline':'none'};text-align:${['left','center','right','justify'].includes(s.align)?s.align:'left'};vertical-align:${['top','middle','bottom'].includes(s.verticalAlign)?s.verticalAlign:'middle'};white-space:pre-wrap;`;
     for(const side of sides){const edge=s.borders?.[side];if(edge&&edge.width>0)css+=`border-${side}:${number(edge.width,1,0,1000)}px ${['solid','dotted','dashed','double'].includes(edge.line)?edge.line:'solid'} ${colorHex(edge.color)};`;}
     const widths=Array.from({length:span},(_,i)=>number(columnWidths[c+i],90,1));
     const text=escape(cell.text).replace(/\r\n?/g,'\n').replace(/\n/g,'<br>');
-    return `<td${m?` rowspan="${m.rowSpan}" colspan="${m.columnSpan}"`:''} colwidth="${widths.join(',')}" data-colwidth="${widths.join(',')}" style="${escape(css)}"><p style="margin:0;text-align:${['left','center','right'].includes(s.align)?s.align:'left'}"><span style="${escape(css.replace(/border[^;]*;|padding[^;]*;|background-color[^;]*;/g,''))}">${text||'<br>'}</span></p></td>`;
+    return `<td${m?` rowspan="${m.rowSpan}" colspan="${m.columnSpan}"`:''} colwidth="${widths.join(',')}" data-colwidth="${widths.join(',')}" style="${escape(css)}"><p style="margin:0;text-align:${['left','center','right','justify'].includes(s.align)?s.align:'left'}"><span style="${escape(css.replace(/border[^;]*;|padding[^;]*;|background-color[^;]*;/g,''))}">${text||'<br>'}</span></p></td>`;
   }).join('')+'</tr>').join('')+'</tbody></table>';
   return {text:tableText(cells),html};
 }

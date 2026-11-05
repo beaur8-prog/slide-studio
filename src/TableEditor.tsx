@@ -1095,6 +1095,7 @@ export default function TableEditor({
                 <option value="left">왼쪽</option>
                 <option value="center">가운데</option>
                 <option value="right">오른쪽</option>
+                <option value="justify">양쪽 맞춤</option>
               </select>
             </label>
             <label>

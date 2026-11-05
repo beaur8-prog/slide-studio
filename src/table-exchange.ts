@@ -193,7 +193,7 @@ function cellFormat(s: StudioStyle = {}): TableCellFormat {
     bold: !!s.bold,
     italic: !!s.italic,
     underline: !!s.underline,
-    align: ["left", "center", "right"].includes(s.align || "")
+    align: ["left", "center", "right", "justify"].includes(s.align || "")
       ? (s.align as TableCellFormat["align"])
       : "left",
     verticalAlign: ["top", "middle", "bottom"].includes(s.verticalAlign || "")

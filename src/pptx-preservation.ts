@@ -203,7 +203,7 @@ function unmodeledText(root: Element | Document) {
   return (
     all(root, "buBlip").length > 0 ||
     all(root, "pPr").some((n) =>
-      ["just", "dist", "thaiDist", "justLow"].includes(
+      ["dist", "thaiDist", "justLow"].includes(
         n.getAttribute("algn") ?? "",
       ),
     ) ||
@@ -1631,7 +1631,7 @@ export async function writePreservedPptx(
           } else {
             if (unmodeledText(raw))
               warn(
-                "편집한 텍스트의 취소선·특수 밑줄·강조·그림 글머리표·양쪽 맞춤 등 일부 원본 서식을 유지하지 못합니다.",
+                "편집한 텍스트의 취소선·특수 밑줄·강조·그림 글머리표·배분 및 특수 양쪽 맞춤 등 일부 원본 서식을 유지하지 못합니다.",
               );
             const oldBodyPr = child(child(raw, "txBody"), "bodyPr"),
               newBodyPr = child(child(target, "txBody"), "bodyPr");

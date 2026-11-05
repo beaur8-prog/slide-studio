@@ -1,0 +1,2597 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-11-05",
+  "baselineCommit": "fd5a04cd77b49e70de5d1734f814e97a41b0e856",
+  "reference": {
+    "application": "PowerPoint Web",
+    "capturedAt": "2026-10-31",
+    "status": "historical screenshot reference; not recaptured on 2026-11-05",
+    "evidenceFile": "evidence.json",
+    "evidenceSha256": "515ffb8fb6ec5577643eeaebac60538491951f03214706c9493d743708e5a999",
+    "defaultRoot": "../qa/layout-improvements-20261031/comparison-review",
+    "historicalStudioBaselineCommit": "71249c1",
+    "historicalStudioImprovedVersion": "1.6.18",
+    "fullViewportCaptureNote": "All cropped references survive and are SHA-256 pinned. Most original full viewport files were temporary and no longer exist. 31 source Web viewports for Dickinson/DSU remain in the durable archive. Web actual font faces were not instrumented."
+  },
+  "scope": {
+    "files": 17,
+    "slides": 62,
+    "representativeSlides": 12,
+    "imageOnlySlidesExcluded": 31
+  },
+  "sources": [
+    {
+      "id": "dickinson-workplace",
+      "file": "dickinson-workplace.pptx",
+      "bytes": 647237,
+      "sha256": "ac7f2627645042190df3244cc25929f4b006d144fc2cac520e79ab376197bbbf",
+      "source": "https://www.dickinson.edu/downloads/download/520/sample_powerpoint_slides",
+      "url": "https://www.dickinson.edu/download/downloads/id/1076/sample_powerpoint_slides.pptx",
+      "slides": 9
+    },
+    {
+      "id": "poi-bar-chart",
+      "file": "poi-bar-chart.pptx",
+      "bytes": 44410,
+      "sha256": "79e1d218bfb2903e8dc8425a6b1997d9c1976f5a5f025bada85b0c47b5777969",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bar-chart.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/bar-chart.pptx",
+      "slides": 1
+    },
+    {
+      "id": "poi-line-chart",
+      "file": "poi-line-chart.pptx",
+      "bytes": 44700,
+      "sha256": "a2319540fb096629874e8c2baf91b9f8afd1386bfba411efff503b96dce9e9a1",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/line-chart.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/line-chart.pptx",
+      "slides": 1
+    },
+    {
+      "id": "poi-pie-chart",
+      "file": "poi-pie-chart.pptx",
+      "bytes": 55297,
+      "sha256": "3b6404b59b24cb79fbb91fc2e92bd8b80cdc340aeed71a1ec1e267db0d8ad444",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/pie-chart.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/pie-chart.pptx",
+      "slides": 1
+    },
+    {
+      "id": "poi-radar-chart",
+      "file": "poi-radar-chart.pptx",
+      "bytes": 43689,
+      "sha256": "faf631199e44a1eb5dae48527d233b3231e67ea0345e93fd0c9306ce5261b570",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/radar-chart.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/radar-chart.pptx",
+      "slides": 1
+    },
+    {
+      "id": "poi-scatter-chart",
+      "file": "poi-scatter-chart.pptx",
+      "bytes": 44269,
+      "sha256": "946d17760f23822950d97a02aeeedbac773fe8ba5afd61bb26a9ee5fd8db53be",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/scatter-chart.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/scatter-chart.pptx",
+      "slides": 1
+    },
+    {
+      "id": "poi-chart-picture-bg",
+      "file": "poi-chart-picture-bg.pptx",
+      "bytes": 651648,
+      "sha256": "97bad7041fa5f23408eea513cd85bf7fed47a8ba218d8791a59be14cb53fdaa5",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/chart-picture-bg.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/chart-picture-bg.pptx",
+      "slides": 1
+    },
+    {
+      "id": "poi-themes",
+      "file": "poi-themes.pptx",
+      "bytes": 322325,
+      "sha256": "3ea86e4ee84a8bca6b99fe3a9f2a9a9186c0655df28ff92a2d02da24926c64ba",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/themes.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/themes.pptx",
+      "slides": 10
+    },
+    {
+      "id": "dsu-korean",
+      "file": "dsu-korean.pptx",
+      "bytes": 1981629,
+      "sha256": "ad8cd53369e5b1591ff7ff2c91513df3811e48859592e306d3b8ba77be18136e",
+      "source": "https://cess.dsu.ac.kr/lifelong/index.php?idx=2039&mode=view&pCode=lecture",
+      "url": "https://cess.dsu.ac.kr/lifelong/index.php?idx=2039&mode=fdn&num=1&pCode=lecture",
+      "slides": 22
+    },
+    {
+      "id": "poi-table-with-theme",
+      "file": "poi-table-with-theme.pptx",
+      "bytes": 35189,
+      "sha256": "571d0cd2e1e9767249b3a02544c7771c883c48bb191264409729c7cec574ab48",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-theme.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-theme.pptx",
+      "slides": 1
+    },
+    {
+      "id": "poi-table-with-no-theme",
+      "file": "poi-table-with-no-theme.pptx",
+      "bytes": 34362,
+      "sha256": "d6b3cca13b8bdeaa66df184883ace4fcbc6bf7a88a9547abdbd01875caf5af4e",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-no-theme.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-no-theme.pptx",
+      "slides": 1
+    },
+    {
+      "id": "poi-table-with-different-font-colors",
+      "file": "poi-table-with-different-font-colors.pptx",
+      "bytes": 36562,
+      "sha256": "fb0245f28e32e5137da6f9c2a9c35c5a8694a71c35d675ab671a595c1b93d72d",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-different-font-colors.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table-with-different-font-colors.pptx",
+      "slides": 2
+    },
+    {
+      "id": "poi-table_test2",
+      "file": "poi-table_test2.pptx",
+      "bytes": 33414,
+      "sha256": "e80d09a5fa767f6ee2d024f3a4198f1e8b3241cc638183e5ebafdbacf1fb2838",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table_test2.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/table_test2.pptx",
+      "slides": 1
+    },
+    {
+      "id": "poi-smartart-rotated-text",
+      "file": "poi-smartart-rotated-text.pptx",
+      "bytes": 43459,
+      "sha256": "a357985aec81b0bfa8a71138bbe94c9b3f6e00dee110c0da34302e22253de260",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/smartart-rotated-text.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/smartart-rotated-text.pptx",
+      "slides": 1
+    },
+    {
+      "id": "poi-shapes",
+      "file": "poi-shapes.pptx",
+      "bytes": 68822,
+      "sha256": "19fde9b87e33dd1a95fdbba0cf6abc2278bf03874f4665c7f8b88b6afe4a2571",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/shapes.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/shapes.pptx",
+      "slides": 6
+    },
+    {
+      "id": "poi-placeholder-layout-color",
+      "file": "poi-placeholder-layout-color.pptx",
+      "bytes": 346876,
+      "sha256": "b683af99cf4e71db112fe87db15840846c53dbc7a6839cbf84804980d21af9ce",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/placeholder-layout-color.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/placeholder-layout-color.pptx",
+      "slides": 1
+    },
+    {
+      "id": "poi-withmaster",
+      "file": "poi-withmaster.pptx",
+      "bytes": 47505,
+      "sha256": "54ae7677fd2813a815160cc72bd8960a4e482690dfc369b392868521c9b61549",
+      "source": "https://github.com/apache/poi/blob/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/WithMaster.pptx",
+      "url": "https://raw.githubusercontent.com/apache/poi/6327f056ba3cfdae326a0261a236460592b80f5c/test-data/slideshow/WithMaster.pptx",
+      "slides": 2
+    }
+  ],
+  "rows": [
+    {
+      "id": "dickinson-workplace",
+      "slide": 4,
+      "category": "charts",
+      "representative": true,
+      "reason": "Native chart plus annotations",
+      "references": {
+        "web": {
+          "file": "crops/dickinson-workplace-04-web.png",
+          "sha256": "2adc2eda3803a4e5c0b88835b465a2dfbc1fa96992b82d449669e6860fcd5ba8",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d9942e89bbb440dd2fec2a9cbc23e956245b0a968f8a64198c76cee4618a81cb",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dickinson-workplace-04-baseline.png",
+          "sha256": "1c7b55c87c18b8ced418dcd95f5736a407d693286f0096475bb4688bcd6f61de",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "b93e1ca640bf96e734cac323a6862e2d17a2164f3e4484c8951a9a652c814d6c",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dickinson-workplace-04-improved.png",
+          "sha256": "826a663d8d4fa69950a615e62f1f55e1bf0850c641ed8958f9935eeb5c89b212",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d77cc1fa7b90cb953e4b32bf93c2c9e72398484631fd246e87101a5c9d302bbf",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-bar-chart",
+      "slide": 1,
+      "category": "charts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-bar-chart-01-web.png",
+          "sha256": "0c528f4b2c5da69e6c1f94492961178683554e1bd01abc62325e9bd9d7d85c82",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "f88effe7a7f6a9ddbb6ecff1533fcf6e1a898e96b4202d5141fb691b8045b3ec",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-bar-chart-01-baseline.png",
+          "sha256": "a77e373ead3babf5c13796c7aefc1f2a5e7cb67017e0ff6ee795e45d1ec0c1d3",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "a8b02d4c81cd20a0efc2337bd772b1d9b87e5a5e6e2cf146adfeb31b633df0b1",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-bar-chart-01-improved.png",
+          "sha256": "0dd46334e375cc4b4c989752cd8df6deef58ae2690de6478286e034492298118",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "28f0e99150632fd6a316b055fd1658809a3fab33a30ed4614a9399d325995635",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-line-chart",
+      "slide": 1,
+      "category": "charts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-line-chart-01-web.png",
+          "sha256": "cd6c9a3e75b7edeb96324f1515288fa8732d02d4e8e590f8fcab7cdfb2f4141b",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "28ded2206557d0a61c6d32b373db021e15b117dc94c722381aa024725e2de17f",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-line-chart-01-baseline.png",
+          "sha256": "6a84aa490127cec52728efd73f1f86eb47d4c6b2ef30f72b2910632872b80d87",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "84dd72fdcef8baed1efb552c202ad57c83722ee593e85c44a83e75858925aa7e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-line-chart-01-improved.png",
+          "sha256": "37fd501fca8070a9473ba2e0d5bbc7add093c2c697a8f8588b5b530c25fa4198",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "44306a131d050a9dd33939eed182be703bd95863ca5afa189f4f0e6dcabca4a2",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-pie-chart",
+      "slide": 1,
+      "category": "charts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-pie-chart-01-web.png",
+          "sha256": "84ce035b808f26eca8955744dc85a2baecd3bfe33eb3cbcac708275c6beadb56",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "fd21cfa7d6f04a5dcfa7b3fdacabb3ac50290e700de97881d85d3e30e1abb478",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-pie-chart-01-baseline.png",
+          "sha256": "47ddf803c60aa8762f12cf675a3c5f893ed10bbc1532a35b0286b2a7c8650351",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "984ccf75b63ef08450610b46e4329dccd87b3a4a19dd7fb12789ce33e2bb4cd1",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-pie-chart-01-improved.png",
+          "sha256": "604e8b01350a7bb1132686a085de68fe19b0d16d93b25e226b7e81d8f633fa2e",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "00bf5fceb939cf54b00bf80d6d3aabc6597cfb32f43fea9bff07e53ab54dc01e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-radar-chart",
+      "slide": 1,
+      "category": "charts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-radar-chart-01-web.png",
+          "sha256": "b3d8387d04c3efb8b51404cbfa829185657cda110b7a7791658d3fee1078cb81",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d11ac720630d64e725fa22f8f5ca1d7e0db9f66334f67a6b5872130c5e0e20a0",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-radar-chart-01-baseline.png",
+          "sha256": "b8231aeff4f756df9fc51eb3d8050f49ad40e3bdf672a1094d56407058c4b3dd",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "47305a57fb1d94cfc4604fc69889753bcd3419aff0e302ae00c2ad9d291edc40",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-radar-chart-01-improved.png",
+          "sha256": "f623013f5cbdfef1e0df632dbfe361166f4b8e77a38f4960f02a0c4cbf0a5281",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "03d8e8292bd83eb295f58842a3407da2b0512de35bc11790273478cd838d3a26",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-scatter-chart",
+      "slide": 1,
+      "category": "charts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-scatter-chart-01-web.png",
+          "sha256": "dcdc7cf128c7f3d525f24b287a564953a140851cc8037a6df1e068959a9a27c4",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "17094135b980f7f75ddb3aec6f5b006827163083015a5f5a68abade515b896c9",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-scatter-chart-01-baseline.png",
+          "sha256": "cc015078c48ad5dddba49ff3a97d0ffc4ff2e41228d116b43bc365584b524a78",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "e8cf1f5ffc59c0bb29af0d0f9d3d537581e013530765b817e06140dfd4fc7bbb",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-scatter-chart-01-improved.png",
+          "sha256": "162bb56dc60da919ba34da7c579ecd176439d4ae44d9cae27f4ed8c426643fd3",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "94973a9f3bbb0e4c04316e7d1309541aba028edff349ea10272b7fe923cf5c20",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-chart-picture-bg",
+      "slide": 1,
+      "category": "charts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-chart-picture-bg-01-web.png",
+          "sha256": "cb8620a6e7216aabf3a675da4f0cf24b358a77c97c678a274e39c13bf3683970",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "a47c2db798fc25293e6996d6431617a5f1b04029f7a2735456b8f0e0b1e7c83f",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-chart-picture-bg-01-baseline.png",
+          "sha256": "cad7f728503f3496f7af5ac70e66498d4cfae4436972f43c8d1085e4144f9fa1",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "ff60ab9fe3f07e85ba8c2dbb7f9d8acea8caccd974c5e318e0de9cf288434cd7",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-chart-picture-bg-01-improved.png",
+          "sha256": "842fa8eb99adafa8f2716a9ab6f028ff0fd4c34586fc5bc79ec52ec9466ee568",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "72d016d0a8ef49b1720f8a7a254ecefafc260dfd726b3306f3d3c8bee51ad3b7",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-themes",
+      "slide": 1,
+      "category": "themes",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-themes-01-web.png",
+          "sha256": "ad4c547c9eefdad671d55f43377ebc0e1cff99362dd1a7b6c036243ecf2cdc1e",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "8d1a312ca9ad8a60ba5ae3f5703f69d50c5663168b97b60bdb1628edcc3e8359",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-themes-01-baseline.png",
+          "sha256": "dc2e3a181b7d5a2ada4f818c81eec01cb8f43fc553df12ba31548ab59e3fb88a",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "26985988ad84d85ddb205f0a7a439a12585f0d8ca9b181a1a37a6e95485620ad",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-themes-01-improved.png",
+          "sha256": "47456c55ffba7237b9fee25df43db3ee17319ae3a1ed19b8545799af8edffbf9",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "34db76a3459ce8a1b5b525a01f8285a1c2a07f89dd2b2b3a1766314b8723974b",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-themes",
+      "slide": 2,
+      "category": "themes",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-themes-02-web.png",
+          "sha256": "82c354a7105527349e96fc83d9ba717e4658d9a5a96ad2afa09cdadd56e87deb",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "79ef559e948e69bd9b4f1b48003f354fe9ab16ca75cc6d8bc5227b6095733e3c",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-themes-02-baseline.png",
+          "sha256": "6227fb53df786bd3b3389bb44dcce2f9adba00796971ad3b471d2acc522c8635",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "379b0a9ea251fec3802a6f2c02fc5a4faee77109136627af48e2303f6e90cb39",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-themes-02-improved.png",
+          "sha256": "affef2d752b217962a82330755d6c98ec944bbd68f21c15a2da1aa629803fdf9",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "5cc3172a6d11f6c042bc625724176715bb1ec0e6aa3f7e13e466493c40489028",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-themes",
+      "slide": 3,
+      "category": "themes",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-themes-03-web.png",
+          "sha256": "6d96ba12390599b98f1a8f594b871675021aaa0d5cec35f48bd30efe8ed6f5f1",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "ab8415037d8995a54e1745757faf0abffeb9ee794ef882b0287fc8ea48b4794c",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-themes-03-baseline.png",
+          "sha256": "44ba60574ef66c738e0ed835df6ecf88c8f8e0924386a1a5d079bd3e83c8d4aa",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "f3cbe7c87c3cee2306378e908a8a65d5978b5331ab99e3fa91b27fb96af5b882",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-themes-03-improved.png",
+          "sha256": "7e34b28aec28a9e974ac7c570b0fbdc68e96926d8168a4de617696b44651d051",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "eed554724e0b9bbc68d2590c7a2c0cbd0d5c78baf424f2c65a7c65b1d9dd5e4c",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-themes",
+      "slide": 4,
+      "category": "themes",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-themes-04-web.png",
+          "sha256": "3d933279c9fd0876347be9c4e13f58995383aafb78e5ea87c87e575173cdb46e",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "8ceca8e864d54d3cdc5209a26a17a4a5db3f8bcb4b798fa68d4c0ec64f2b3393",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-themes-04-baseline.png",
+          "sha256": "e92456bf43a0fa84989a5e27b50283f4f21790dc81cc0f8326de9b54d8b006d5",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "4fcdb521666225d0ed87882e9148a9504cfb8c81502e35b96ce1904114ee309f",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-themes-04-improved.png",
+          "sha256": "2ea06e38ca0c9bc62f5d93d55820036115061a48aa78ce8c7f71d67df65f65c8",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "26db523c27080bad9830d908971d70b646911afa98c43d59fbab5f53f1c8070f",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-themes",
+      "slide": 5,
+      "category": "themes",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-themes-05-web.png",
+          "sha256": "5dfb262155543bfa261f72f913192d0e119dab2fdec1a2e8ec936c11d0461d09",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d2e111de64418e4d9ae871689092ff59b6146bf956c08d0ca0a728c191a34e31",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-themes-05-baseline.png",
+          "sha256": "64b1e7f8dd142fca999ed56c1c258cd9272aea66532caa76887e488aedec3cdf",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "98c08577ba39942907d06ea4d1ca4bc3f582c5e527d96efefa8c6c6b8d64d480",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-themes-05-improved.png",
+          "sha256": "e50773f6b99c7153582dedd969ce1488e924abc7cc04c6ebc726ecc5af9f4882",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "26486edb0053c7f8a18349fe9098a7cb5d6437fbad10cbb774cb2a9dd36f7a8a",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-themes",
+      "slide": 6,
+      "category": "themes",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-themes-06-web.png",
+          "sha256": "4ce57a7b2c0b90337d5c248d1bf96792786e996853d4586d44bae101131e5488",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "95fd36341080899b186b6e5a399054394ad45f2a65b3c342c1a8ebd01e48a49b",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-themes-06-baseline.png",
+          "sha256": "fc2e2d7f6e67583407da216def93986ad9e10d6145af28219329f027455d819c",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "558ad6e8cfcdf66cdfdac062d083a863d5d280e4c55fd96621595e8e0c1efa89",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-themes-06-improved.png",
+          "sha256": "0f3b8dfd8140a0d8d9f6944cbd08d2143a02ec7370c1cb7a052b3c4fc373fa12",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "bc1b39972595910c3799a2620b0f304f92ef54329ce6eac8db14fffac57e7553",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-themes",
+      "slide": 7,
+      "category": "themes",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-themes-07-web.png",
+          "sha256": "da295c51f9907cd8722679a635f2c5bd7ad04258bcff72d99550168bc44c5f48",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "1e1064eb31d4ee1b702f649c27785b2495ce8747e68a4a326f358854576e6b3a",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-themes-07-baseline.png",
+          "sha256": "f5191067e10f026b9d7d14003a3123f426eae746e927e87b1b91b551f7a4424a",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "a23e64839b09bc1a701b2925069a0f84e77b8728687ed71a4ccb59aa3918f6d7",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-themes-07-improved.png",
+          "sha256": "a43918986e618623f7fcd15e664fb5269d4019c7abf235cbcdafb82b3a1c6be7",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "dbaf12841a4e12c3a64de721f66aee7f3596061af2d32401d7dd2d1755c93279",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-themes",
+      "slide": 8,
+      "category": "themes",
+      "representative": true,
+      "reason": "Theme major font / Medium-face fallback",
+      "references": {
+        "web": {
+          "file": "crops/poi-themes-08-web.png",
+          "sha256": "4633069bd5af08520db961b5491d7ed927ebfe999bfc2c3b59594b6fa28d1293",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "b23ea907fc6065f6e4a5354952913907a12f0db3da7876e732dcd34fdf16b27e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-themes-08-baseline.png",
+          "sha256": "7a87362ea1e10c017218f662348a7b13157be352eb5b63c36039e9461a532cfd",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "0a164a873f0258bc35426a7455344d46b4cff2f3efa2e77f63736ec7ea9e7445",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-themes-08-improved.png",
+          "sha256": "8ec69f9bfc8c2d54a553214f2e10520f6a7c0de78d2cae2730e5d73c0051d343",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "4065c5c2c3a5d9c70c3bb185392276ef1a969225284bde9bdb79884378d8ef99",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-themes",
+      "slide": 9,
+      "category": "themes",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-themes-09-web.png",
+          "sha256": "21dd9c50f1c1e9bedd76128a1348f3543987eadb118a5ab72c67ae690b5096ee",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "b41ebb6fb5e5a4f2e4fde110c294b6bf7db9fd718141d8859bdb7afb6b36bf59",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-themes-09-baseline.png",
+          "sha256": "08476cc07a2b0d15e7630ed0487d12e2ad8cfb40637d6827690ec51bb80a366a",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "ba69a881845ef50270fffb802c36e6d2d700d6ec0d5935328e0182021e769181",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-themes-09-improved.png",
+          "sha256": "888c522c1f042198b982778af95ddabc32878d9cb19e6a608a61bcada61105e7",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "82dabe13f01a9b3a5f8743a310df64c4c17a6991a9f0cd27c1322df8f62c06de",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-themes",
+      "slide": 10,
+      "category": "themes",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-themes-10-web.png",
+          "sha256": "2465baa710a1381f7c207c9596707b525983be21edbe5de67ed220f0a7ced3d9",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "4df92547c1701c7fedb21107ebb11fb09f13d66c101f28b52bc94ec715be769e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-themes-10-baseline.png",
+          "sha256": "8f6062e693fa81a571e0defe4b27f176112dd0f1a821aa6e2ef2923bf376689e",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "7852558deed5d7e384081a9cf9a9951974041d7e4301c2e50180db6d42269d4e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-themes-10-improved.png",
+          "sha256": "ebf76a8b313e70231d577d7332353b3e6d39870e6ad62fd2a8b9de980b592ad0",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "818960e062018e3ef993d6528fd17d7d8b68e2f7ec974d83438a3d44a12da1df",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dickinson-workplace",
+      "slide": 5,
+      "category": "tables",
+      "representative": true,
+      "reason": "Theme table colors and typography",
+      "references": {
+        "web": {
+          "file": "crops/dickinson-workplace-05-web.png",
+          "sha256": "6f1fac59e08035db891cd3d01b88a2bca85cdf33bed63b93a0a2dbea804f82b7",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "826463e5d8d96f37315b3f4c5f7f6937c7bf0b722ca4bdeb55cf5de0482cd23a",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dickinson-workplace-05-baseline.png",
+          "sha256": "6a84cef3e51df384c4d4f0b7330a3499a56dbfb48356957dc6c3bee8d52ae77d",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "6bdbcf0b42d3b612f13aa524086769cb6f11c74b045524eb3ab089d57164cdd2",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dickinson-workplace-05-improved.png",
+          "sha256": "78dd477c067b0c1bc3e0d9d7a25ff6bee274aba3b5deca89b0ca8ac99879dca2",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d1e0c0da5b54e8d6d3cf41dc19e99c98c74898bb2f7afba9d6ec10226dff3146",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 16,
+      "category": "tables",
+      "representative": true,
+      "reason": "Table diagonal borders and mixed numbers",
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-16-web.png",
+          "sha256": "9fd26924305db00f9ca5d6792208d1be60633aedcb39028f2f178cda3a218c6b",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d010efea62e91f984ac0f7b16cf9a63a6eec26deb3d656167fbae5c9e792c5c0",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-16-baseline.png",
+          "sha256": "b9103e7805ae711115239776e506835a3b58f7070452943b7230b075c7f3f88e",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "1e5a53620e4f320e79d136a8658eb8c3bc4a0debad45a27f15d8ca30e3d9f59f",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-16-improved.png",
+          "sha256": "0ed7aa892346801c77a399f98ae9eb23c424b7045f30df3dcf3240159c6253f8",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "9c7969b333f17ecf36dc114ed42391ec8c27e7340d1a513359ddbc0bc1f3cb8e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-table-with-theme",
+      "slide": 1,
+      "category": "tables",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-table-with-theme-01-web.png",
+          "sha256": "e3ec62111ba53148bc4ac06ffc61dd7ba2a8057d29cda42098f4c39d18cd3549",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "ed1ff41522895003782f15dc11d495dc01bb31495803f8b08be519da33a3d5fb",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-table-with-theme-01-baseline.png",
+          "sha256": "b2e65b9b62c78e1f28ef9f5b117a84eac6f37cd2da2de28e3e69b8f534ae58a3",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "786b3114d541a5ed8fb9f6e851c996d7d0e8e65ee5220c011e8512757e43844b",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-table-with-theme-01-improved.png",
+          "sha256": "b78568e5ce86d10e5c4ec9445cc868fe2faa3eaae21b9243b08f892f29a8255a",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "5a8f75e8a86468358b9e40a885d11c05926d71f0d4aa91cfd9547db5e32c27c7",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-table-with-no-theme",
+      "slide": 1,
+      "category": "tables",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-table-with-no-theme-01-web.png",
+          "sha256": "f16cc121565b6cbf0b6cbf882fe20c089b4d7b86260b356da5659a374aa61e95",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "28f1962de829d748612ba86c1be58db6be22a24fa0b3d62c2a2bf508e10bf24b",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-table-with-no-theme-01-baseline.png",
+          "sha256": "a7dfb50ebfd771edb31c7bf54a49e4d4fc979a29e3b05f219bb8e34910c399d0",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "e505574e292c2420c5708acb81c3734041c5e83346251cb26d1315763df97f2a",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-table-with-no-theme-01-improved.png",
+          "sha256": "145fe5771965b1bb846d48292be33fde4a4fa74e9614f7af218f5da156a38879",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "5f7cd808e5c249660124262a770e30bf98e7636e82908d92b0a6b7d436d0f17c",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-table-with-different-font-colors",
+      "slide": 1,
+      "category": "tables",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-table-with-different-font-colors-01-web.png",
+          "sha256": "adf0bb4bf16c21166cc5185dfe408dcfeb37862be79879469b4746625cc000a2",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "a9e34a88cab1af2b27b3980b249d0a3b8507022314364d8e7454bf2f8dadbe34",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-table-with-different-font-colors-01-baseline.png",
+          "sha256": "1e0f0b3267e94834687ae312ffc1b32dfa6ce9585e5ec5d6b319b8d93c481db0",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "79a5fad88705a9e8da6c49583a66f4ade5e5ccb81ce49575323de1b2eea46f2e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-table-with-different-font-colors-01-improved.png",
+          "sha256": "b239f8af2addfbdec97448bf13f7724a2d8159bdbcba0abd2d89d949d15c5583",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "d6925a0824d4bc77a037133d532a8fc4a5638dc5e48f1bfaa6ed2d1ddd136898",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-table-with-different-font-colors",
+      "slide": 2,
+      "category": "tables",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-table-with-different-font-colors-02-web.png",
+          "sha256": "861a354c8d651c733cc394b5f59d986c03e1981241198ec81121e34799392eec",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "44cf62c88bf97c100139b5c2127254586188a0589a535abfa17b0c34a406977d",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-table-with-different-font-colors-02-baseline.png",
+          "sha256": "119f168cb4bccb053118858021f7e299607afcdc2be9fe844c8799231299599f",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "f86cabbcab409d9e39ab49bd86fea69a7d5b2be588a92be8b2668563fc67ceb6",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-table-with-different-font-colors-02-improved.png",
+          "sha256": "dca389a574f412caac696ac03f6d3650e32b0bc5198f5632acfee29d300a607f",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "20876869ea242e0a2e6ad0854636e1e052d3f9e011f23cfd02e46b44447a12c0",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-table_test2",
+      "slide": 1,
+      "category": "tables",
+      "representative": true,
+      "reason": "Rotated/merged table cells",
+      "references": {
+        "web": {
+          "file": "crops/poi-table_test2-01-web.png",
+          "sha256": "294fb995080d51f63d7ca5e65c5ce6f6c178bd016fc1ed64230f4814d501207b",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "e06b70c43357ac057f5b5fc576fae8fc9379124ba19080b7d36cb952fde0cb07",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-table_test2-01-baseline.png",
+          "sha256": "7b56c0f1eed53c0a5a3e8b0616b301acf07f63f1179a8a29b9afef03508a9717",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "824de30db6cb068e2dab24eb440f9883217ee43aecbba5ca12e23d954954a92e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-table_test2-01-improved.png",
+          "sha256": "f095795682ba3b26a75984eb0e4f3b68238b6fd300c7325b8cb003dc63e53816",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "02efa05f1054607aa433075d584d9ce91299dd8781233639d717c9a36ca1e397",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 14,
+      "category": "tables",
+      "representative": true,
+      "reason": "Korean table wrapping and row height",
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-14-web.png",
+          "sha256": "e0a82d13799ad44f730037cc03c942cdb15a878de6350b816f80cb57b03a1a3f",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "42722d25b274cf21d8897421de02ad98029a643a3755ae1b56e7511c4adab1aa",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-14-baseline.png",
+          "sha256": "38a8fc55d158cbe18fccd08cbf5c560df02de3709a226f9606384475b809eb06",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "8fb9d746a4008f92c8fa62238d58103e2bce823a612fbbc5c5d438f840730814",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-14-improved.png",
+          "sha256": "0dc872e596705950fc4e7de74a4faa2b1e4160b4509e86858d595510ee3483a3",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "87633b812f355d3a2eff822ecba54f44d2851fb475d4248cd9274f8e61e676cf",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 15,
+      "category": "tables",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-15-web.png",
+          "sha256": "1adbfcf7d8715cee961e4e09c74a2121a8c84f0bff907d6e74805b4f5ce96639",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "97d2f74b029d7199b354e74b3c040fb0268d651b8cccd292f17f5e44d51d8e4b",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-15-baseline.png",
+          "sha256": "f1e6acdb11f83c142e302b3159ed03d614cad7e443adc16e01ceda696df9f469",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "4b475f006c8c06cc54aac8610c76dd695854f31a8ff860fa0579d0f8ff084e5b",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-15-improved.png",
+          "sha256": "6facbfb3745284cca1bcf3bc0a4393f91d8abbe89b4aba309639fe3bfa0577fd",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "6a393fa53962a9a416e1da86a70bd7b1df1a2036b97bb3d0f4e9da8f5f1d67c3",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-smartart-rotated-text",
+      "slide": 1,
+      "category": "shapes-smartart",
+      "representative": true,
+      "reason": "SmartArt drawing and rotated labels",
+      "references": {
+        "web": {
+          "file": "crops/poi-smartart-rotated-text-01-web.png",
+          "sha256": "2d00f413ea43d8a0314e53a9116272860047027b47ad36606c84575add2f1817",
+          "pixels": [
+            1801,
+            1080
+          ],
+          "originalFullViewportSha256": "5ced844adfc71cd7b90565ae7463a6afd4aca38a76ffa1555018a54ff3bd0d1e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-smartart-rotated-text-01-baseline.png",
+          "sha256": "a5d742d775955a5ff5d057f0b82f045e9c6c3e7627c60cb6832b49b087672adf",
+          "pixels": [
+            1802,
+            1080
+          ],
+          "originalFullViewportSha256": "a537a1b3285251ab462b6cc345e20840fe13c1a6829b8f1d92d37671dd516ba8",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-smartart-rotated-text-01-improved.png",
+          "sha256": "427f82e8b5838b30cebfa3cb8d275f251808989545a667f831211cd772eda665",
+          "pixels": [
+            1802,
+            1080
+          ],
+          "originalFullViewportSha256": "3056e892bf0b9f048d8047097814c8f433a1fec237dd6f7b2477cc9cab661c3e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-shapes",
+      "slide": 1,
+      "category": "shapes-smartart",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-shapes-01-web.png",
+          "sha256": "a56110397e1984b8bf37e629473f5476d715734aa601572997476e22c42763ec",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "5d476857341126106e6764246a5b631122cbe5ee552e22ca1847e8e42784ff72",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-shapes-01-baseline.png",
+          "sha256": "06ffcb38ac8e86122a9263953ef4c70ce1eee90b12b07e121dcc2c6117a1ae6d",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "057b1544093000f693897b235139277b1113987386697641a2cbe7505a9ebbf6",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-shapes-01-improved.png",
+          "sha256": "470d2ef09f09e508bfb19af6da7ce2cb5984ebcde2f88dcc90dd40c7d0a294fc",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "0ac8a4f8ee854e177151eef43dc51218c3238b251c0df8fc5ecbf27caba644bb",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-shapes",
+      "slide": 3,
+      "category": "shapes-smartart",
+      "representative": true,
+      "reason": "Native group geometry",
+      "references": {
+        "web": {
+          "file": "crops/poi-shapes-03-web.png",
+          "sha256": "bf6a99aae5dffd04923056155321047bee2703b0f7931cc92b5737c5b059c901",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "b1309fc436ab013a6a08162b7a84e727df4eef9f1f0f75714043386b2d528ead",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-shapes-03-baseline.png",
+          "sha256": "c078cd5aece4ee240e54209511993232071960997f477084fde5387ce0dde82f",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "5becf3ab5a47a089d9ec81c4bcd1d51dbcabbd4f5272ff8a0b57ca50240d0dd9",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-shapes-03-improved.png",
+          "sha256": "e3dc0d50655d926e3b7277d98d0a87ee3789e5fa1c6965c3545836da20bf527c",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "ee18cf694af5b0181d9fdb72cefe5a3b56290deffec83bfe12d0f6d6b51e96aa",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-shapes",
+      "slide": 6,
+      "category": "shapes-smartart",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-shapes-06-web.png",
+          "sha256": "be52fc1c5447a771ab8c278e0d46da78148adb583e0069fc19488c34e34deea1",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "9b4dee067ef213219258e05387997bbfdbff0cab48c076b999ec68f611db8ad4",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-shapes-06-baseline.png",
+          "sha256": "ca3617a567701d477c71a7b7758a3b8de28fdff0eef9b3152852d12470fb3a77",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "a4a524f88c400763d0f254605b9251773b9d8363d65a0967220a4667ac7f1509",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-shapes-06-improved.png",
+          "sha256": "0b1f0f5a6643c5ca93a638f8706c5588447c3a144bbf721798cf080b9a1edccc",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "42578a125165bf87b07edc01e57f5fd3081d17a6448dee82cefa4c3350808fb2",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-shapes",
+      "slide": 2,
+      "category": "shapes-smartart",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-shapes-02-web.png",
+          "sha256": "d1c2f24a5fda2913bd5baa25be4ccf9aea4a48763696f5218f82ae4bc63d7887",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d68fdeaff5cd85a8786f416d262b171f5e4f55f04b702846647af2bc6939a4ae",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-shapes-02-baseline.png",
+          "sha256": "aa6b685a81c42ecf0c6e285f52a96791b115c7a205e5a55e510d5c361be80433",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d3e0b0f8b0f387b18cc357e07fa6ec0011868b0b6cce66e8821a65e40d447a06",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-shapes-02-improved.png",
+          "sha256": "618958a99bbf94bf709887c63c383972580faba914ff1c2c86ff82dc91fd63bd",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "3cb3a9bc2e580f768353ff3e94ad47c40e069120a80e359b91594860219ac6cc",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-shapes",
+      "slide": 4,
+      "category": "shapes-smartart",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-shapes-04-web.png",
+          "sha256": "28131200dcce0acf00b84b6a1f1a238198fb1061c59a783328463684d64dfad2",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "7a6865ae6dad0cc8be3f84316041bd6e057557253a32b99db704c2599a96b85a",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-shapes-04-baseline.png",
+          "sha256": "3a3ea41d72f458378e60fec40d32e4fd5e5b53cdc1db7670021c632593588dbd",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "a2b1322a186032f77a8da61aa956d2a8deca2f98b3630b4b8dbc28ac9ce0d53e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-shapes-04-improved.png",
+          "sha256": "cc5e8e100a769687b915c7985dcd73cb74b2d2ff7172540ccd396b9f380561b5",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "0c01402d832af8db1ce0bc71e1e37eee04a07f7da449de0dc2bdaddd4c06579e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-shapes",
+      "slide": 5,
+      "category": "shapes-smartart",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-shapes-05-web.png",
+          "sha256": "a1316a9a36c96aae5c1e5402efa34a9f9e2a2d938c1030872b1b0029ed4d6a7b",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "0d9060cdc53b9dd85b76a65604b64c2aea6692eb40a54d02134c93512fdd3636",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-shapes-05-baseline.png",
+          "sha256": "aceef876e27d7aeedcdb3617be069c94e371fe16836d084ffab0f025c3fd610f",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "eef05243c9e27066b59dbaeb06ff1759131aedb045b6e93cce9322689f12e23e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-shapes-05-improved.png",
+          "sha256": "5156f5fdc56c791a296aba7c66b4e776c5da8d5cd9ffe783f8fbed3abe9e0724",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "5f3c1a5e62eb97e7d8afd27885f63f2a17db0eb5ca64264686a965461a0d9004",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dickinson-workplace",
+      "slide": 8,
+      "category": "placeholders",
+      "representative": true,
+      "reason": "Inherited photo placeholder and caption",
+      "references": {
+        "web": {
+          "file": "crops/dickinson-workplace-08-web.png",
+          "sha256": "806fae21ad6d5691741f43ebdb570ac9b2e7bced70b4623b9066cac294169646",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "63b35f96d69d21b092097198c187a83dd929573dcedebaaa7f10b811dabdbae7",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dickinson-workplace-08-baseline.png",
+          "sha256": "cdd8b0259cfe93679c0891f27326ff6540368ebdc15385f2863410d03aaecabb",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d20aa266f487c3874cc3411b474f777b2d1d9604efcb6a4b69aaadeeee29f891",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dickinson-workplace-08-improved.png",
+          "sha256": "ae9b0d2f3ba7f980d4fb15a2afccbc6fd695a3649f74bad79c4f17018a4155ba",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "1c63c0ce0302b8272b3ff4b8e112f9214e64e42df53a1e5356ee222aa75ce34d",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-placeholder-layout-color",
+      "slide": 1,
+      "category": "placeholders",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-placeholder-layout-color-01-web.png",
+          "sha256": "20c81cbed47ee3a27f52a6ab0dafdd593a4acf3cc3534b3983375840c0de079c",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "76cab6848b4d0f6ed67ba6e34a72ed545d0a0eab04424f4a787358348759a694",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-placeholder-layout-color-01-baseline.png",
+          "sha256": "dc9a5e6a14073bad9077a5f234fba348f294189f4a362238b6e3661306910126",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "8e0f7db5d8ca96e3d2ac9be1ac474b550289084c9fe75655e45735a017d0cdab",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-placeholder-layout-color-01-improved.png",
+          "sha256": "1eef1d42037d8ca5381deedd0c0884718afd796b8b01f9d2db28f66b7e0ed331",
+          "pixels": [
+            1920,
+            1080
+          ],
+          "originalFullViewportSha256": "9351c588e4d001ad452804e3399728211dca92253314eaf91acbc85f534132fc",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-withmaster",
+      "slide": 1,
+      "category": "placeholders",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-withmaster-01-web.png",
+          "sha256": "6c130fa5b76d6877440eb8f77d014bfdfa5819baaaab4e96f4cf922e344243a4",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "17129e4bd6383b3a8b84014959f58cbe0d6f5e246ffe8e23b3d40aa84550cf46",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-withmaster-01-baseline.png",
+          "sha256": "7cd209380f4a7739c1d784ab910813f89ff06e36a66b8186b7b820e64449848c",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "39e31102a17b03fa6b1b584d7fcb530926261499d6e6018f590213bd55d480d1",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-withmaster-01-improved.png",
+          "sha256": "302c63295e226724596b4cd5d4c8a220ede78a50a86b18fc6c6d0e9bb9c35db9",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "f17e4f1084c40fac4d5cadcc247a596c0004728a76d6bffe68d2ba5822fee242",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "poi-withmaster",
+      "slide": 2,
+      "category": "placeholders",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/poi-withmaster-02-web.png",
+          "sha256": "f316cc72e5efa58474f2ea46e4f8a3239312312956787dbf7cfb958170fec116",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "0f5b4d92416fb81e1003b563d2aed4ffc02e4903ff34e3009a7afd1d980f9f87",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "baseline": {
+          "file": "crops/poi-withmaster-02-baseline.png",
+          "sha256": "96b21cbee21d6943ec2b056d2f917d34943e072858ac129c1270fc8e20eb47a8",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "85b4d40b8d2ccef49b666f80a6b4f6560831a78c4e9f5821b4e79b85f2988eaa",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/poi-withmaster-02-improved.png",
+          "sha256": "0ac6123e6fa17ea060f59c82011d41b4ecb657139e1296b664f9b27853e83395",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "9dfa70632e381c6c8376e2d1b2aeb45d0f40941b7cc08f53444181bc79bf25fd",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 20,
+      "category": "text-layout",
+      "representative": true,
+      "reason": "Long Korean paragraphs and line wrapping",
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-20-web.png",
+          "sha256": "6272f5930fb69dab61fbdf092c2dd7e1ea8e1ed8a621342fa5c7b1dcc6542373",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "59f399782283269d95244ee6d4fdb93f94c6e1d97e10a7437810147b669cbf7f",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-20-baseline.png",
+          "sha256": "3521185b64507aaa3ddcf26f53825ea095c50dc07011cb660b75433eb8cbb33d",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "e57f21b6909d1a8576cf790c3d3ab9e5f26419319f204d457ff8dd6ef0158856",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-20-improved.png",
+          "sha256": "c4ceef0be6df9a83ff9cb3b1aa3ac2c05cfb31617a8d2368bf9f24cbcc00bb2c",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "6dbc7c8dba7e826c4242688c439a7b16f26a9b32b1c1eabc7857f8d7c333b82f",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 8,
+      "category": "text-layout",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-08-web.png",
+          "sha256": "e01e6701340f59cfbd2e069b44e5c9cf47060d2974f27dfdd8e843264e3be949",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "ebc4f9deeb001dfc96d7e0637c0b43ba7c5167896428bd39ae673dbd718ebde5",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-08-baseline.png",
+          "sha256": "198d6e41c8cd0f9066d2dbfba8e81fdc15d95dc7c328a96a33db931b29ef5e6f",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "f1383ab558404ab9c35541bfff3c77c653ecedf4f5f9f043e1cd5704bd71017a",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-08-improved.png",
+          "sha256": "1bbc8cdad5b995f7ead82501d520659a049a2c6ff6e480edcb1d92988f0d4690",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "05f1da90c926d10c330d38485fb9e6b0fc0a478f2ef16291aa8573751a16ac30",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dickinson-workplace",
+      "slide": 6,
+      "category": "text-layout",
+      "representative": true,
+      "reason": "List paragraphs and Latin text",
+      "references": {
+        "web": {
+          "file": "crops/dickinson-workplace-06-web.png",
+          "sha256": "f00e6cc8b1179798bb72d4c7208623b61ab9f79ac0f988f271439ca9ae1c4ad2",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "421d7465ed8dd20ebe25631d09288fe5ebc750998e01ae67a4efe9f5fc0f05cd",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dickinson-workplace-06-baseline.png",
+          "sha256": "45b7098b1a63bcd4331a7c2ad8a594bea15609ae16d88f59e47cf8f7a4a04b50",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "30c6a1a4560b4214761bd7d405f1874b285b180e05f11bee623cb1944f9b3624",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dickinson-workplace-06-improved.png",
+          "sha256": "2c8eeed56b095163de17b51f9f843f68d256c6b60cd9c85b3b770602d7516758",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "6bcc75bd452629be13696a2441f6eb15f881018ee4f8f30e3d870a2d2c321076",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 5,
+      "category": "text-layout",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-05-web.png",
+          "sha256": "81c7632c22aadbdb06ddce7db09f8030e1f925c9198cc372acf66618375b3885",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "e7030a7b9bff76dd893b0b76ab1423faa7cb19ffedbb8f9ae4b82e8ae30075a2",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-05-baseline.png",
+          "sha256": "eb6b277c71640e9e1a186e24d1242c53362c72f9020ca57ca3065223de2f79da",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d50cc5061712f57e7c1532b8c253177e407ffd02b7e7cc9c148c5296e1fa33d0",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-05-improved.png",
+          "sha256": "48b56d4126a3ba30a4eaf5666a468f2fa2de273f827d1a06b9f7cda2a5ae32ed",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "c60dfcc8a69443a1e26221e748bcbdfa2381e628a62a659f2793d7b374c32632",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dickinson-workplace",
+      "slide": 1,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dickinson-workplace-01-web.png",
+          "sha256": "359ae66954ea6af5ee26e305c3f8aee9e915b2bb458be9c80a99152da4facb7c",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "3ef18bc92b86c45c26ce7062c6d32746a83942e70055f616063198ac99dd7688",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dickinson-workplace-01-baseline.png",
+          "sha256": "924359ceae3438e9ec870d9886e3016256651beab0f31f13908f7f2f939a26e2",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "6ff3bb55d55b5da6e18a42061006fae0a0e81e00637c03ac2d9062b38fb58876",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dickinson-workplace-01-improved.png",
+          "sha256": "3793db59faa8134c2992fc3998927929ce8971c69524281f6bb1169d2d0589d9",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "50df62e4464bd64768bc024d7719abb7469282de2382aeba3cb05b9b9521225a",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dickinson-workplace",
+      "slide": 2,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dickinson-workplace-02-web.png",
+          "sha256": "61161bceb8bb6903328bb2a36ce87b5e92fa4b76247cca61e9df4d55d94442e7",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "b3f1a2373b2afa6d8e95141155b19c188484ac488623fc2e0ed6aa728ac07c61",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dickinson-workplace-02-baseline.png",
+          "sha256": "32c882270130330ae09fb09c71b29c2e718bfbbdda77f14d8b4bf9365856785c",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "8a347cd867673413635cd17b9d1509e691c5a395c90043cb86492eabfe75d5c7",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dickinson-workplace-02-improved.png",
+          "sha256": "7640afd02176398abf80f975237d3ba7b385a05d41d7a42bb54d98b16eb0b0b9",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "98985bc364e8ba625e86698aa41c8affe4ad54fac666749b295525dab74fbd61",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dickinson-workplace",
+      "slide": 3,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dickinson-workplace-03-web.png",
+          "sha256": "0d5c2fb6591b26d61c0bc51c9eca9b0764a23994ba585d57aee47a256934fb5c",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "093586deaf96b5529755223714fe0d4523765f11ce95c728e46727401a422b62",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dickinson-workplace-03-baseline.png",
+          "sha256": "05cc63ac90b78a88365b313fab9ebbdd42c60f99b2ff8683e1391fdced108367",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "5c3e2fb84ffe47354cb81ece5edf77f143462ded7eba2f6297c7b6994ba426f6",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dickinson-workplace-03-improved.png",
+          "sha256": "988d5936b19679b74786403bdd7128c2538320ff742a2305d8057d510368cda6",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "1fc853b543c33db9010b9cc51281be7f0721e7390a7e679840bd431ec36b8cd2",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dickinson-workplace",
+      "slide": 7,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dickinson-workplace-07-web.png",
+          "sha256": "07faa3e5ff65368525c72aa27551716794c14867382a5eea1b8f28ecf34d23c1",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "486e614df77fadb1adbf5bd0d23354c225816d2851e7e1c80d0eded1031f1783",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dickinson-workplace-07-baseline.png",
+          "sha256": "2aae36f1bd0c98022b8502d7da4ec7f976cef880a101cad7f77276d0515bfe2a",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d4017f0bd53d68fce2464ef5b9cc5c4baa2c5be4902d9445ec1ea4566db84988",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dickinson-workplace-07-improved.png",
+          "sha256": "d9963b2afdaa2adcbca31773f3873ee41b9c8a27269598790f6ca8e79ffdef2e",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "7403f139f09651fac8c68b58736bc918b874d6b1f5bee073fc5c77afb68bee37",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dickinson-workplace",
+      "slide": 9,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dickinson-workplace-09-web.png",
+          "sha256": "b4ad2080c4966489ea3aa4d7a3e1bf3bf6b53fc7395351f3273f218f4b6369a9",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "42c13d258ebe5efdab688e0107aa12b8032adfe13762cbb098c1494d3af7de7d",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dickinson-workplace-09-baseline.png",
+          "sha256": "7517842a39dd6ef82a43ce3c8a3c69e516ad0e99ea681e979ab51773c747e157",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "3218e8d061f0caab21c4227dbd7d3053fa7d2d1ffff1ff90b3dfe424ece95720",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dickinson-workplace-09-improved.png",
+          "sha256": "54b33c959553b826141f6206c39b668108b496babdcd8897c9e2cd98e6415ebd",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "8df0c2f8c15ac04747ddf69108b1d6665653e0268dc39afb3aa6a91205c6cc50",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 1,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-01-web.png",
+          "sha256": "a4a3e526f1b19fe8e5a051201940004f94dcedab0a7960956aa3b39ef1d7ecf3",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "5c21f6affca8b9d843eb7eef753d15d2f1ba51e6a7e705ca37ee6dbf23acd196",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-01-baseline.png",
+          "sha256": "2ad413d708133b58a781d550ff21a4cfa762772fe01668a7b967b3c409611fd2",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "9c380f2adefc2f42b973e00584024216fc39f91025551111c9ab5a6de2dc8412",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-01-improved.png",
+          "sha256": "3fbcef73fbdf7709a26d8dbb289fef65dd7a5c8fc9b0458983f58912b25aac94",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "dd26b6a49776efeb6e34a2ae41699bd8db849140ee7160fd3b48340c222b1e81",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 2,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-02-web.png",
+          "sha256": "dbf0a804bde7f3d18c6654929703bd3da34965a4c519930cbb8814a87c345a44",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "e7401df29880a795ca2314007bb778d00f8bc27fad2a54991cbf5b5ce01e2cd2",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-02-baseline.png",
+          "sha256": "e63dd69294c0e23b4bc8b0d38ba6a1d3183ce0e2023de575e20a08907003ab14",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "9c5ca3218b284155e756986737f3c31f1fe7094d6d8f7a4712bf7f70e5f3cbb4",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-02-improved.png",
+          "sha256": "8e678760bebd32c876ba86508b11c254ae6f536ea7c3aab2571e78f0680f5051",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "baae1b82b4b41d7f05fb3d63bfe32ca74d14df46557b36f3e13710b7ce20b9eb",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 3,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-03-web.png",
+          "sha256": "5b6e97faf359e452d8468333dae561e5007e2dad3645b208ae3d85fcea1c8658",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "66932277bf8c09cbe1679ad55d3b6081129551e1290b9eaf21bf46349bc9d587",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-03-baseline.png",
+          "sha256": "26f06c00cc30805e5813008af467eab9f640fd24a8f7eaa086c0bb4b0d1ffc4d",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "18e42e87ae1093afa565eab742d2e33d15aaff60a68e96aa973951ec444aa5ca",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-03-improved.png",
+          "sha256": "b42bfaff76c2b45fd50aeeda64f443346039cfc0da32fec1ae4a1e09a12b203b",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "62e77d9050f3d2f65254646117e56f0212a35727768872bfbf92f4dd3c096c43",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 4,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-04-web.png",
+          "sha256": "c5b7c53e49dfed5625534b6ce9f541f66b16d2e738a904e7d5bd1e6d05716621",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "72ad9bd4606f2edbb53fe52e64382e467650fa6722d474af93523390691f8af3",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-04-baseline.png",
+          "sha256": "6a6af3d7a808a8805ff5227ef7117530ffde3a1105301289ccb4ba193ea8c099",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "3459702a959b91354cb59e26045e20e55a8c2b91649a132eeecdec25c86cd945",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-04-improved.png",
+          "sha256": "34a533359eaa06cecf3e16e736f330f33e5c5f7da4b7a93fe86a3d5e33c7d9ff",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "c5f1847675dd27cdf4ad3883deac9cf7ba5bc935dd57a74f2f7cace91a2cc634",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 6,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-06-web.png",
+          "sha256": "b0a32817fd5c3f544efb8007e62f633d885168ef5c686851967695a29b7ecf57",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "6dd62e315e0f876f4975952a4a0e8aee7feb57cb8b5e9949604da18158a7249e",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-06-baseline.png",
+          "sha256": "4d40ba2ef4ffbe1d296f2b0a0830978b72dfb8dbabf63282e5b05d1fc5e2be5b",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d86248f87888b54cd8698d9688a7fe317125768e93bb26b56e3580ca7e784662",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-06-improved.png",
+          "sha256": "b30f50a5c0044cd876d857aed1b0c4cd9a67e0288b44428908309315289b76f9",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "66dcfe6508d05a535cdfac9cbf9740e0c372554a3c212507fff37bf8a5ba4007",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 7,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-07-web.png",
+          "sha256": "744548ca3294a6e3d4540abe77f2aa09ee5350e5736d60ab41d5b9301b491785",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "1ec6de7c762ff1bf2032b5513e72021f98cf9d3fab9488d22228def515d4b101",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-07-baseline.png",
+          "sha256": "c7fe5f3424e11e3f3dd8694ebdca84479cb6b16f90dc0343f97b9db56ceb851b",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "af6c5a93df4175176bfa913a837df0e4cafb8e8be8e3bbdcc389f03886fa98dd",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-07-improved.png",
+          "sha256": "6ce226a723b0f998482aec0746680c86c9460760dbec0bb9c23ee193e68b2d0d",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "702a881847da39489247529c444dad4779c198f6200fbb2e660fb64ff7d495fd",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 9,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-09-web.png",
+          "sha256": "b52181ecd6092fe52d038f8ee338c09d382ef224c0d9ef44f7237c4269aa729c",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "380a42d60d7225c4d0f21749bd5c3bd5135773dfc4098072e5da48f6f2de9a2e",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-09-baseline.png",
+          "sha256": "cf4da92283e148faa03a3c198b5f8fd6dd18bfc2e23097ac137a4e9179886891",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d79ceca7a45843e1cc8e0cea5f46ae8e4c87da509bdfbdbce6248f0cb22d1004",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-09-improved.png",
+          "sha256": "b7f98ec52ec764dc34ee9ad1d850b5b84a0aedabc9444e347d6f6e8633bef627",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "7fe5a0fc1911fd39c3ba13dd8e8dc827c61b3c5332f595c43d895bf55f4288c9",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 10,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-10-web.png",
+          "sha256": "59661977a5d7c22e937e75ac729cd0bdc3458a2b7ec4772733cee514e495fbf5",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "211d1fd141ec6aae8a41119fddc3ce44cb344db3262410c2023a0016b8255e9d",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-10-baseline.png",
+          "sha256": "6e223f97cc1bc86b0200344f7c56c10db14b56b2c69f67c6f5b6b5668992e1e4",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "e62743790eeb25768164eb0aa0ec520a350f176d9fb43212c1d595100f77ee74",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-10-improved.png",
+          "sha256": "d01437fefb0348747224e881661e24484a5489560991b23ab5750ab5e46526cf",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "da70e0d37d1c2dc3f7fb54304c5102186f1b9d52036118b2f3683288204f0dbc",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 11,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-11-web.png",
+          "sha256": "9bb493ad41ad7fbcdc25784823cce8a696a21d2232655b549aac98064433e38b",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "66f9e26c0feaec0f1da8cfedb64d6750cf281eee0517e0bb3ac967b06a0182d0",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-11-baseline.png",
+          "sha256": "f171719c1144e716b9cd7fe54444cd7e6e67b15ff3abeacbb66878a504af511f",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "636bf563da9a5bf8e3618fc1ccb2bc7db9f7a184882af07e9b4a75fd99136512",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-11-improved.png",
+          "sha256": "4c6fe47ad37405fb242b5c7768a54b134f16807c68616edde517831c728d9fed",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "e5834a6a2c550bcf1526ab3fb3adcbdfe441706fec5658ae0ed679a91315f5c2",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 12,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-12-web.png",
+          "sha256": "fc4c3b3d6685fd1ffd9cb9a131fccb068300659eb6fb100cb443fd80e32ab3e2",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "e6c16a5f7d402cf2485ad39a97377ce7b7178b86e08724bfdd53e80fe72059fe",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-12-baseline.png",
+          "sha256": "e1ecc8eaad5f844ced8fb49ea7aba78d161b1f094e055449430f1f67d4ee8c01",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "3d70f0b48e79c80581a2a8a2eae6d1e27a16cfa64493e6f436fa106fd64eb24d",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-12-improved.png",
+          "sha256": "4ab22a1452ea08d72c3b8ae33867449f7619ace4bc360516abae0edff8fc699a",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "98c28c85615f3d947e975ef121ec303f9c2a25b072e038471464453c413ad09d",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 13,
+      "category": "other-layouts",
+      "representative": true,
+      "reason": "Five native groups and translucent overlapping shapes",
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-13-web.png",
+          "sha256": "40e1fac171ceaf5ed9873b46bae2395ef911d48468239c3826fc0d7326df9e67",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "6f2cf5fdc906b4a0987c432e0f39ba54329519ca85725337acc05c6367a07aab",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-13-baseline.png",
+          "sha256": "5adf50a94d498ffa4b30b9d7a450f4cd2f8edd7192766c6d62ecebb8e052a3ce",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "4b817f7e4e60ded2b7800163dbc7ff0bf989eb2ad3e29c6791e2a00e36348e97",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-13-improved.png",
+          "sha256": "4a105ad554c2fe240dc2c8c21ac683ed50a8e1a34eb9485f00a1ff2b195f1774",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "27e9081e49a25be093550a3ef1ef8c3721374bf4b46e69034bbbc076ceda9bc2",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 17,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-17-web.png",
+          "sha256": "1f4639149a9e786d9f3e2ccd22517c1665dd7a6fd844ea9764a4d86f460c6269",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "7924fc55e9dda5eff019d662d1337a8a60aab7bd6b8fda1e0d8086634351baa3",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-17-baseline.png",
+          "sha256": "d9fd9a4d4044e71d600cacf1e2682971c0f99bc2d7599b253d0b3db76ca9a4e7",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "816e77f4a61d497e8fa475a73d35a45e7c7b6415cc0aa22b72e402700f6ca25d",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-17-improved.png",
+          "sha256": "0d22722115027be530289c237e7af5dfe796e991ce97b91b9053ec0d103b63c0",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "78cdd7a982a319b9ed29e8e5615f860186382a6ade22377d793f6115a08b906c",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 18,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-18-web.png",
+          "sha256": "2759dac0b916ad683a036f67154f5d1fb7b7b23e21abc399318c95e0510918be",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "27fe0a11f41ca52a650b8f23688381150cac05e945726c8044b79a5939d4df6e",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-18-baseline.png",
+          "sha256": "7e39347f1bd6c6f11e7ab75ce03cb9450d321eb5bccdc70b913f7d9d077cb77c",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "0afc176cd163a8a49221ce38d0b673b813f80d97e666f4ef33858bb47672dd37",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-18-improved.png",
+          "sha256": "4eae4709ec9ac72e0e7af384cdba0262c612f59727be91b8bb015bb020db8b0f",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "a93740807bbf623a7c75e7e89b3b518cd4096049c5726e45b1027192c95fe8aa",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 19,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-19-web.png",
+          "sha256": "e47cfdb6ac7239fe42d4ef3eb6e37c3c52c44fd8245acf1f496738b967e07b2f",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "1da8129a5c360167e2463a42cce7538d9fdc020e55a7e7cf2a8cdaef20ab7ad3",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-19-baseline.png",
+          "sha256": "0ae8a509842a8ce07151ca6e677ff4b9e5e0a9c31a1f9d08525ce40a26135756",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "1fca981d254829dc477894f3e159bd7338d098db433a3700cd143913b1f9c5a5",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-19-improved.png",
+          "sha256": "75353ca67bbc12eea5dfcc1b856d113eca7ed42710f4a335ae8f527632132d32",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d9ee67e1c7750d7b2a427badfc7580fa286573c2c8a413f32778a559bc7fa168",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 21,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-21-web.png",
+          "sha256": "78e3f0a27e69097337093162ed200173bc83762646092bc90ce944656a94e13b",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "c1553f23feccc0dbc23d9657c12883dbc8913ddddba32ae8649aa29028f51799",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-21-baseline.png",
+          "sha256": "7e588bb44ca3fd98dba03ee2e5326eb3feac61e095dd6a6acf5d2b5bb0d13ad3",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "d26515dbfc415808a4b33edae2082c6a6df6d05b1ad388a7aff0fa6b3b57eaf5",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-21-improved.png",
+          "sha256": "eee57ccb5c087620d4b727d6c797fceaed060058e3703a9212d2c682dfb25ffd",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "5499a0707c26b9c6af7302ff8298c46e46a5bc8f54753db4d185fa88b3b005f7",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    },
+    {
+      "id": "dsu-korean",
+      "slide": 22,
+      "category": "other-layouts",
+      "representative": false,
+      "reason": null,
+      "references": {
+        "web": {
+          "file": "crops/dsu-korean-22-web.png",
+          "sha256": "80d80d2dd191b409dc4bcc140205390f1d99e597414ae50c7525c4409ecff464",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "92e05e41bc3859734ca157c58899320a6c821f2cbf00db0aa4bed5d55424ea02",
+          "originalFullViewportAvailableAtRecordedPath": true
+        },
+        "baseline": {
+          "file": "crops/dsu-korean-22-baseline.png",
+          "sha256": "adf8d18a86ef644aec36aadc545855a40b57f71a0fdadb899e26bfd3b50fe8d1",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "7326002f6f7e5caff0e32eb3ea2c954ff4a39b82771b50652608715826e5848e",
+          "originalFullViewportAvailableAtRecordedPath": false
+        },
+        "improved": {
+          "file": "crops/dsu-korean-22-improved.png",
+          "sha256": "e2c1c5c7d52a2a31a558cd95b5a382da5d48adfce232f7e9d2106e953bf6761d",
+          "pixels": [
+            1440,
+            1080
+          ],
+          "originalFullViewportSha256": "caa24fede0c21d82f4a032ccee1fa5e9fa6ff057f6bc699fbf92cf8d91845787",
+          "originalFullViewportAvailableAtRecordedPath": false
+        }
+      }
+    }
+  ]
+}

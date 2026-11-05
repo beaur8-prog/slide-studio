@@ -67,6 +67,8 @@ export function trackTextFormat(host: HTMLElement, inputType: string) {
       formatJustifyLeft: "align",
       formatJustifyCenter: "align",
       formatJustifyRight: "align",
+      formatJustifyFull: "align",
+      formatParagraphAlignment: "align",
     } as Record<string, string>
   )[inputType];
   if (!format) return;
@@ -138,6 +140,12 @@ export function cssColorHex(value: string): string | undefined {
   );
 }
 
+function cssTextAlignment(node: HTMLElement): TextParagraph["align"] {
+  return ({ center: "center", right: "right", justify: "justify" } as const)[
+    getComputedStyle(node).textAlign as "center" | "right" | "justify"
+  ] ?? "left";
+}
+
 // Read formatting without replacing the live editable DOM or disturbing IME/selection.
 // Markers in one detached clone map text nodes onto the editor's logical text,
 // including explicit lines, blank paragraphs and imported bullet separators.
@@ -165,17 +173,24 @@ export function editableTextFormatRanges(host: HTMLElement): TextFormatRange[] {
       style: readStyle(node, host, formats),
       ...(formats.has("align")
         ? {
-            align:
-              (
-                { center: "center", right: "right" } as Record<
-                  string,
-                  TextParagraph["align"]
-                >
-              )[getComputedStyle(node.parentElement!).textAlign] ?? "left",
+            align: cssTextAlignment(node.parentElement!),
           }
         : {}),
     });
     copy.textContent = prefix + index + "\uFDD1" + node.textContent;
+  }
+  if (formats.has("align")) {
+    // A blank paragraph has no glyph to sample. Include its leaf block at a
+    // zero-length logical range, so native Undo can recover its current visual
+    // alignment even after older command snapshots leave the bounded cache.
+    const originalBlocks = [host, ...host.querySelectorAll<HTMLElement>("div,p,li")];
+    const clonedBlocks = [clone, ...clone.querySelectorAll<HTMLElement>("div,p,li")];
+    originalBlocks.forEach((block, index) => {
+      if (block.querySelector("div,p,li") || editableText(block)) return;
+      const entry = entries.length;
+      entries.push({ text: "", style: {}, align: cssTextAlignment(block) });
+      clonedBlocks[index].prepend(document.createTextNode(prefix + entry + "\uFDD1"));
+    });
   }
   const expression = new RegExp(prefix + "(\\d+)\uFDD1", "g");
   const serialized = editableText(clone);
@@ -199,7 +214,7 @@ export function editableTextFormatRanges(host: HTMLElement): TextFormatRange[] {
       starts[i + 1]?.start ?? plain.length,
       plain.length,
     );
-    if (end <= start) return;
+    if (end < start || (end === start && align === undefined)) return;
     const previous = ranges.at(-1);
     if (
       previous &&
@@ -226,7 +241,8 @@ export function applyTextFormatRanges(
   const paragraphs = source.map((paragraph, paragraphIndex) => {
     if (paragraphIndex) offset++;
     const align = ranges.find(
-      (range) => range.start <= offset && range.end > offset,
+      (range) => range.start <= offset &&
+        (range.end > offset || (range.start === offset && range.end === offset)),
     )?.align;
     const runs: TextRun[] = [];
     const append = (run: TextRun) => {

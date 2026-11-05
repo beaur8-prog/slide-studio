@@ -14,6 +14,7 @@ import {
 } from "./text-formatting";
 import { textPointOffset, restoreTextOffsets } from "./text-selection";
 import { PAINT_TEXT_EVENT, paintTextRange, type PaintTextDetail } from "./format-painter";
+import { TEXT_ALIGN_EVENT, alignTextParagraphs, type TextAlignmentDetail } from "./text-alignment";
 import {
   continueTextBullet,
   toggleTextBullets,
@@ -46,6 +47,7 @@ export default function EditableText({
   const inputEdit = useRef<TextEdit | undefined>(undefined);
   const pastedRange = useRef<{ start: number; length: number } | null>(null);
   const commandParagraphs = useRef<TextParagraph[] | undefined>(undefined);
+  const commandInputType = useRef<string | undefined>(undefined);
   const listHistory = useRef(
     new Map<
       string,
@@ -90,11 +92,23 @@ export default function EditableText({
     entire.selectNodeContents(host);
     selection?.removeAllRanges();
     selection?.addRange(entire);
-    document.execCommand(
-      "insertHTML",
-      false,
-      renderToStaticMarkup(<TextContent element={next} editing />),
-    );
+    let inserted = false;
+    try {
+      inserted = document.execCommand(
+        "insertHTML",
+        false,
+        renderToStaticMarkup(<TextContent element={next} editing />),
+      );
+    } finally {
+      // Chromium can decline a command in an empty editor without emitting
+      // input. Never let the next typed character consume that old snapshot.
+      commandParagraphs.current = undefined;
+      commandInputType.current = undefined;
+    }
+    if (!inserted) {
+      restoreTextOffsets(host, start, end);
+      return;
+    }
     const nextStart = remapBulletOffset(element, next, start),
       nextEnd = remapBulletOffset(element, next, end);
     listHistory.current.set(host.innerHTML, {
@@ -105,6 +119,49 @@ export default function EditableText({
     if (listHistory.current.size > 20)
       listHistory.current.delete(listHistory.current.keys().next().value!);
     restoreTextOffsets(host, nextStart, nextEnd);
+  };
+  const applyAlignment = (
+    next: SlideElement,
+    range: NonNullable<ReturnType<typeof listSelection>>,
+    align: TextAlignmentDetail["align"],
+  ) => {
+    const { host, start, end, indices } = range;
+    const old = element.paragraphs ??
+      (element.text ?? "").split("\n").map(text => ({ runs: [{ text }] }));
+    const first = indices[0], last = indices.at(-1);
+    if (first === undefined || last === undefined) return;
+    let offset = 0, from = 0, to = 0;
+    old.forEach((paragraph, index) => {
+      const length = paragraph.runs.reduce((sum, run) => sum + run.text.length, 0);
+      if (index === first) from = offset;
+      if (index === last) to = offset + length;
+      offset += length + 1;
+    });
+    listHistory.current.set(host.innerHTML, { paragraphs: old, start, end });
+    // Native alignment is one undoable change and keeps empty blocks intact.
+    // Replacing all HTML here can nest the new paragraphs inside the first
+    // existing empty line. Expand only the command's selection to whole source
+    // paragraphs, including every segment separated by Shift+Enter.
+    restoreTextOffsets(host, from, to);
+    commandParagraphs.current = next.paragraphs;
+    commandInputType.current = "formatParagraphAlignment";
+    let consumed = false;
+    try {
+      document.execCommand("styleWithCSS", false, "true");
+      document.execCommand({
+        left: "justifyLeft", center: "justifyCenter",
+        right: "justifyRight", justify: "justifyFull",
+      }[align]);
+      consumed = commandParagraphs.current === undefined;
+    } finally {
+      commandParagraphs.current = undefined;
+      commandInputType.current = undefined;
+    }
+    if (consumed)
+      listHistory.current.set(host.innerHTML, { paragraphs: next.paragraphs!, start, end });
+    if (listHistory.current.size > 20)
+      listHistory.current.delete(listHistory.current.keys().next().value!);
+    restoreTextOffsets(host, start, end);
   };
   useEffect(() => {
     const host = ref.current;
@@ -124,13 +181,22 @@ export default function EditableText({
       detail.applied = true;
       if (next !== element) applyList(next, range);
     };
+    const align = (event: Event) => {
+      const range = listSelection(), detail = (event as CustomEvent<TextAlignmentDetail>).detail;
+      if (!range || !detail || element.locked) return;
+      const next = alignTextParagraphs(element, range.indices, detail.align);
+      detail.applied = true;
+      if (next !== element) applyAlignment(next, range, detail.align);
+    };
     host.addEventListener("slide-studio:toggle-numbering", numbers);
     host.addEventListener("slide-studio:toggle-bullets", toggle);
     host.addEventListener(PAINT_TEXT_EVENT, paint);
+    host.addEventListener(TEXT_ALIGN_EVENT, align);
     return () => {
       host.removeEventListener("slide-studio:toggle-numbering", numbers);
       host.removeEventListener("slide-studio:toggle-bullets", toggle);
       host.removeEventListener(PAINT_TEXT_EVENT, paint);
+      host.removeEventListener(TEXT_ALIGN_EVENT, align);
     };
   }, [element]);
   useLayoutEffect(() => {
@@ -213,7 +279,8 @@ export default function EditableText({
       }}
       onInput={(e) => {
         const host = e.currentTarget;
-        const type = (e.nativeEvent as InputEvent).inputType || "";
+        const type = commandInputType.current ?? (e.nativeEvent as InputEvent).inputType ?? "";
+        commandInputType.current = undefined;
         applyPendingFontSize(host, type);
         trackTextFormat(host, type);
         let edit = inputEdit.current;

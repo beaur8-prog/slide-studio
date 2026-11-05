@@ -344,12 +344,12 @@ export function restoreLayoutXml(
           pr = make(
             "pPr",
             {
-              algn:
-                paragraph.align === "center"
-                  ? "ctr"
-                  : paragraph.align === "right"
-                    ? "r"
-                    : "l",
+              algn: {
+                left: "l",
+                center: "ctr",
+                right: "r",
+                justify: "just",
+              }[paragraph.align ?? el.align ?? "left"],
             },
             p,
           );

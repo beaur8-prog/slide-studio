@@ -166,8 +166,8 @@ export function captureInlineFormat(
     underline,
     color: cssColorHex(css.color) ?? base.text?.color ?? "#233D35",
     align:
-      ({ center: "center", right: "right" } as const)[
-        css.textAlign as "center" | "right"
+      ({ center: "center", right: "right", justify: "justify" } as const)[
+        css.textAlign as "center" | "right" | "justify"
       ] ?? "left",
     verticalAlign: base.text?.verticalAlign ?? "top",
     textOpacity: base.text?.textOpacity ?? 1,

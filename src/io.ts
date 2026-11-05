@@ -453,7 +453,7 @@ export function validateDeck(input: unknown): Deck {
           if (source.align !== undefined)
             el.align = enumValue(
               source.align,
-              ["left", "center", "right"] as const,
+              ["left", "center", "right", "justify"] as const,
               `${elLabel} 정렬`,
             );
           if (source.verticalAlign !== undefined)

@@ -41,6 +41,7 @@ import {
   AArrowUp,
   AArrowDown,
   AlignCenter,
+  AlignJustify,
   AlignLeft,
   AlignRight,
   ArrowDown,
@@ -142,6 +143,7 @@ import {
   type InlineFormat,
 } from "./text-formatting";
 import { captureTextSelection, restoreTextSelection, selectedTextElement, textRangeAtOffsets } from "./text-selection";
+import { TEXT_ALIGN_EVENT, type TextAlignmentDetail } from "./text-alignment";
 import TextContextMenu from "./TextContextMenu";
 import type { TextMenuSelection } from "./text-selection";
 import ObjectContextMenu, { type ObjectMenuAction } from "./ObjectContextMenu";
@@ -3362,16 +3364,15 @@ export default function App() {
       host && (captureTextSelection(host) ?? ribbonTextSelection.current);
     if (!selection || selection.host !== host || !host.isConnected) return;
     restoreTextSelection(selection);
+    if (key === "align") {
+      host.dispatchEvent(new CustomEvent<TextAlignmentDetail>(TEXT_ALIGN_EVENT, {
+        detail: { align: value as NonNullable<SlideElement["align"]> },
+      }));
+      ribbonTextSelection.current = captureTextSelection(host);
+      return;
+    }
     const command =
-      key === "align"
-        ? (
-            {
-              left: "justifyLeft",
-              center: "justifyCenter",
-              right: "justifyRight",
-            } as Record<string, string>
-          )[String(value)]
-        : key === "fontFamily"
+      key === "fontFamily"
           ? "fontName"
           : "fontSize";
     const type = `format${command[0].toUpperCase()}${command.slice(1)}`;
@@ -3413,7 +3414,7 @@ export default function App() {
       if (event.defaultPrevented || event.isComposing || presenting || busy || modal ||
           pendingInk || menu || objectMenu || colorPalette || textMenu || event.repeat) return;
       if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || !textCapable) return;
-      const align = ({l:"left",e:"center",r:"right"} as const)[event.key.toLowerCase() as "l"|"e"|"r"];
+      const align = ({l:"left",e:"center",r:"right",j:"justify"} as const)[event.key.toLowerCase() as "l"|"e"|"r"|"j"];
       if (!align) return;
       const target = event.target instanceof Element ? event.target : null;
       if (editingTarget(target) && !target?.closest(".editing-text")) return;
@@ -4334,6 +4335,7 @@ export default function App() {
                       ["left", AlignLeft, "왼쪽 정렬"],
                       ["center", AlignCenter, "가운데 정렬"],
                       ["right", AlignRight, "오른쪽 정렬"],
+                      ["justify", AlignJustify, "양쪽 맞춤"],
                     ] as const
                   ).map(([align, Icon, label]) => (
                     <Tool

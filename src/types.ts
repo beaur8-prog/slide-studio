@@ -6,6 +6,9 @@ export type ShapeKind =
   | "line"
   | "arrow"
   | "custom";
+// DrawingML's ordinary justification (algn="just"). Distributed and
+// low-compression/Thai justification have different layout semantics.
+export type TextAlignment = "left" | "center" | "right" | "justify";
 export interface TextRun {
   text: string;
   fontFamily?: string;
@@ -31,7 +34,7 @@ export interface TextParagraph {
   // Imported list label, including its plain-text separator. Keep editable
   // text intact while painting the label in the paragraph's hanging indent.
   bulletPrefix?: string;
-  align?: "left" | "center" | "right";
+  align?: TextAlignment;
   fontSize?: number;
   lineHeight?: number;
   lineSpacing?: number;
@@ -90,7 +93,7 @@ export interface TableCellFormat {
   padding?: number;
   borderColor?: string;
   borderWidth?: number;
-  align?: "left" | "center" | "right";
+  align?: TextAlignment;
   verticalAlign?: "top" | "middle" | "bottom";
 }
 export interface TableData {
@@ -108,7 +111,7 @@ export interface TableData {
   fontFamily: string;
   fontSize: number;
   padding: number;
-  align: "left" | "center" | "right";
+  align: TextAlignment;
   verticalAlign: "top" | "middle" | "bottom";
   // Relative sizes; resizing the element scales the table grid as a whole.
   columnWidths?: number[];
@@ -241,7 +244,7 @@ export interface SlideElement {
   italic?: boolean;
   underline?: boolean;
   color?: string;
-  align?: "left" | "center" | "right";
+  align?: TextAlignment;
   verticalAlign?: "top" | "middle" | "bottom";
   wrap?: boolean;
   autoHeight?: boolean;

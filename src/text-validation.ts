@@ -87,7 +87,7 @@ export function validateParagraphs(
     if (p.align !== undefined)
       paragraph.align = enumValue(
         p.align,
-        ["left", "center", "right"] as const,
+        ["left", "center", "right", "justify"] as const,
         elLabel,
       );
     if (p.bulletPrefix !== undefined)

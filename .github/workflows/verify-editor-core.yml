@@ -74,6 +74,7 @@ jobs:
           tests/theme-backgrounds.spec.ts
           tests/smartart-text-layout.spec.ts
           tests/web-layout-text.spec.ts
+          tests/paragraph-justify.spec.ts
           tests/text-caps.spec.ts
           tests/picture-placeholder.spec.ts
           tests/picture-duotone.spec.ts
@@ -98,6 +99,17 @@ jobs:
           QA_APP_ROOT: ${{ github.workspace }}
           QA_NO_SANDBOX: '1'
         run: xvfb-run --auto-servernum node scripts/qa-save-native.cjs node_modules/electron/dist/electron qa/results/editor-core-native
+      - name: Verify Windows native paragraph justification and saved XML
+        if: always() && steps.build.outcome == 'success' && runner.os == 'Windows'
+        env:
+          QA_APP_ROOT: ${{ github.workspace }}
+        run: node scripts/qa-justify-native.cjs node_modules/electron/dist/electron.exe qa/results/editor-core-justify
+      - name: Verify Linux native paragraph justification and saved XML
+        if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
+        env:
+          QA_APP_ROOT: ${{ github.workspace }}
+          QA_NO_SANDBOX: '1'
+        run: xvfb-run --auto-servernum node scripts/qa-justify-native.cjs node_modules/electron/dist/electron qa/results/editor-core-justify
       - name: Verify real Windows recovery preservation and download
         if: always() && steps.build.outcome == 'success' && runner.os == 'Windows'
         env:
@@ -131,6 +143,8 @@ jobs:
             qa/results/editor-core-ci.json
             qa/results/editor-core-native/*.json
             qa/results/editor-core-native/*.png
+            qa/results/editor-core-justify/*.json
+            qa/results/editor-core-justify/*.png
             qa/results/editor-core-recovery/**/*.json
             qa/results/editor-core-recovery/**/*.png
             qa/results/editor-core-audio/*.json

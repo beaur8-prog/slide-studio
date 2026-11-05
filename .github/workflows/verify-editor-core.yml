@@ -10,7 +10,7 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       PLAYWRIGHT_CHANNEL: chromium
       LAYOUT_COMPARISON_SAMPLES: ${{ github.workspace }}/qa/samples

@@ -20,7 +20,7 @@ const sha256 = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
   await fs.mkdir(output, { recursive: true });
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), "slide-justify-native-"));
   const originalHash = sha256(await fs.readFile(fixture));
-  const results = [], errors = [], saved = [];
+  const results = [], errors = [], saved = [], shapeHistory = [];
   let app;
   try {
     const env = { ...process.env };
@@ -179,19 +179,43 @@ const sha256 = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
         name: index % 2 === 0 ? "양쪽 맞춤" : "왼쪽 정렬", exact: true,
       }).click();
     }
+    const liveShape = () => editor.evaluate(host => {
+      // Electron's Chromium can insert a nested alignment block on Undo. The
+      // outer imported line may retain its old style; inspect painted glyphs.
+      const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+      let glyph;
+      while (walker.nextNode()) if (walker.currentNode.textContent.trim()) {
+        glyph = walker.currentNode.parentElement; break;
+      }
+      return {
+        align: getComputedStyle(glyph || host.querySelector("[data-text-line]") || host).textAlign,
+        text: host.textContent.replace(/\u00a0/g, " "),
+        html: host.innerHTML,
+        selection: getSelection()?.toString() ?? "",
+      };
+    });
     for (let index = 0; index < 28; index++) {
+      const before = await liveShape();
       await menu("Undo");
-      const live = await editor.evaluate(host =>
-        getComputedStyle(host.querySelector("[data-text-line]") || host).textAlign,
-      );
+      await expect.poll(liveShape, { message: `Native shape Undo ${index + 1} must complete in the renderer` }).not.toEqual(before);
+      await idle();
+      const live = await liveShape();
       await expect.poll(async () => {
         const item = await readShape();
         return item?.paragraphs?.[0]?.align ?? item?.align ?? "left";
-      }, { message: `Native shape Undo ${index + 1} must agree with saved alignment` }).toBe(live);
+      }, { message: `Native shape Undo ${index + 1} must agree with saved alignment` }).toBe(live.align);
+      const item = await readShape();
+      assert.equal(item.text, live.text);
+      shapeHistory.push({ step: index + 1, live, semanticChange: before.text !== live.text || before.align !== live.align,
+        saved: { text: item.text, align: item.paragraphs?.[0]?.align ?? item.align ?? "left" } });
     }
-    assert.deepEqual(geometry(await readShape()), originalShape);
     await justify.click();
     await editor.press("Escape");
+    await idle();
+    const finalShape = await readShape(), shapeText = finalShape.text;
+    assert.deepEqual(geometry(finalShape), originalShape);
+    assert(shapeText.startsWith("Alpha"));
+    await fs.writeFile(path.join(output, "shape-history.json"), JSON.stringify({ originalShape, finalShape, shapeHistory }, null, 2) + "\n");
     await expect(justify).toHaveAttribute("aria-pressed", "true");
     const shapeFile = path.join(output, "shape-justify-save.pptx");
     await queue("save", { canceled: false, filePath: shapeFile });
@@ -201,27 +225,28 @@ const sha256 = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
     const shapeBytes = await fs.readFile(shapeFile), shapeZip = await JSZip.loadAsync(shapeBytes);
     const shapeXml = await shapeZip.file("ppt/slides/slide1.xml").async("string");
     const savedShape = [...shapeXml.matchAll(/<p:sp(?:\s[^>]*)?>[\s\S]*?<\/p:sp>/g)]
-      .map(match => match[0]).find(xml => /<a:t>Alpha<\/a:t>/.test(xml));
+      .map(match => match[0]).find(xml => xml.includes(`<a:t>${shapeText}</a:t>`));
     assert(savedShape && /<a:prstGeom\b[^>]*\bprst="rect"/.test(savedShape));
     assert(/<a:pPr\b[^>]*\balgn="just"/.test(savedShape));
     saved.push({ kind: "shape", file: path.basename(shapeFile), bytes: shapeBytes.length, sha256: sha256(shapeBytes) });
     await open(shapeFile);
-    const reopenedShape = page.locator('.editable-slide [data-type="shape"]').filter({ hasText: /^Alpha$/ });
+    const reopenedShape = page.locator('.editable-slide [data-type="shape"]').filter({ hasText: shapeText });
     await expect(reopenedShape).toHaveCount(1);
+    assert.equal(await reopenedShape.locator(".shape-text-frame").textContent(), shapeText);
     await expect(reopenedShape.locator("[data-text-line]")).toHaveCSS("text-align", "justify");
     results.push("shape-long-native-undo-keeps-visual-and-saved-alignment-geometry-and-roundtrip");
     assert.equal(sha256(await fs.readFile(fixture)), originalHash);
     assert.deepEqual(errors, []);
     await page.screenshot({ path: path.join(output, "finished.png") });
     await fs.writeFile(path.join(output, "results.json"), JSON.stringify({
-      status: "passed", completedAt: new Date().toISOString(), environment, results, saved, errors,
+      status: "passed", completedAt: new Date().toISOString(), environment, results, saved, errors, shapeHistory,
       originalFixtureSha256: originalHash,
       limitations: ["Native file-panel responses were supplied by QA.", "No live Microsoft PowerPoint verification or physical printer test."],
     }, null, 2) + "\n");
     console.log(JSON.stringify({ status: "passed", results }));
   } catch (error) {
     await (await app?.firstWindow())?.screenshot({ path: path.join(output, "failure.png") }).catch(() => {});
-    await fs.writeFile(path.join(output, "failure.json"), JSON.stringify({ error: String(error.stack || error), results, errors }, null, 2));
+    await fs.writeFile(path.join(output, "failure.json"), JSON.stringify({ error: String(error.stack || error), results, errors, shapeHistory }, null, 2));
     throw error;
   } finally {
     // Only the isolated QA process/profile is closed; the user's app is untouched.

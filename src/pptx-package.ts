@@ -34,11 +34,18 @@ export function checkZip(bytes: Uint8Array): Map<string, number> {
   if (bytes.length > MAX_ARCHIVE) fail("PPTX 파일은 256 MiB 이하여야 합니다.");
   if (bytes.length < 22) fail("올바른 PPTX ZIP 파일이 아닙니다.");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // Some Office/POI documents have one text-transfer line ending after EOCD.
+  // Accept only LF or CRLF, retaining the complete ZIP comment and all bounds
+  // checks. Arbitrary trailing payloads and multiple lines remain invalid.
+  const lineEnding = bytes[bytes.length - 1] === 10
+    ? bytes[bytes.length - 2] === 13 ? 2 : 1
+    : 0;
   let end = -1;
-  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557 - lineEnding); i--) {
     if (
       view.getUint32(i, true) === 0x06054b50 &&
-      i + 22 + view.getUint16(i + 20, true) === bytes.length
+      (i + 22 + view.getUint16(i + 20, true) === bytes.length ||
+        (lineEnding > 0 && i + 22 + view.getUint16(i + 20, true) === bytes.length - lineEnding))
     ) {
       end = i;
       break;

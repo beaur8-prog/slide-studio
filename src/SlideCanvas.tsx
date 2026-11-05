@@ -279,7 +279,8 @@ export function elementStyle(e: SlideElement): CSSProperties {
     width: e.width,
     height: e.height,
     transform: `rotate(${e.rotation}deg)`,
-    opacity: e.opacity,
+    // A picture's alphaModFix affects its bitmap, independently of its outline.
+    opacity: e.type === "image" ? 1 : e.opacity,
     filter: e.shadow
       ? `drop-shadow(${e.shadow.dx}px ${e.shadow.dy}px ${e.shadow.blur / 2}px ${alphaColor(e.shadow.color, e.shadow.opacity)})`
       : undefined,

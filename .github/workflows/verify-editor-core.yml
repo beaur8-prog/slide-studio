@@ -79,6 +79,7 @@ jobs:
           tests/table-insert.spec.ts
           tests/text-caps.spec.ts
           tests/picture-placeholder.spec.ts
+          tests/picture-outline.spec.ts
           tests/picture-duotone.spec.ts
           tests/chart-layout-compatibility.spec.ts
           tests/chart-picture-fill.spec.ts
@@ -92,9 +93,9 @@ jobs:
         env:
           QA_APP_ROOT: ${{ github.workspace }}
         run: node scripts/qa-save-native.cjs node_modules/electron/dist/electron.exe qa/results/editor-core-native
-      - name: Verify Linux native menu Undo and Redo
+      - name: Verify Linux native menu history and picture outlines
         if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
-        run: xvfb-run --auto-servernum npx playwright test tests/native-menu-history.spec.ts --reporter=line --output=qa/results/editor-core-native-history
+        run: xvfb-run --auto-servernum npx playwright test tests/native-menu-history.spec.ts tests/picture-outline.spec.ts --grep native --reporter=line --output=qa/results/editor-core-native-history
       - name: Exercise real Linux production app with disposable files
         if: always() && steps.build.outcome == 'success' && runner.os == 'Linux'
         env:

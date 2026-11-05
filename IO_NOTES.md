@@ -8,11 +8,20 @@ establish full PowerPoint compatibility. Public installers are updated separatel
 Development 1.6.23 adds ordinary DrawingML paragraph justification (`algn="just"`)
 to text, shape text and table cells, including validation, editing, clipboard and
 PPTX export. Home's justify control and Ctrl/Cmd+J act on the selected paragraphs
-and retain the original text selection. Distributed, Thai and low-compression
+and retain the original text selection. Shape text also reads live run and paragraph
+styles after native Undo while retaining independent geometry, fill and outline.
+Object selection reports a uniform paragraph alignment and leaves mixed alignment
+unpressed. Distributed, Thai and low-compression
 justification remain outside this support slice. Explicit soft-break line spacing
 and fresh Microsoft-rendered fixtures still require comparison; preserving `just`
 on save is not proof of identical typography. See the
 [first layout work record](qa/LAYOUT-FIRST-BLOCK-2026-11-05.md).
+
+Picture outlines now reuse the DrawingML line resolver for solid color, positive
+width, alpha, dash and cap, and survive picture edits and generated PPTX output.
+Bitmap alpha and outline alpha are independent; cropping clips only the bitmap.
+Nonrectangular picture masks and gradient/pattern outline rendering remain outside
+this bounded change.
 
 The development editor now includes table-aware document find/replace, nondestructive
 picture crop/fit/fill/replacement, a selection pane, and format painting. Search

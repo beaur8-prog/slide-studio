@@ -48,7 +48,24 @@ export function restoreLayoutXml(
         el.gradient,
         el.opacity * (el.fillOpacity ?? 1),
       );
-    const outline = child(properties, "ln");
+    let outline = child(properties, "ln");
+    if (properties && el.type === "image" && (el.stroke !== undefined || el.strokeWidth !== undefined)) {
+      // PptxGenJS does not expose picture outlines. Write standard a:ln after
+      // the fill and before effects, with alpha independent of bitmap opacity.
+      if (!outline) {
+        outline = make("ln");
+        properties.insertBefore(outline, Array.from(properties.children).find(node =>
+          ["effectLst", "effectDag", "scene3d", "sp3d", "extLst"].includes(node.localName)) ?? null);
+      }
+      outline.setAttribute("w", String(Math.round((el.strokeWidth ?? 0) * 9525)));
+      for (const name of ["noFill", "solidFill", "gradFill", "pattFill"]) child(outline, name)?.remove();
+      const paint = make(!el.stroke || el.stroke === "transparent" || !el.strokeWidth ? "noFill" : "solidFill");
+      if (paint.localName === "solidFill") {
+        const color = make("srgbClr", { val: el.stroke!.slice(1) }, paint);
+        if ((el.strokeOpacity ?? 1) !== 1) make("alpha", { val: Math.round((el.strokeOpacity ?? 1) * 100000) }, color);
+      }
+      outline.insertBefore(paint, outline.firstChild);
+    }
     if (outline && el.type === "shape") {
       // PptxGenJS substitutes a default for zero widths, including ordinary
       // and imported zero-height lines whose editor box is one pixel tall.

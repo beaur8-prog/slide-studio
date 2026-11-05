@@ -38,8 +38,9 @@ export function SlideBackground({
           width,
           height,
           rotation: 0,
-          opacity: 1,
           ...slide.backgroundImage,
+          // The background wrapper already applies the bitmap alpha.
+          opacity: 1,
         }}
         playing={playMedia}
       />}

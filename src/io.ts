@@ -2408,6 +2408,7 @@ export async function importPptx(
         0,
         1,
       );
+      const pictureLine = readLine([node, layoutShape, masterShape]);
       addElement({
         id: uid(),
         type: "image",
@@ -2421,6 +2422,13 @@ export async function importPptx(
         flipH: ["1", "true"].includes(xfrm?.getAttribute("flipH") ?? ""),
         flipV: ["1", "true"].includes(xfrm?.getAttribute("flipV") ?? ""),
         opacity,
+        ...(pictureLine.color !== "transparent" && pictureLine.width > 0 ? {
+          stroke: pictureLine.color,
+          strokeWidth: pictureLine.width,
+          strokeOpacity: pictureLine.opacity,
+          strokeDash: pictureLine.dash,
+          strokeCap: pictureLine.cap,
+        } : {}),
         alt: first(node, "cNvPr")?.getAttribute("descr") ?? "",
       });
     };

@@ -14,7 +14,7 @@ test("inspector has one close action, preserves the selected shape and fits its 
   const panel = page.locator(".inspector");
   await expect(panel.locator(".inspector-heading")).toContainText("개체 서식");
   await expect(panel.locator(".inspector-heading button")).toHaveCount(1);
-  for (const width of [970, 1000, 1001, 1040, 1041, 1080, 1100, 1150, 1151, 1180, 1200, 1201, 1250, 1251, 1280, 1540]) {
+  for (const width of [970, 1000, 1001, 1040, 1041, 1080, 1081, 1100, 1150, 1151, 1180, 1200, 1201, 1250, 1251, 1280, 1350, 1351, 1540]) {
     await page.setViewportSize({ width, height: 900 });
     const bounds = await panel.evaluate(el => ({
       width: el.getBoundingClientRect().width,
@@ -22,7 +22,17 @@ test("inspector has one close action, preserves the selected shape and fits its 
     }));
     expect(bounds.width).toBeLessThanOrEqual(280);
     expect(bounds.horizontalOverflow).toBeLessThanOrEqual(1);
-    expect(await page.locator('.ribbon').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+    const ribbonBounds = await page.locator('.ribbon').evaluate(el => ({
+      viewport: innerWidth, overflow: el.scrollWidth - el.clientWidth,
+      groups: [...el.children].map(group => ({ label: group.querySelector('.group-label')?.textContent,
+        width: group.getBoundingClientRect().width })),
+    }));
+    expect(ribbonBounds.overflow, JSON.stringify(ribbonBounds)).toBeLessThanOrEqual(1);
+    for (const name of ['선택 창', '찾기', '바꾸기']) {
+      const action = page.getByRole('button', { name, exact: true });
+      await expect(action).toBeVisible();
+      await expect(action).toHaveAttribute('title', /.+/);
+    }
     const ribbonLayout = await page.locator('.ribbon').evaluate(el => {
       const groups = Array.from(el.children);
       const font = groups.findIndex(g => g.classList.contains('font-group'));

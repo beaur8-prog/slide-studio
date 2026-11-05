@@ -202,7 +202,11 @@
   .office-shell .ribbon-group { padding-left: 8px; padding-right: 8px; }
   .office-shell .ribbon-hint { font-size: 10px; padding-left: 12px; }
 }
-@media (max-width: 1200px) {
+@media (max-width: 1350px) {
+  .office-shell .home-ribbon > .ribbon-group { padding-left: 8px; padding-right: 8px; }
+  .office-shell .home-ribbon > .ribbon-group:first-child { padding-left: 0; }
+}
+@media (max-width: 1250px) {
   .office-shell .home-ribbon > .ribbon-group { padding-left: 6px; padding-right: 6px; }
   .office-shell .home-ribbon > .ribbon-group:first-child { padding-left: 0; }
   .office-shell .home-ribbon .font-group { width: 186px; }
@@ -222,13 +226,17 @@
   .office-shell .local-badge { display: none; }
   .command-trigger kbd { display: none; }
 }
-@media (max-width: 1040px) {
-  .office-shell .home-ribbon > .ribbon-group { padding-left: 3px; padding-right: 3px; }
+@media (max-width: 1080px) {
+  .office-shell .home-ribbon > .ribbon-group { padding-left: 2px; padding-right: 2px; }
   .office-shell .home-ribbon > .ribbon-group:first-child { padding-left: 0; }
   .office-shell .home-ribbon .font-group { width: 174px; }
   .office-shell .home-ribbon .font-row select { width: 102px; }
   .office-shell .home-ribbon .tool.small { width: 24px; min-width: 24px; }
   .office-shell .home-ribbon .toolbar-color { width: 25px; min-width: 25px; }
+  /* Keep all actions available when platform UI fonts need wider labels. */
+  .office-shell .home-ribbon .editing-group .tools-stack > button {
+    min-width: 28px; justify-content: center; gap: 0; font-size: 0;
+  }
 }
 
 /* Reserve label width independently of platform font metrics and flex sizing. */

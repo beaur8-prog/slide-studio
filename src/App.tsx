@@ -4477,11 +4477,11 @@ export default function App() {
                 </div>
                 <span className="group-label">정렬</span>
               </div>
-              <div className="ribbon-group">
+              <div className="ribbon-group editing-group">
                 <div className="tools-stack">
-                  <button title="선택 창 Alt+F10" onClick={() => openInspector("layers")}><Layers size={15} />선택 창</button>
-                  <button title={`찾기 ${shortcut("F")}`} onClick={() => openFind()}><Search size={15} />찾기</button>
-                  <button title={`바꾸기 ${isMac ? "⇧⌘H" : "Ctrl+H"}`} onClick={() => openFind(true)}><Replace size={15} />바꾸기</button>
+                  <button aria-label="선택 창" title="선택 창 Alt+F10" onClick={() => openInspector("layers")}><Layers size={15} />선택 창</button>
+                  <button aria-label="찾기" title={`찾기 ${shortcut("F")}`} onClick={() => openFind()}><Search size={15} />찾기</button>
+                  <button aria-label="바꾸기" title={`바꾸기 ${isMac ? "⇧⌘H" : "Ctrl+H"}`} onClick={() => openFind(true)}><Replace size={15} />바꾸기</button>
                 </div>
                 <span className="group-label">편집</span>
               </div>

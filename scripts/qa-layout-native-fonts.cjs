@@ -7,12 +7,15 @@ const crypto = require("node:crypto");
 const assert = require("node:assert/strict");
 const { _electron, expect } = require("@playwright/test");
 const root = path.resolve(__dirname, "..");
-const [executable, outputArg] = process.argv.slice(2);
+const [executable, outputArg, corpus = "baseline"] = process.argv.slice(2);
 assert(executable && outputArg, "Pass the packaged executable and a new qa/results directory.");
+assert(["baseline", "powerpoint-pdf"].includes(corpus), "Optional corpus must be baseline or powerpoint-pdf.");
 const output = path.resolve(outputArg);
 assert(output.startsWith(path.join(root, "qa/results") + path.sep));
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
-const selected = [
+const selected = corpus === "powerpoint-pdf" ? [
+  { id: "cmu-lecture-3", slides: [1, 2, 22, 50, 75, 113, 151] },
+] : [
   { id: "poi-themes", slides: [8] },
   { id: "dsu-korean", slides: [8, 14, 15, 20] },
   { id: "dickinson-workplace", slides: [6] },
@@ -20,10 +23,14 @@ const selected = [
 (async () => {
   await fs.mkdir(output, { recursive: false });
   const manifest = JSON.parse(await fs.readFile(path.join(root, "qa/layout-baseline-2026-11-05.json")));
+  if (corpus === "powerpoint-pdf") manifest.sources.push({
+    id: "cmu-lecture-3", file: "cmu-lecture-3.pptx", slides: 151,
+    sha256: "12a8a88d3e33a520c6c037debbbab47ef9a3f706dca2dbc450d7443150df03ca",
+  });
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), "slide-native-fonts-"));
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE; delete env.SLIDE_STUDIO_DEV;
-  const report = { status: "running", startedAt: new Date().toISOString(), slides: [], errors: [],
+  const report = { status: "running", corpus, startedAt: new Date().toISOString(), slides: [], errors: [],
     limitations: ["Native file-panel answers supplied by QA; original public files are not edited.",
       "Font observations belong to this Mac and fresh profile, not Microsoft's rendering environment."] };
   let app;

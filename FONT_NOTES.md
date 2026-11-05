@@ -17,6 +17,13 @@ This is a family-level diagnosis, not proof that every weight, style or characte
 uses the same original face. A family with “Medium” in its name can be visually
 heavier than its substitute even when the source has no explicit bold property.
 
+The first 1.6.23 layout block adds `scripts/qa-layout-native-fonts.cjs` for developer
+QA. It records actual platform faces for text-bearing DOM parents in a disposable
+production-app profile, separately from the family-level user diagnosis. The Mac
+six-page baseline and seven paired-PDF-page observations and their limits are recorded in the
+[layout work report](qa/LAYOUT-FIRST-BLOCK-2026-11-05.md). This does not add or
+redistribute source fonts or make a fallback visually identical to the original.
+
 ## Bundled fonts and provenance
 
 - **Carlito**, unchanged Fontsource 5.3.0 files, is the Calibri substitute.

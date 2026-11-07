@@ -59,6 +59,7 @@ jobs:
           tests/presentation-start-input.spec.ts
           tests/presentation-fullscreen.spec.ts
           tests/windows-ui.spec.ts
+          tests/android-ui.spec.ts
           tests/document-capacity.spec.ts
           tests/document-table-capacity.spec.ts
           tests/recovery-quarantine.spec.ts

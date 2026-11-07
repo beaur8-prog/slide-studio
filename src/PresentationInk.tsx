@@ -20,6 +20,7 @@ import {
 import { SlideVisual } from "./SlideCanvas";
 import type { Slide } from "./types";
 import { touchesInk, type InkPoint, type InkStroke } from "./presentation-ink";
+import { androidRuntime } from "./android-platform";
 import "./presentation-ink.css";
 
 type Tool = "arrow" | "laser" | "pen" | "highlighter" | "eraser";
@@ -72,10 +73,11 @@ const PresentationInk = forwardRef<
     scale: number;
     ended: boolean;
     blackout: boolean;
+    paused?: boolean;
     onSlideLink: (id: string) => void;
   }
 >(function PresentationInk(
-  { slide, width, height, scale, ended, blackout, onSlideLink },
+  { slide, width, height, scale, ended, blackout, paused = false, onSlideLink },
   ref,
 ) {
   const [tool, setTool] = useState<Tool>("arrow");
@@ -253,7 +255,7 @@ const PresentationInk = forwardRef<
     hidePointer();
     setMenu(null);
     // End, blackout, resize, and direct jumps must never retain a pointer grab.
-  }, [slide.id, ended, blackout, scale]);
+  }, [slide.id, ended, blackout, scale, paused]);
   useLayoutEffect(() => {
     if (!menu || !panel.current) return;
     const bounds = panel.current.getBoundingClientRect();
@@ -331,8 +333,8 @@ const PresentationInk = forwardRef<
         >
           <SlideVisual
             slide={slide}
-            interactive={!blackout && tool === "arrow"}
-            playMedia={!blackout}
+            interactive={!blackout && !paused && tool === "arrow"}
+            playMedia={!blackout && !paused}
             onSlideLink={onSlideLink}
             width={width}
             height={height}
@@ -347,6 +349,7 @@ const PresentationInk = forwardRef<
             aria-hidden="true"
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => {
+              if (androidRuntime && !event.isPrimary) { finish(true); return; }
               if (event.button !== 0 || !event.isPrimary || blackout) return;
               event.preventDefault();
               event.stopPropagation();
@@ -355,6 +358,7 @@ const PresentationInk = forwardRef<
                 focusView();
                 return;
               }
+              if (androidRuntime && toolRef.current === "laser") { move(event); return; }
               if (
                 gesture.current ||
                 !["pen", "highlighter", "eraser"].includes(toolRef.current)
@@ -392,6 +396,7 @@ const PresentationInk = forwardRef<
             }}
             onPointerMove={move}
             onPointerUp={(event) => {
+              if (androidRuntime && toolRef.current === "laser") hidePointer();
               if (gesture.current?.pointerId === event.pointerId) {
                 move(event);
                 finish();

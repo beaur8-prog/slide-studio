@@ -11,8 +11,8 @@ export function RecoveryNotice({ blocked, onOpen }: { blocked: boolean; onOpen: 
     <button type="button" onClick={onOpen}>복구 데이터 확인</button>
   </aside>;
 }
-export default function RecoveryBackups({ blocked, onRetry, onClose }: {
-  blocked: boolean; onRetry: () => Promise<void>; onClose: () => void;
+export default function RecoveryBackups({ blocked, onRetry, onClose, sessionDrafts = false }: {
+  blocked: boolean; onRetry: () => Promise<void>; onClose: () => void; sessionDrafts?: boolean;
 }) {
   const [records, setRecords] = useState<RecoveryBackup[]>([]);
   const [message, setMessage] = useState("");
@@ -57,7 +57,7 @@ export default function RecoveryBackups({ blocked, onRetry, onClose }: {
       }}>
       <button ref={close} className="dialog-close icon-button" aria-label="대화상자 닫기" disabled={busy} onClick={onClose}><X size={18}/></button>
       <h2 id="recovery-title">보관된 복구 데이터</h2>
-      <p>읽을 수 없었던 자동 저장 원문을 보관합니다. 내려받아도 현재 작업이나 보관된 원문은 바뀌지 않습니다. 이 파일은 복구·진단용 자료이며 PPTX로 바로 열리지 않을 수 있습니다.</p>
+      <p>{sessionDrafts ? "이전 편집 자료와 읽을 수 없었던 자동 저장 원문을 보관합니다." : "읽을 수 없었던 자동 저장 원문을 보관합니다."} 내려받아도 현재 작업이나 보관된 원문은 바뀌지 않습니다. 이 파일은 복구·진단용 자료이며 PPTX로 바로 열리지 않을 수 있습니다.</p>
       {blocked && <div className="recovery-record" role="alert"><strong>아직 별도로 보관하지 못한 원문</strong>
         <p>기존 자료를 덮지 않도록 자동 저장을 중지했습니다. 현재 작업은 PPTX로 저장할 수 있습니다. 저장 공간을 확보한 후 다시 보관을 시도해 주세요.</p>
         <button disabled={busy} onClick={() => void download()}><FileDown size={15}/>기존 원문 내려받기</button>

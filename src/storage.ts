@@ -172,6 +172,31 @@ export async function listRecoveryBackups(): Promise<RecoveryBackup[]> {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   } finally { db.close(); }
 }
+
+/** Keep a previous session's draft before a different document starts autosaving.
+ * Unlike quarantine, this copies the record without removing or revising current.
+ * Desktop save/recovery paths do not call this optional operation. */
+export async function backupAutosave(reason: string): Promise<RecoveryBackup | undefined> {
+  return locked(async () => {
+    const db = await database();
+    try {
+      const source = await snapshot(db);
+      if (source.raw === undefined) return undefined;
+      const backup = { id: crypto.randomUUID(), createdAt: new Date().toISOString(), reason: reason.slice(0, 300) };
+      return await new Promise<RecoveryBackup>((resolve, reject) => {
+        const tx = db.transaction("documents", "readwrite"), store = tx.objectStore("documents");
+        const revision = store.get(REVISION_KEY);
+        revision.onsuccess = () => {
+          if (revision.result !== source.revision) { tx.abort(); return; }
+          try { store.put(source.raw, DATA_PREFIX + backup.id); store.put(backup, META_PREFIX + backup.id); }
+          catch { tx.abort(); }
+        };
+        tx.oncomplete = () => resolve(backup);
+        tx.onabort = tx.onerror = () => reject(tx.error || new Error("이전 편집 자료를 보관하지 못했습니다. 다시 시도해 주세요."));
+      });
+    } finally { db.close(); }
+  });
+}
 export async function recoveryDownload(id?: string): Promise<{ blob: Blob; name: string; description: string }> {
   if (id !== undefined && !/^[\da-f-]{36}$/i.test(id)) throw new Error("복구 기록을 찾을 수 없습니다.");
   const db = await database();

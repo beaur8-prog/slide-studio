@@ -11,6 +11,11 @@ import "@fontsource/carlito/latin-700-italic.css";
 import "./fonts.css";
 import "./styles.css";
 import "./office-shell.css";
+import { androidRuntime } from "./android-platform";
+if (androidRuntime) {
+  document.documentElement.dataset.studioPlatform = "android";
+  document.querySelector('meta[name="viewport"]')?.setAttribute("content", "width=device-width, initial-scale=1.0, viewport-fit=cover");
+}
 void Promise.allSettled([installDesktopFonts(), installLocalFonts()]).finally(
   () => {
     createRoot(document.getElementById("root")!).render(

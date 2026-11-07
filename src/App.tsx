@@ -176,7 +176,7 @@ import {
 import SlideCanvas, { SlideVisual } from "./SlideCanvas";
 import { exportPptx, importPptx, parseDeckJson, validateDeck } from "./io";
 import { mergePptxSources, replaceSlideTransition } from "./pptx-preservation";
-import { loadAutosave, saveAutosave, listRecoveryBackups, AutosaveRecoveryError } from "./storage";
+import { loadAutosave, saveAutosave, listRecoveryBackups, backupAutosave, AutosaveRecoveryError } from "./storage";
 import RecoveryBackups, { RecoveryNotice } from "./RecoveryBackups";
 import { restoreWindowBuffer } from "./startup";
 import type { RecentPresentationFile } from "./types";
@@ -204,6 +204,11 @@ import { applyFooters, resolveDeckFields } from "./insert-fields";
 import ScreenshotDialog from "./ScreenshotDialog";
 import PresentationInk, { type PresentationInkHandle } from "./PresentationInk";
 import { DEFAULT_SHAPE_FILL, EXTRA_SHAPES, shapeInsertionStyle } from "./shape-presets";
+import { androidRuntime, useAndroidBack } from "./android-platform";
+import AndroidReader, { type AndroidReaderHandle } from "./AndroidReader";
+import AndroidEditorBar, { type AndroidEditorHandle } from "./AndroidEditorBar";
+import AndroidPresentationControls from "./AndroidPresentationControls";
+import "./android.css";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const shortcut = (key: string) => (isMac ? `⌘${key}` : `Ctrl+${key}`);
@@ -423,6 +428,17 @@ function LibraryContents({
 }
 
 export default function App() {
+  const [androidMode, setAndroidMode] = useState<"view" | "edit">("view");
+  const [androidHome, setAndroidHome] = useState(true);
+  const [androidHasDocument, setAndroidHasDocument] = useState(false);
+  const [androidRecovery, setAndroidRecovery] = useState<Deck | null>(null);
+  const androidReadOnly = androidRuntime && androidMode === "view";
+  const mutationAllowed = useRef(!androidReadOnly);
+  mutationAllowed.current = !androidReadOnly;
+  const androidReader = useRef<AndroidReaderHandle>(null);
+  const androidEditor = useRef<AndroidEditorHandle>(null);
+  const androidOriginal = useRef<File | null>(null);
+  const [androidHasOriginal, setAndroidHasOriginal] = useState(false);
   const updates = useAppUpdates();
   const printRendering = usePrintRendering();
   const [history, setHistory] = useState<History>(() => ({
@@ -684,7 +700,7 @@ export default function App() {
   const [zoom, setZoom] = useState<number | null>(null);
   const [fitScale, setFitScale] = useState(0.6);
   const scale = zoom === null ? fitScale : zoom;
-  const [notesVisible, setNotesVisible] = useState(true);
+  const [notesVisible, setNotesVisible] = useState(!androidRuntime);
   const [grid, setGrid] = useState(false);
   const [gridVisible, setGridVisible] = useState(false);
   const [smartGuides, setSmartGuides] = useState(true);
@@ -708,6 +724,13 @@ export default function App() {
     }
   });
   const [presenting, setPresenting] = useState(false);
+  const [androidBackgrounded, setAndroidBackgrounded] = useState(androidRuntime && document.hidden);
+  useEffect(() => {
+    if (!androidRuntime) return;
+    const visibility = () => setAndroidBackgrounded(document.hidden);
+    document.addEventListener("visibilitychange", visibility);
+    return () => document.removeEventListener("visibilitychange", visibility);
+  }, []);
   useEffect(() => {
     setObjectMenu(null);
     setTextMenu(null);
@@ -740,6 +763,15 @@ export default function App() {
     w: window.innerWidth,
     h: window.innerHeight,
   });
+  const [androidPresentationSize, setAndroidPresentationSize] = useState({ w: innerWidth, h: Math.max(1, innerHeight - 96) });
+  useLayoutEffect(() => {
+    if (!androidRuntime || !presenting || !presentationView.current) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setAndroidPresentationSize({ w: Math.max(1, entry.contentRect.width), h: Math.max(1, entry.contentRect.height) });
+    });
+    observer.observe(presentationView.current);
+    return () => observer.disconnect();
+  }, [presenting]);
   const [dragSlide, setDragSlide] = useState<number | null>(null);
   const [dropSlide, setDropSlide] = useState<number | null>(null);
   const canvasArea = useRef<HTMLDivElement>(null);
@@ -799,7 +831,9 @@ export default function App() {
   }, []);
   const capacityNotice = useRef<string | null>(null);
   const commit = useCallback((update: (d: Deck) => Deck) => {
+    if (!mutationAllowed.current) return;
     setHistory((h) => {
+      if (!mutationAllowed.current) return h;
       const next = update(h.present);
       if (sameDocument(next, h.present)) return h;
       const error = documentCapacityError(next);
@@ -824,12 +858,15 @@ export default function App() {
     });
   }, [notify]);
   const begin = useCallback(() => {
+    if (!mutationAllowed.current) return;
     // All document updates are immutable. Reuse the snapshot, including large
     // embedded images, instead of cloning the entire deck on each edit.
     if (!transaction.current) transaction.current = documentRef.current;
   }, []);
   const preview = useCallback((update: (d: Deck) => Deck) => {
+    if (!mutationAllowed.current) return;
     setHistory((h) => {
+      if (!mutationAllowed.current) return h;
       const next = update(h.present);
       return sameValue(next, h.present) ? h : { ...h, present: next };
     });
@@ -854,6 +891,7 @@ export default function App() {
       row?: number,
       column?: number,
     ) => {
+      if (!mutationAllowed.current) return;
       // Native Save can finish a transaction without blurring the text editor.
       // Further typing must start a new transaction for document-level undo.
       if (!transaction.current) transaction.current = documentRef.current;
@@ -911,6 +949,7 @@ export default function App() {
     [finish],
   );
   const undo = useCallback(() => {
+    if (!mutationAllowed.current) return;
     setSlideInsertBefore(undefined);
     setEditing(null);
     transaction.current = null;
@@ -925,6 +964,7 @@ export default function App() {
     );
   }, []);
   const redo = useCallback(() => {
+    if (!mutationAllowed.current) return;
     setSlideInsertBefore(undefined);
     setEditing(null);
     transaction.current = null;
@@ -944,6 +984,7 @@ export default function App() {
   const pendingPreview = !editing && !!transaction.current &&
     !sameDocument(transaction.current, history.present);
   const runToolbarHistory = (direction: "undo" | "redo") => {
+    if (!mutationAllowed.current) return;
     const host = document.querySelector<HTMLElement>(".editing-text");
     const inlineAvailable = direction === "undo" ? inlineUndoAvailable : inlineRedoAvailable;
     if (host && inlineAvailable) {
@@ -1059,6 +1100,11 @@ export default function App() {
     imageOperationVersion.current++;
     imageReplaceTarget.current = null;
     setCropImage(null);
+    if (androidRuntime) {
+      setAndroidMode("view"); setAndroidHome(false); setAndroidHasDocument(true);
+      androidOriginal.current = null; setAndroidHasOriginal(false);
+      setNotesVisible(false); setInspectorVisible(false);
+    }
   };
 
   const openFind = (replace = false) => {
@@ -1231,7 +1277,8 @@ export default function App() {
     loadAutosave(validateDeck)
       .then((saved) => {
         if (disposed) return;
-        if (saved && restoreWindowBuffer) {
+        if (saved && androidRuntime) setAndroidRecovery(saved);
+        if (saved && restoreWindowBuffer && !androidRuntime) {
           setHistory({ past: [], present: saved, future: [] });
           setFileSnapshot(restoredFileChanges.current ? null : saved);
           setActiveId(saved.slides[0].id);
@@ -1262,6 +1309,7 @@ export default function App() {
     return () => { disposed = true; };
   }, [notify]);
   useLayoutEffect(() => {
+    if (androidReadOnly) return;
     if (!ready || !loadedRef.current || autosaveBlockedRef.current) return;
     setSaveStatus("saving");
     let live = true;
@@ -1280,7 +1328,7 @@ export default function App() {
         });
     }, 450);
     return () => { live = false; clearTimeout(timer); };
-  }, [deck, ready, notify, autosaveBlocked]);
+  }, [deck, ready, notify, autosaveBlocked, androidReadOnly]);
   const retryRecovery = async () => {
     try {
       await loadAutosave(validateDeck);
@@ -1340,8 +1388,8 @@ export default function App() {
         const { clientWidth: width, clientHeight: height } = canvasArea.current;
         setFitScale(
           Math.min(
-            (width - 64) / deck.width,
-            (height - 60) / deck.height,
+            (width - (androidRuntime ? 24 : 64)) / deck.width,
+            (androidRuntime ? Math.max(24, height - 24) : height - 60) / deck.height,
             1.25,
           ),
         );
@@ -1351,7 +1399,7 @@ export default function App() {
     ro.observe(canvasArea.current);
     measure();
     return () => ro.disconnect();
-  }, [deck.width, deck.height, ready, sorter, notesVisible]);
+  }, [deck.width, deck.height, ready, sorter, notesVisible, androidMode]);
   useEffect(() => {
     const resize = () =>
       setWindowSize({ w: window.innerWidth, h: window.innerHeight });
@@ -1727,9 +1775,9 @@ export default function App() {
     notify(`${cells.length * cells[0].length}개 셀을 복사했습니다.`);
     return true;
   };
-  const copySelection = (nativeClipboard?: DataTransfer | null) => {
-    if (copySelectedTableCells(nativeClipboard)) return;
-    clipboard.current = selected.length
+  const copySelection = (nativeClipboard?: DataTransfer | null, forceSlides = false) => {
+    if (!forceSlides && copySelectedTableCells(nativeClipboard)) return;
+    clipboard.current = !forceSlides && selected.length
       ? {
           elements: clone(
             slide.elements.filter((e) => selected.includes(e.id)),
@@ -1760,7 +1808,7 @@ export default function App() {
       /* Keep the internal copy if native clipboard access fails. */
     }
     notify(
-      selected.length ? "개체를 복사했습니다." : "슬라이드를 복사했습니다.",
+      !forceSlides && selected.length ? "개체를 복사했습니다." : "슬라이드를 복사했습니다.",
     );
   };
   const cutSelection = (nativeClipboard?: DataTransfer | null) => {
@@ -2162,7 +2210,7 @@ export default function App() {
     if (!canReplaceDocument()) return;
     setBusy("프레젠테이션을 열고 있습니다");
     try {
-      await saveAutosave(deck);
+      if (!androidReadOnly) await saveAutosave(deck);
       if (/\.pptx$/i.test(name)) {
         const result = await importPptx(data);
         replaceDeck(result.deck);
@@ -2171,6 +2219,12 @@ export default function App() {
       } else {
         const imported = parseDeckJson(new TextDecoder().decode(data));
         replaceDeck(imported);
+      }
+      if (androidRuntime) {
+        androidOriginal.current = new window.File([new Uint8Array(data)], name, {
+          type: /\.pptx$/i.test(name) ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/json",
+        });
+        setAndroidHasOriginal(true);
       }
     } catch (error) {
       notify(
@@ -2227,19 +2281,29 @@ export default function App() {
     setModal("library");
     setMenu(null);
   };
+  const preserveAndroidRecovery = async () => {
+    if (!androidRuntime || !androidRecovery) return;
+    const backup = await backupAutosave("다른 문서 편집 전에 보관한 Android 이전 편집 자료");
+    if (backup) setHasRecoveryBackups(true);
+    setAndroidRecovery(null);
+  };
   const createDocument = async (isSample = false) => {
     if (!canReplaceDocument()) return;
+    if (androidRuntime && (busy || openingFile.current || savingPptx.current)) return;
+    if (androidRuntime) setBusy("새 문서를 준비하고 있습니다");
     try {
-      await saveAutosave(deck);
+      if (androidRuntime) await preserveAndroidRecovery();
+      if (!androidReadOnly) await saveAutosave(deck);
       const next = isSample ? sampleDeck() : blankDeck();
       if (!isSample) next.slides = [newSlide(layout)];
       replaceDeck(next);
+      if (androidRuntime) { mutationAllowed.current = true; setAndroidMode("edit"); }
       notify("새 프레젠테이션을 만들었습니다.");
     } catch {
       notify(
         "현재 문서의 자동 저장에 실패했습니다. 파일로 저장한 후 다시 시도해 주세요.",
       );
-    }
+    } finally { if (androidRuntime) setBusy(""); }
   };
   const enterPresentationFullscreen = () => {
     if (window.desktop?.setPresentationMode) {
@@ -2527,6 +2591,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (presenting) {
+        if (androidRuntime && e.target instanceof Element && e.target.closest(".android-presentation-controls,.android-presentation-jump")) return;
         if (e.key !== "Escape" && e.target instanceof Element && e.target.closest(".video-visual, .audio-visual")) return;
         if (presentationInk.current?.handleKey(e)) return;
         if (
@@ -2598,7 +2663,7 @@ export default function App() {
           e.preventDefault();
           setBlackout(false);
           setWhiteout((b) => !b);
-        } else if (e.key.toLowerCase() === "o" && !presentEnded) {
+        } else if (e.key.toLowerCase() === "o" && !presentEnded && !androidRuntime) {
           e.preventDefault();
           setPresentNotes((v) => !v);
         }
@@ -2608,6 +2673,15 @@ export default function App() {
       if (objectMenu || textMenu || colorPalette || slideMenu || pendingInk)
         return;
       const cmd = e.metaKey || e.ctrlKey;
+      if (androidReadOnly) {
+        if (editingTarget(e.target) || modal || androidHome) return;
+        if (cmd && e.key.toLowerCase() === "o") { e.preventDefault(); void openProject(); }
+        else if (!cmd && !e.altKey && ["ArrowLeft", "ArrowRight", "PageUp", "PageDown"].includes(e.key)) {
+          e.preventDefault(); selectSlide(deck.slides[Math.max(0, Math.min(deck.slides.length - 1,
+            activeIndex + (["ArrowLeft", "PageUp"].includes(e.key) ? -1 : 1)))].id);
+        }
+        return;
+      }
       if (cmd && e.key === "F1") {
         e.preventDefault();
         setRibbonCollapsed((value) => !value);
@@ -2915,6 +2989,7 @@ export default function App() {
   });
   useEffect(() => {
     const copyCells = (event: ClipboardEvent) => {
+      if (androidReadOnly) return;
       if (
         modal ||
         presentationActive.current ||
@@ -2934,6 +3009,7 @@ export default function App() {
     };
   });
   const pasteFromClipboard = async () => {
+    if (androidReadOnly) return;
     if (!ready || busy || modalRef.current || presentationActive.current || editing)
       return;
     const shortcut = /Mac/i.test(navigator.platform) ? "⌘V" : "Ctrl+V";
@@ -2985,6 +3061,7 @@ export default function App() {
   };
   useEffect(() => {
     const paste = (e: ClipboardEvent) => {
+      if (androidReadOnly) return;
       if (presentationActive.current) {
         e.preventDefault();
         return;
@@ -3091,6 +3168,7 @@ export default function App() {
   };
   useEffect(() =>
     window.desktop?.onMenu((action) => {
+      if (androidReadOnly && !["open", "present"].includes(action)) return;
       if (presentationActive.current) {
         if (action === "undo" || action === "redo") presentationInk.current?.command(action);
         if (action === "present") movePresent(1);
@@ -3802,6 +3880,66 @@ export default function App() {
     );
   }
 
+  const enterAndroidEdit = async () => {
+    if (busy) return;
+    try {
+      setBusy("편집 화면을 준비하고 있습니다");
+      await preserveAndroidRecovery();
+      mutationAllowed.current = true;
+      setAndroidMode("edit"); setAndroidHome(false);
+      setSelected([]); setEditing(null); setNotesVisible(false); setZoom(null);
+    } catch (error) { notify(error instanceof Error ? error.message : "이전 편집 자료를 보관하지 못했습니다."); }
+    finally { setBusy(""); }
+  };
+  const leaveAndroidEdit = () => {
+    commitPendingInputs();
+    setEditing(null); setSelected([]); setTableSelection(null);
+    setObjectMenu(null); setTextMenu(null); setColorPalette(null); setSlideMenu(null);
+    setInspectorVisible(false); setNotesVisible(false); setSorter(false); setFindOpen(false);
+    setAndroidMode("view");
+  };
+  const downloadAndroidOriginal = () => {
+    const file = androidOriginal.current;
+    if (!file) return;
+    const url = URL.createObjectURL(file), link = document.createElement("a");
+    link.href = url; link.download = file.name; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+  const shareAndroidOriginal = async () => {
+    const file = androidOriginal.current;
+    if (!file) return;
+    try {
+      if (!navigator.share || !navigator.canShare?.({ files: [file] })) {
+        notify("이 환경에서는 파일 공유를 사용할 수 없습니다. 원본 파일 다운로드를 이용하세요."); return;
+      }
+      await navigator.share({ files: [file], title: file.name });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        notify("원본 파일을 공유하지 못했습니다. 원본 파일 다운로드를 이용하세요.");
+    }
+  };
+  useAndroidBack(() => {
+    if (busy) return true;
+    if (modal) { setModal(null); return true; }
+    if (pendingInk) { setPendingInk(null); return true; }
+    if (presenting) {
+      const jump = document.querySelector<HTMLInputElement>(".android-presentation-jump input");
+      if (jump) { jump.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); return true; }
+      if (presentationInk.current?.handleKey(new KeyboardEvent("keydown", { key: "Escape" }))) return true;
+      stopPresent(); return true;
+    }
+    if (colorPalette) { closeTextColor(true); return true; }
+    if (textMenu) { closeTextMenu(); return true; }
+    if (objectMenu || slideMenu) { setObjectMenu(null); setSlideMenu(null); return true; }
+    if (!androidReadOnly) {
+      if (androidEditor.current?.back()) return true;
+      if (inspectorVisible) { setInspectorVisible(false); return true; }
+      if (editing) { commitPendingInputs(); setEditing(null); return true; }
+      leaveAndroidEdit(); return true;
+    }
+    return androidReader.current?.back() ?? false;
+  });
+
   if (!ready)
     return (
       <div className="loading-screen">
@@ -3813,8 +3951,22 @@ export default function App() {
     );
   return (
     <>
+      {androidReadOnly ? <AndroidReader ref={androidReader} deck={deck} index={activeIndex}
+        home={androidHome} hasDocument={androidHasDocument} version={appVersion}
+        dirty={hasFileChanges} warnings={warnings} canShare={androidHasOriginal} disabled={!!busy || !!modal || presenting || !!pendingInk}
+        hasRecovery={!!androidRecovery} hasBackups={hasRecoveryBackups || autosaveBlocked}
+        onRecover={() => {
+          if (!androidRecovery || !canReplaceDocument()) return;
+          replaceDeck(androidRecovery); setFileSnapshot(null); setAndroidRecovery(null);
+          mutationAllowed.current = true; setAndroidMode("edit");
+        }} onBackups={() => setModal("recovery")}
+        onHome={setAndroidHome} onOpen={() => void openProject()} onNew={() => void createDocument()}
+        onSelect={index => { const target = deck.slides[index]; if (target) selectSlide(target.id); }}
+        onEdit={() => void enterAndroidEdit()} onPresent={() => startPresent()}
+        onShare={() => void shareAndroidOriginal()} onDownload={downloadAndroidOriginal} onSave={() => void savePptx()}
+      /> :
       <div
-        className={`app-shell office-shell ${window.desktop?.platform === "win32" ? "desktop-windows" : ""} ${painterMode ? "format-painting" : ""}`}
+        className={`app-shell office-shell ${androidRuntime ? "android-editor" : ""} ${window.desktop?.platform === "win32" ? "desktop-windows" : ""} ${painterMode ? "format-painting" : ""}`}
         inert={presenting}
         onPointerDownCapture={event => {
           if (!painterMode || !formatSample || event.button !== 0 || modal || busy) return;
@@ -3834,6 +3986,47 @@ export default function App() {
           });
         }}
       >
+        {androidRuntime && <AndroidEditorBar ref={androidEditor} name={deck.name} dirty={hasFileChanges}
+          disabled={!!busy || !!modal || presenting || !!pendingInk} canUndo={!!history.past.length || inlineUndoAvailable || pendingPreview}
+          canRedo={!!history.future.length || inlineRedoAvailable} fontTools={fontTools}
+          canEditText={!!selectedElement && ["text", "shape"].includes(selectedElement.type) && !selectedElement.locked}
+          onEditText={() => { if (selectedElement) { begin(); setEditing(selectedElement.id); } }}
+          insertTools={<>
+            {([ ["rect", "사각형"], ["ellipse", "타원"], ["triangle", "삼각형"], ["right-arrow", "블록 화살표"] ] as const).map(([kind, label]) =>
+              <button key={kind} onClick={() => addElement("shape", kind as ShapeKind)}>{label}</button>)}
+            <button onClick={() => openTable()}>표</button>
+          </>}
+          slideTools={<div className="android-insert-actions">
+            <button onClick={() => setSorter(value => !value)}>전체 슬라이드 보기</button>
+            <button disabled={!activeIndex} onClick={() => selectSlide(deck.slides[activeIndex - 1].id)}>이전 장 선택</button>
+            <button disabled={activeIndex >= deck.slides.length - 1} onClick={() => selectSlide(deck.slides[activeIndex + 1].id)}>다음 장 선택</button>
+            <button onClick={() => copySelection(undefined, true)}>슬라이드 복사</button>
+            <button disabled={!clipboard.current.slides?.length && !clipboard.current.slide} onClick={pasteSelection}>슬라이드 붙여넣기</button>
+            <button onClick={duplicateCurrentSlide}>슬라이드 복제</button>
+            <button disabled={deck.slides.length <= 1} onClick={() => removeSlide()}>슬라이드 삭제</button>
+            <button disabled={!activeIndex} onClick={() => commit(d => ({ ...d, slides: stepSlides(d.slides, selectedSlideIds, -1) }))}>슬라이드 앞으로 이동</button>
+            <button disabled={activeIndex >= deck.slides.length - 1} onClick={() => commit(d => ({ ...d, slides: stepSlides(d.slides, selectedSlideIds, 1) }))}>슬라이드 뒤로 이동</button>
+            <button onClick={() => selectSlideInsertion(deck.slides[activeIndex].id)}>현재 장 앞에 삽입</button>
+            <button onClick={() => selectSlideInsertion(deck.slides[activeIndex + 1]?.id ?? null)}>현재 장 뒤에 삽입</button>
+            <span role="status">삽입 위치: {slideInsertIndex + 1}번째</span>
+          </div>}
+          shapeTools={<div className="shape-format-controls">
+            <ColorField label="도형 채우기" value={shapeStyleTarget?.fill ?? DEFAULT_SHAPE_FILL} onChange={setShapeFill} />
+            <button disabled={shapeStylesDisabled} onClick={() => setShapeFill("transparent")}>채우기 없음</button>
+            <ColorField label="도형 선 색" value={shapeStyleTarget?.stroke ?? "#000000"} onChange={setShapeStroke} />
+            <NumberField label="도형 선 두께" value={shapeStyleTarget?.strokeWidth ?? 3} min={0} max={100} onChange={setShapeStrokeWidth} disabled={shapeStylesDisabled} />
+          </div>}
+          selectionTools={<div className="android-insert-actions">
+            {slide.elements.map(item => <button key={item.id} aria-pressed={selected.includes(item.id)} onClick={() => { finish(); setEditing(null); setSelected([item.id]); }}>{item.text?.slice(0, 45) || item.alt || item.type}{item.locked ? " (잠금)" : ""}</button>)}
+            <button disabled={!selected.length} onClick={() => copySelection()}>개체 복사</button>
+            <button disabled={!selected.length} onClick={duplicateSelected}>개체 복제</button>
+            <button disabled={!selected.length} onClick={removeSelected}>개체 삭제</button>
+          </div>}
+          onDone={leaveAndroidEdit} onSave={() => void savePptx()} onOpen={() => void openProject()}
+          onUndo={() => runToolbarHistory("undo")} onRedo={() => runToolbarHistory("redo")}
+          onText={() => addElement("text")} onImage={() => imageInput.current?.click()} onSlide={() => addSlide()}
+          onNotes={() => setNotesVisible(value => !value)} onFormat={() => setInspectorVisible(value => !value)}
+        />}
         <header className="topbar">
           <button
             className="app-brand"
@@ -5902,7 +6095,7 @@ export default function App() {
             onClose={closeObjectMenu}
           />
         )}
-      </div>
+      </div>}
       <input ref={videoInput} type="file" hidden accept={VIDEO_ACCEPT}
         onChange={event => { if (event.target.files?.[0]) void addVideo(event.target.files[0]); event.target.value = ""; }} />
       <input ref={audioInput} type="file" hidden accept={AUDIO_ACCEPT} aria-label="오디오 삽입 파일"
@@ -5933,6 +6126,9 @@ export default function App() {
           const file = e.target.files?.[0];
           e.target.value = "";
           if (file) {
+            if (androidRuntime && (openingFile.current || savingPptx.current || printing.current)) return;
+            if (androidRuntime) { openingFile.current = true; setBusy("파일 데이터를 읽고 있습니다"); }
+            try {
             if (file.size > 256 * 1024 * 1024)
               notify("256 MiB 이하의 파일을 선택해 주세요.");
             else {
@@ -5941,6 +6137,9 @@ export default function App() {
               } catch {
                 notify("파일 데이터를 읽지 못했습니다. 다시 선택해 주세요.");
               }
+            }
+            } finally {
+              if (androidRuntime) { openingFile.current = false; setBusy(""); }
             }
           }
         }}
@@ -6105,7 +6304,7 @@ export default function App() {
         </div>
       )}
       {modal === "updates" && <UpdateDialog updates={updates} onClose={() => setModal(null)} />}
-      {modal === "recovery" && <RecoveryBackups blocked={autosaveBlocked} onRetry={retryRecovery} onClose={() => setModal(null)} />}
+      {modal === "recovery" && <RecoveryBackups blocked={autosaveBlocked} sessionDrafts={androidRuntime} onRetry={retryRecovery} onClose={() => setModal(null)} />}
       {modal && ["new", "library", "shortcuts", "import"].includes(modal) && (
         <div
           className="modal-backdrop"
@@ -6239,7 +6438,7 @@ export default function App() {
       )}
       {presenting && (
         <div
-          className={`presentation-view ${blackout || whiteout ? "blackout" : ""} ${whiteout ? "whiteout" : ""}`}
+          className={`presentation-view ${androidRuntime ? "android-presentation" : ""} ${blackout || whiteout ? "blackout" : ""} ${whiteout ? "whiteout" : ""}`}
           ref={presentationView}
           tabIndex={-1}
           data-testid="presentation-view"
@@ -6250,7 +6449,7 @@ export default function App() {
               : `발표 슬라이드 ${presentIndex + 1} / ${deck.slides.length}`
           }
           onClick={() => {
-            if (!presentationInk.current?.consumeClick()) movePresent(1);
+            if (!androidRuntime && !presentationInk.current?.consumeClick()) movePresent(1);
           }}
           onContextMenu={(event) => {
             if (
@@ -6264,28 +6463,33 @@ export default function App() {
         >
           {presentEnded && (
             <p className="presentation-end" data-testid="presentation-end">
-              슬라이드 쇼가 끝났습니다. 클릭하거나 Esc 키를 눌러 종료하세요.
+              {androidRuntime ? "슬라이드 쇼가 끝났습니다. 종료 버튼을 눌러 돌아가세요." : "슬라이드 쇼가 끝났습니다. 클릭하거나 Esc 키를 눌러 종료하세요."}
             </p>
           )}
-          <PresentationAudio slide={deck.slides[presentIndex]} index={presentIndex} paused={blackout||whiteout} ended={presentEnded}>
+          <PresentationAudio slide={deck.slides[presentIndex]} index={presentIndex} paused={blackout||whiteout||androidBackgrounded} ended={presentEnded}>
           <PresentationInk
             ref={presentationInk}
             slide={deck.slides[presentIndex]}
             width={deck.width}
             height={deck.height}
             scale={Math.min(
-              windowSize.w / deck.width,
-              (windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
+              (androidRuntime ? androidPresentationSize.w : windowSize.w) / deck.width,
+              (androidRuntime ? androidPresentationSize.h : windowSize.h - (presentNotes ? 160 : 0)) / deck.height,
             )}
             ended={presentEnded}
             blackout={blackout || whiteout}
+            paused={androidBackgrounded}
             onSlideLink={(slideId) => {
               const index = deck.slides.findIndex((s) => s.id === slideId);
               if (index >= 0) showPresentationSlide(index);
             }}
           />
           </PresentationAudio>
-          {presentNotes && !presentEnded && (
+          {androidRuntime && <AndroidPresentationControls view={presentationView} ink={presentationInk}
+            index={presentIndex} total={deck.slides.length} ended={presentEnded} onStep={movePresent}
+            onJump={index => showPresentationSlide(index)} onEnd={stopPresent}
+            onBlack={() => { setWhiteout(false); setBlackout(value => !value); }} />}
+          {presentNotes && !presentEnded && !androidRuntime && (
             <div className="present-notes" onClick={(e) => e.stopPropagation()}>
               <strong>발표자 노트</strong>
               <p>
@@ -6390,6 +6594,7 @@ export default function App() {
                   if (!withinCapacity({
                     elements: Object.fromEntries(Object.entries(pendingInk).map(([id, strokes]) => [id, strokes.length])),
                   })) return;
+                  if (androidReadOnly) { mutationAllowed.current = true; setAndroidMode("edit"); }
                   commit((d) => ({
                     ...d,
                     slides: d.slides.map((s) => {

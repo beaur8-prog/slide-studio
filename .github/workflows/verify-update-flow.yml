@@ -105,6 +105,8 @@ jobs:
           path: |
             release/Slide-Studio-Setup-x64.exe
             release/BUILD-win-setup-x64.json
+            release/Slide-Studio-win-x64.zip
+            release/BUILD-win-x64.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:

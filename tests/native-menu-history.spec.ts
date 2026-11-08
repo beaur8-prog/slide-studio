@@ -2,18 +2,23 @@ import { test, expect, _electron } from "@playwright/test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 
 test.skip(
   process.platform === "linux" && !process.env.DISPLAY,
   "Native history requires a desktop/Xvfb",
 );
 let app: Awaited<ReturnType<typeof _electron.launch>>, profile: string;
-test.beforeEach(async () => {
+test.beforeEach(async ({}, testInfo) => {
   profile = await fs.mkdtemp(path.join(os.tmpdir(), "slide-native-history-"));
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.SLIDE_STUDIO_DEV;
+  const evidence = path.resolve("qa/results/editor-core-native-history", testInfo.testId.replace(/[^a-zA-Z0-9_-]/g, "_"));
+  await fs.mkdir(evidence, { recursive: true });
+  const executablePath = createRequire(path.resolve("package.json"))("electron") as string;
   app = await _electron.launch({
+    executablePath,
     args: [
       path.resolve("."),
       "--user-data-dir=" + profile,
@@ -21,17 +26,47 @@ test.beforeEach(async () => {
     ],
     env,
   });
-  await expect((await app.firstWindow()).locator(".save-indicator")).toHaveText(
-    "저장됨",
-    { timeout: 20000 },
-  );
+  const output: string[] = [];
+  app.process().stdout?.on("data", chunk => output.push(String(chunk)));
+  app.process().stderr?.on("data", chunk => output.push(String(chunk)));
+  const page = await app.firstWindow();
+  page.on("pageerror", error => output.push(String(error)));
+  try {
+    await expect(page.locator(".save-indicator")).toHaveText("저장됨", { timeout: 20000 });
+  } catch (error) {
+    const details = await Promise.race([
+      app.evaluate(({ app, BrowserWindow }) => ({
+        appPath: app.getAppPath(), userData: app.getPath("userData"), packaged: app.isPackaged,
+        windows: BrowserWindow.getAllWindows().map(window => ({ url: window.webContents.getURL(), title: window.getTitle() })),
+      })).catch(error => ({ mainError: String(error) })),
+      new Promise(resolve => setTimeout(() => resolve({ mainTimedOut: true }), 2000)),
+    ]);
+    await fs.writeFile(path.join(evidence, "startup.json"), JSON.stringify({ executablePath, details, windows: app.windows().map(window => window.url()), output }, null, 2));
+    await page.screenshot({ path: path.join(evidence, "startup.png"), timeout: 3000 }).catch(() => {});
+    throw error;
+  }
 });
 test.afterEach(async () => {
   if (app) {
-    await app.evaluate(({ app }) => app.exit(0)).catch(() => {});
-    await app.close().catch(() => {});
+    // Only this disposable app owns the unsaved fixture profile. Return the IPC
+    // acknowledgement before exiting; Electron then closes its renderer children.
+    const child = app.process();
+    if (child.exitCode === null) {
+      const exited = new Promise<number | null>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("Disposable history app did not exit")), 5000);
+        child.once("exit", code => { clearTimeout(timer); resolve(code); });
+      });
+      await app.evaluate(({ app }) => {
+        setTimeout(() => app.exit(0), 100);
+        return true;
+      });
+      // Do not race BrowserContext.close against Electron's scheduled exit.
+      // The process-exit event closes its protocol connection and child renderers.
+      expect(await exited).toBe(0);
+    }
   }
-  if (profile) await fs.rm(profile, { recursive: true, force: true });
+  if (profile) await fs.rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    .catch(error => console.warn("Disposable history profile cleanup:", String(error)));
 });
 const menu = (label: string) =>
   app.evaluate(({ Menu, BrowserWindow }, label) => {

@@ -24,12 +24,16 @@ export async function androidPrintDocument(name: string, width: number, height: 
   base.href = document.baseURI;
   output.head.append(base);
   for (const node of document.querySelectorAll<HTMLStyleElement | HTMLLinkElement>('style, link[rel="stylesheet"]')) {
+    // The desktop @page size competes with Android's selected PrintAttributes.
+    // The native layout adapter alone owns sheet dimensions in this document.
+    if (node.closest(".print-deck")) continue;
     const copy = node.cloneNode(true) as HTMLStyleElement | HTMLLinkElement;
     if (copy instanceof HTMLLinkElement) copy.href = (node as HTMLLinkElement).href;
     output.head.append(copy);
   }
   const style = output.createElement("style");
-  style.textContent = `html,body{margin:0!important;padding:0!important;height:auto!important;overflow:visible!important;background:white!important}
+  style.textContent = `@page{size:auto;margin:0}
+    html,body{margin:0!important;padding:0!important;height:auto!important;overflow:visible!important;background:white!important}
     .android-print-sheet{position:relative;overflow:hidden;break-after:page;page-break-after:always;width:${width}px;height:${height}px}
     .android-print-sheet:last-child{break-after:auto;page-break-after:auto}
     .android-print-page{position:absolute;left:0;top:0;width:${width}px;height:${height}px;transform-origin:0 0;overflow:hidden}

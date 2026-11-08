@@ -119,6 +119,10 @@ for (const portrait of [false, true])
       await page.evaluate(() => (window as any).__fullscreenRequests),
     ).toEqual([]);
     expect(await page.evaluate(() => !!document.fullscreenElement)).toBe(false);
+    await page.evaluate(() =>
+      document.dispatchEvent(new Event("fullscreenchange")),
+    );
+    await expect(page.getByTestId("presentation-view")).toBeVisible();
     expect(
       await page.evaluate(() => (window as any).__edgeCalls),
     ).toBeGreaterThan(0);

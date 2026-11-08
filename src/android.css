@@ -553,6 +553,10 @@ html[data-studio-platform="android"] {
 }
 
 /* Dialogs/ink menus are outside the shell, so scope them to the runtime tag. */
+html[data-studio-platform="android"] .object-context-menu {
+  /* Transient notifications (110) must not intercept a context command. */
+  z-index: 115;
+}
 html[data-studio-platform="android"] .modal-backdrop {
   padding: max(12px, var(--android-safe-top)) 12px
     max(12px, var(--android-safe-bottom));
@@ -574,8 +578,8 @@ html[data-studio-platform="android"] .presentation-tools
 }
 html[data-studio-platform="android"]:not([data-studio-editor-layout="tablet"])
   :is(.object-context-menu, .text-color-palette) {
-  max-width: calc(100vw - 16px);
-  max-height: 80dvh;
+  max-width: min(calc(100vw - 16px), var(--context-menu-available-width, 100vw));
+  max-height: min(80dvh, var(--context-menu-available-height, 80dvh));
   overflow: auto;
 }
 html[data-studio-platform="android"] .toast {

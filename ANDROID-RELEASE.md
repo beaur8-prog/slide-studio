@@ -1,5 +1,10 @@
-# Android 1.0.1
+# Android 개발 브랜치 · 화면 조작 개선
 
-최신 main의 몰입형 발표·터치 조작 개선과 기존 Android 네이티브 파일 열기·저장·공유 연결을 함께 포함합니다. 이 브랜치의 버전은 Android 전용이며 Windows·Mac 버전과 별도입니다. 이번 APK 배포는 추가 실행·설치·기능 테스트 없이 빌드합니다.
+기준은 배포된 Android 1.0.1(`440b619`)이며, 이번 브랜치는 main의 핀치 확대·화면 이동·도구 이름·안전 여백 개선을 기존 Android 파일 열기·저장·공유 연결과 병합한 개발 소스입니다. Windows·Mac 버전과 별도로 관리합니다.
 
-Android 패키징과 서명은 office-studio 저장소의 android 구성을 사용하며 applicationId와 기존 배포 키를 유지하고 versionCode를 2로 올립니다.
+- 앱 소스: `codex/android-screen-ui-20261108`
+- 호스트: `office-studio` 저장소의 같은 이름 브랜치
+- 호스트는 발표 캔버스를 카메라/상태바 영역까지 넓히고 안전 여백을 CSS로 전달합니다.
+- 검증 범위와 제한은 `qa/ANDROID-SHOW-ZOOM-2026-11-08.md`를 참고합니다.
+
+새 APK 조립·서명·설치·배포는 하지 않았습니다. 현재 `package.json`의 1.0.1은 기준 배포 버전으로 유지되어 있습니다. 이후 별도 배포 시 Android 버전과 versionCode를 올리고, 기존 applicationId와 서명 키를 유지하여 호스트·웹 자산을 함께 빌드해야 합니다. 기존 배포본의 테스트 생략 기록을 이번 변경의 검증 결과로 재사용하지 않습니다.

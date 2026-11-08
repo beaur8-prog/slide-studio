@@ -38,9 +38,34 @@ export default function ObjectContextMenu({
         "context-text-selection",
         new Highlight(textSelection.range),
       );
-    const bounds = host.getBoundingClientRect();
-    host.style.left = `${Math.max(8, Math.min(x, innerWidth - bounds.width - 8))}px`;
-    host.style.top = `${Math.max(8, Math.min(y, innerHeight - bounds.height - 8))}px`;
+    const viewport = window.visualViewport;
+    const editor = host.closest<HTMLElement>(".android-editor");
+    const footer = editor?.querySelector<HTMLElement>(":scope > .statusbar");
+    const position = () => {
+      let left = viewport?.offsetLeft ?? 0;
+      let top = viewport?.offsetTop ?? 0;
+      let right = left + (viewport?.width ?? innerWidth);
+      let bottom = top + (viewport?.height ?? innerHeight);
+      if (editor) {
+        // The APK draws under system bars. Its shell padding contains the
+        // resolved native/camera insets, which a fixed popup does not inherit.
+        const rect = editor.getBoundingClientRect(), style = getComputedStyle(editor);
+        left = Math.max(left, rect.left + parseFloat(style.paddingLeft));
+        top = Math.max(top, rect.top + parseFloat(style.paddingTop));
+        right = Math.min(right, rect.right - parseFloat(style.paddingRight));
+        bottom = Math.min(bottom, rect.bottom - parseFloat(style.paddingBottom));
+        const icons = footer?.getBoundingClientRect();
+        if (icons && icons.height > 0 && icons.top > top)
+          bottom = Math.min(bottom, icons.top);
+      }
+      left += 8; top += 8; right -= 8; bottom -= 8;
+      host.style.setProperty("--context-menu-available-width", `${Math.max(0, right - left)}px`);
+      host.style.setProperty("--context-menu-available-height", `${Math.max(0, bottom - top)}px`);
+      const bounds = host.getBoundingClientRect();
+      host.style.left = `${Math.max(left, Math.min(x, right - bounds.width))}px`;
+      host.style.top = `${Math.max(top, Math.min(y, bottom - bounds.height))}px`;
+    };
+    position();
     host
       .querySelector<HTMLButtonElement>("button:not(:disabled)")
       ?.focus({ preventScroll: true });
@@ -86,6 +111,11 @@ export default function ObjectContextMenu({
     window.addEventListener("pointerdown", outside, true);
     window.addEventListener("resize", close);
     window.addEventListener("blur", close);
+    viewport?.addEventListener("resize", position);
+    viewport?.addEventListener("scroll", position);
+    const resize = new ResizeObserver(position);
+    if (editor) resize.observe(editor);
+    if (footer) resize.observe(footer);
     // Capture prevents editor shortcuts from changing objects behind the menu.
     host.addEventListener("keydown", key);
     return () => {
@@ -94,6 +124,9 @@ export default function ObjectContextMenu({
       window.removeEventListener("pointerdown", outside, true);
       window.removeEventListener("resize", close);
       window.removeEventListener("blur", close);
+      viewport?.removeEventListener("resize", position);
+      viewport?.removeEventListener("scroll", position);
+      resize.disconnect();
       host.removeEventListener("keydown", key);
     };
   }, [x, y, onClose, textSelection]);
@@ -104,7 +137,10 @@ export default function ObjectContextMenu({
       role="menu"
       aria-label={label}
       style={{ left: x, top: y }}
-      onContextMenu={(event) => event.preventDefault()}
+      onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerUp={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
       onMouseDown={(event) => {
         if (textSelection) event.preventDefault();
       }}

@@ -2,8 +2,10 @@
   position: fixed;
   z-index: 100;
   width: 220px;
-  max-height: min(480px, calc(100dvh - 16px));
+  max-width: var(--context-menu-available-width, calc(100vw - 16px));
+  max-height: min(480px, var(--context-menu-available-height, calc(100dvh - 16px)));
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 5px;
   background: var(--chrome-ribbon);
   color: var(--chrome-text);

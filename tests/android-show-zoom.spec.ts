@@ -285,6 +285,7 @@ test("pen and laser controls can be hidden and reopened without changing tools o
     await expect(page.getByRole("dialog", { name: "발표 도구", exact: true })).toHaveCount(0);
     const trigger = page.getByRole("button", { name: "발표 도구 열기", exact: true });
     await expect(trigger).toBeVisible();
+    await expect(trigger).toHaveCSS("color", "rgb(255, 255, 255)");
     if (tool === "pen") {
       await pan(page, { x: 350, y: 150 }, { x: 430, y: 175 });
       await expect(page.getByTestId("ink-stroke")).toHaveCount(1);

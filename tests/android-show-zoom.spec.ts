@@ -40,13 +40,11 @@ async function open(page: Page) {
     });
     return JSON.stringify(deck);
   });
-  await page
-    .locator('input[accept*=".pptx"]')
-    .setInputFiles({
-      name: "zoom.slide",
-      mimeType: "application/json",
-      buffer: Buffer.from(json),
-    });
+  await page.locator('input[accept*=".pptx"]').setInputFiles({
+    name: "zoom.slide",
+    mimeType: "application/json",
+    buffer: Buffer.from(json),
+  });
   await expect(page.getByTestId("android-slide-viewport")).toBeVisible();
   await page.getByRole("button", { name: "현재 슬라이드에서 발표" }).click();
   await expect(page.getByTestId("presentation-view")).toBeVisible();
@@ -105,6 +103,37 @@ async function clean(page: Page) {
     ),
   ).toBe("false");
 }
+
+test("APK safe insets protect buttons without shrinking the presentation canvas", async ({
+  page,
+}) => {
+  await open(page);
+  await page.evaluate(() => {
+    const style = document.documentElement.style;
+    style.setProperty("--studio-safe-area-inset-top", "28px");
+    style.setProperty("--studio-safe-area-inset-left", "40px");
+    style.setProperty("--studio-safe-area-inset-bottom", "24px");
+    style.setProperty("--studio-safe-area-inset-right", "12px");
+  });
+  expect(await page.getByTestId("presentation-view").boundingBox()).toEqual({
+    x: 0,
+    y: 0,
+    width: 960,
+    height: 450,
+  });
+  const controls = await tools(page);
+  const bounds = (await controls.boundingBox())!;
+  expect(bounds.x).toBeGreaterThanOrEqual(40);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(960 - 12);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(450 - 24);
+  await controls
+    .getByRole("button", { name: "발표 종료", exact: true })
+    .click();
+  await expect(page.getByTestId("android-reader")).toBeVisible();
+  await expect(page.locator(".android-app")).toHaveCSS("padding-top", "28px");
+  await expect(page.locator(".android-app")).toHaveCSS("padding-left", "40px");
+  await clean(page);
+});
 
 test("presentation pinch and pan enlarge without page navigation, and fit restores swipe navigation", async ({
   page,

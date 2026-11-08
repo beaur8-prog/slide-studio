@@ -388,3 +388,26 @@ test("letterbox and root background have no white edge or hidden control footpri
   );
   await clean(page);
 });
+
+test("new-presentation notification cannot intercept the slideshow toolbar", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("http://127.0.0.1:5190");
+  await page.getByRole("button", { name: "새 프레젠테이션", exact: true }).click();
+  const toast = page.locator(".toast");
+  await expect(toast).toContainText("새 프레젠테이션을 만들었습니다.");
+  await page.locator(".document-actions .button.primary").click();
+  const controls = await tools(page);
+  const pen = controls.getByRole("button", { name: "포인터와 판서 도구" });
+  expect(await pen.evaluate(button => {
+    const rect = button.getBoundingClientRect();
+    return button.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+  })).toBe(true);
+  await pen.click();
+  await expect(page.getByRole("dialog", { name: "발표 도구", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "펜", exact: true }).click();
+  await page.getByRole("button", { name: "발표 도구 열기", exact: true }).click();
+  await controls.getByRole("button", { name: "발표 도구 모음 숨기기" }).click();
+  await expect(controls).toBeHidden();
+  await page.keyboard.press("Escape");
+  await clean(page);
+});

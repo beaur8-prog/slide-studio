@@ -3944,7 +3944,7 @@ export default function App() {
         notify("원본 파일을 공유하지 못했습니다. 원본 파일 다운로드를 이용하세요.");
     }
   };
-  useAndroidBack(() => {
+  useAndroidBack(source => {
     if (busy) return true;
     if (modal) { setModal(null); return true; }
     if (pendingInk) { setPendingInk(null); return true; }
@@ -3959,9 +3959,10 @@ export default function App() {
       if (androidEditor.current?.back()) return true;
       if (inspectorVisible) { setInspectorVisible(false); return true; }
       if (editing) { commitPendingInputs(); setEditing(null); return true; }
+      if (source === "escape") { setSelected([]); setTableSelection(null); return true; }
       leaveAndroidEdit(); return true;
     }
-    return androidReader.current?.back() ?? false;
+    return androidReader.current?.back(source === "escape") ?? false;
   });
 
   if (!ready)
@@ -4015,6 +4016,24 @@ export default function App() {
           canRedo={!!history.future.length || inlineRedoAvailable} fontTools={fontTools}
           canEditText={!!selectedElement && ["text", "shape"].includes(selectedElement.type) && !selectedElement.locked}
           onEditText={() => { if (selectedElement) { begin(); setEditing(selectedElement.id); } }}
+          onPresent={startPresent}
+          designTools={<>
+            {THEMES.map(theme => <button key={theme.id} aria-pressed={deck.theme === theme.id} onClick={() => applyTheme(theme.id)}>
+              <span className="android-theme-swatch" style={{ background: theme.background, color: theme.text }}>Aa</span>{theme.name}
+            </button>)}
+            <button onClick={() => resizeDeck(1280, deck.height === 720 ? 960 : 720)}>비율 {Math.abs(deck.width / deck.height - 16 / 9) < 0.02 ? "16:9" : "4:3"}</button>
+          </>}
+          transitionTools={<>
+            {([ ["none", "없음"], ["fade", "페이드"] ] as const).map(([value, label]) =>
+              <button key={value} aria-pressed={slide.transition === value} onClick={() => changeSlide(s => replaceSlideTransition(s, value))}>{label}</button>)}
+            <button onClick={() => commit(d => ({ ...d, slides: d.slides.map(s => replaceSlideTransition(s, slide.transition)) }))}>모두 적용</button>
+          </>}
+          viewTools={<>
+            <button aria-pressed={!sorter} onClick={() => setSorter(false)}>기본 보기</button>
+            <button aria-pressed={sorter} onClick={() => setSorter(true)}>여러 슬라이드</button>
+            <button aria-pressed={rulerVisible} onClick={() => setRulerVisible(value => !value)}>눈금자</button>
+            <button aria-pressed={guides} onClick={() => setGuides(value => !value)}>가운데 안내선</button>
+          </>}
           insertTools={<>
             {([ ["rect", "사각형"], ["ellipse", "타원"], ["triangle", "삼각형"], ["right-arrow", "블록 화살표"] ] as const).map(([kind, label]) =>
               <button key={kind} onClick={() => addElement("shape", kind as ShapeKind)}>{label}</button>)}

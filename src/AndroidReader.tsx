@@ -37,7 +37,7 @@ type Panel =
   | "content"
   | "warnings"
   | null;
-export type AndroidReaderHandle = { back(): boolean };
+export type AndroidReaderHandle = { back(escapeOnly?: boolean): boolean };
 export default forwardRef<
   AndroidReaderHandle,
   {
@@ -92,11 +92,12 @@ export default forwardRef<
     setPanel(value);
   };
   useImperativeHandle(ref, () => ({
-    back() {
+    back(escapeOnly = false) {
       if (panel) {
         close();
         return true;
       }
+      if (escapeOnly) return true;
       if (!home) {
         props.onHome(true);
         return true;

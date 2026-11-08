@@ -40,7 +40,9 @@ export const androidRuntime = isAndroidEnvironment({
 });
 
 /** WebView back navigation, with a cancellable event for a future native host. */
-export function useAndroidBack(handler: () => boolean) {
+export function useAndroidBack(
+  handler: (source: "back" | "escape") => boolean,
+) {
   const latest = useRef(handler);
   latest.current = handler;
   useEffect(() => {
@@ -53,24 +55,24 @@ export function useAndroidBack(handler: () => boolean) {
       );
     if (!history.state?.studioAndroidBack) push();
     let handling = false;
-    const run = () => {
+    const run = (source: "back" | "escape") => {
       if (handling) return false;
       handling = true;
       try {
-        return latest.current();
+        return latest.current(source);
       } finally {
         handling = false;
       }
     };
     const back = () => {
-      if (run()) push();
+      if (run("back")) push();
       else history.back();
     };
     const nativeBack = (event: Event) => {
-      if (run()) event.preventDefault();
+      if (run("back")) event.preventDefault();
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.isComposing && run()) {
+      if (event.key === "Escape" && !event.isComposing && run("escape")) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }

@@ -30,3 +30,5 @@
 - Android 호스트: `office-studio`의 `codex/android-editor-escape-20261108` (최신 Slide APK 1.0.3 호스트 기준, Sheet의 기존 전체 화면·생명주기 변경 보존).
 - 앱 자산과 APK 호스트를 **함께 빌드해야** 물리 Esc 수정이 적용된다. 현재 설치본은 Git 반영만으로 바뀌지 않는다.
 - 새 APK 조립·서명·설치·GitHub Release/리토스 갱신은 수행하지 않는다. 별도 배포 요청 때 버전과 versionCode를 올려 진행한다.
+
+후속: [태블릿 공용 데스크톱 UI와 실제 Android 네이티브 종료 검증](ANDROID-TABLET-DESKTOP-AND-NAVIGATION-2026-11-08.md). 1.0.4에 Esc 키 차단이 포함된 것을 확인하고, Back false/null 종료 경로를 추가 수정해 에뮬레이터에서 검증했다.

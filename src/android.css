@@ -667,7 +667,7 @@ html[data-studio-platform="android"][data-studio-presenting="true"] body {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.android-presentation-tools-trigger {
+.android-presentation > .android-presentation-tools-trigger {
   position: fixed;
   z-index: 94;
   right: max(8px, var(--android-safe-right));

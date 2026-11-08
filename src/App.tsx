@@ -207,6 +207,7 @@ import PresentationInk, { type PresentationInkHandle } from "./PresentationInk";
 import { DEFAULT_SHAPE_FILL, EXTRA_SHAPES, shapeInsertionStyle } from "./shape-presets";
 import { androidRuntime, useAndroidBack } from "./android-platform";
 import { useAndroidPresentation } from "./android-presentation";
+import { ANDROID_FIT_VIEW, type AndroidZoomView } from "./android-zoom";
 import AndroidReader, { type AndroidReaderHandle } from "./AndroidReader";
 import AndroidEditorBar, { type AndroidEditorHandle } from "./AndroidEditorBar";
 import AndroidPresentationControls from "./AndroidPresentationControls";
@@ -727,6 +728,8 @@ export default function App() {
     }
   });
   const [presenting, setPresenting] = useState(false);
+  const [androidPresentationZoom, setAndroidPresentationZoom] = useState<AndroidZoomView>(ANDROID_FIT_VIEW);
+  const [androidPresentationTool, setAndroidPresentationTool] = useState("arrow");
   useAndroidPresentation(presenting, deck.width >= deck.height);
   const [androidBackgrounded, setAndroidBackgrounded] = useState(androidRuntime && document.hidden);
   useEffect(() => {
@@ -2351,6 +2354,7 @@ export default function App() {
     if (!ready || presentationActive.current || modal || busy || openingFile.current || printing.current || savingPptx.current) return;
     commitPendingInputs();
     const current = deckRef.current;
+    if (androidRuntime) { setAndroidPresentationZoom(ANDROID_FIT_VIEW); setAndroidPresentationTool("arrow"); }
     setEditing(null);
     presentationWheel.current = {
       delta: 0,
@@ -6462,6 +6466,7 @@ export default function App() {
           ref={presentationView}
           tabIndex={-1}
           data-testid="presentation-view"
+          data-zoom={androidRuntime ? androidPresentationZoom.zoom.toFixed(2) : undefined}
           role="region"
           aria-label={
             presentEnded
@@ -6500,6 +6505,8 @@ export default function App() {
             ended={presentEnded}
             blackout={blackout || whiteout}
             paused={androidBackgrounded}
+            viewportTransform={androidRuntime ? androidPresentationZoom : undefined}
+            onToolChange={androidRuntime ? setAndroidPresentationTool : undefined}
             onSlideLink={(slideId) => {
               const index = deck.slides.findIndex((s) => s.id === slideId);
               if (index >= 0) showPresentationSlide(index);
@@ -6508,6 +6515,8 @@ export default function App() {
           </PresentationAudio>
           {androidRuntime && <AndroidPresentationControls view={presentationView} ink={presentationInk}
             index={presentIndex} total={deck.slides.length} ended={presentEnded} onStep={movePresent}
+            drawing={androidPresentationTool !== "arrow"} onZoom={setAndroidPresentationZoom}
+            bounds={{ width: androidPresentationSize.w, height: androidPresentationSize.h, slideWidth: deck.width, slideHeight: deck.height }}
             onEnd={stopPresent}
             onBlack={() => { setWhiteout(false); setBlackout(value => !value); }} />}
           {presentNotes && !presentEnded && !androidRuntime && (

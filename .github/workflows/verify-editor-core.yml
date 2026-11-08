@@ -61,6 +61,7 @@ jobs:
           tests/windows-ui.spec.ts
           tests/android-ui.spec.ts
           tests/android-presentation.spec.ts
+          tests/android-show-zoom.spec.ts
           tests/document-capacity.spec.ts
           tests/document-table-capacity.spec.ts
           tests/recovery-quarantine.spec.ts

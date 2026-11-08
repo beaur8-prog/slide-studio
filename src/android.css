@@ -1,11 +1,32 @@
+/* Native APKs publish physical system/camera insets in CSS pixels.
+   Browsers retain their own safe-area values. The artwork can extend under
+   cutouts while navigation and editing controls stay reachable. */
+html[data-studio-platform="android"] {
+  --android-safe-top: var(
+    --studio-safe-area-inset-top,
+    env(safe-area-inset-top, 0px)
+  );
+  --android-safe-right: var(
+    --studio-safe-area-inset-right,
+    env(safe-area-inset-right, 0px)
+  );
+  --android-safe-bottom: var(
+    --studio-safe-area-inset-bottom,
+    env(safe-area-inset-bottom, 0px)
+  );
+  --android-safe-left: var(
+    --studio-safe-area-inset-left,
+    env(safe-area-inset-left, 0px)
+  );
+}
 /* Android is selected by runtime identity, never by the desktop window width. */
 .android-app {
   height: 100dvh;
   min-width: 0;
   color: var(--chrome-text);
   background: var(--chrome-canvas);
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: var(--android-safe-top) var(--android-safe-right)
+    var(--android-safe-bottom) var(--android-safe-left);
   font-size: 16px;
 }
 .android-reader-body {
@@ -151,7 +172,7 @@
   justify-content: center;
   align-items: flex-end;
   background: #0008;
-  padding-top: max(12px, env(safe-area-inset-top));
+  padding-top: max(12px, var(--android-safe-top));
 }
 .android-sheet {
   background: var(--chrome-surface);
@@ -161,7 +182,7 @@
   max-height: 92dvh;
   overflow-y: auto;
   border-radius: 16px 16px 0 0;
-  padding: 8px 16px max(16px, env(safe-area-inset-bottom));
+  padding: 8px 16px max(16px, var(--android-safe-bottom));
   overscroll-behavior: contain;
 }
 .android-sheet > header {
@@ -277,8 +298,8 @@
 .office-shell.android-editor {
   min-width: 0;
   height: 100dvh;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: var(--android-safe-top) var(--android-safe-right)
+    var(--android-safe-bottom) var(--android-safe-left);
 }
 .android-editor > :is(.topbar, .tabs, .ribbon, .statusbar) {
   display: none;
@@ -399,9 +420,9 @@
 .android-editor .inspector {
   position: fixed;
   z-index: 25;
-  right: env(safe-area-inset-right);
-  top: max(56px, env(safe-area-inset-top));
-  bottom: env(safe-area-inset-bottom);
+  right: var(--android-safe-right);
+  top: max(56px, var(--android-safe-top));
+  bottom: var(--android-safe-bottom);
   width: min(360px, 100vw);
   max-width: 100%;
   overflow-y: auto;
@@ -440,8 +461,8 @@
 
 /* Dialogs/ink menus are outside the shell, so scope them to the runtime tag. */
 html[data-studio-platform="android"] .modal-backdrop {
-  padding: max(12px, env(safe-area-inset-top)) 12px
-    max(12px, env(safe-area-inset-bottom));
+  padding: max(12px, var(--android-safe-top)) 12px
+    max(12px, var(--android-safe-bottom));
 }
 html[data-studio-platform="android"]
   :is(.dialog, .chart-editor-dialog, .image-crop-dialog) {
@@ -464,7 +485,7 @@ html[data-studio-platform="android"]
 }
 html[data-studio-platform="android"] .toast {
   max-width: calc(100vw - 24px);
-  bottom: max(76px, env(safe-area-inset-bottom));
+  bottom: max(76px, var(--android-safe-bottom));
   font-size: 15px;
 }
 html[data-studio-platform="android"] .presentation-tools {
@@ -481,28 +502,67 @@ html[data-studio-platform="android"] .presentation-ink-colors button {
 html[data-studio-platform="android"] .presentation-ink-actions {
   flex-wrap: wrap;
 }
-.android-presentation {
+.presentation-view.android-presentation {
   touch-action: none;
   padding: 0;
+  overflow: hidden;
+  background: #000;
+  isolation: isolate;
+  outline: none;
+  border: 0;
+  box-shadow: none;
+}
+html[data-studio-platform="android"][data-studio-presenting="true"],
+html[data-studio-platform="android"][data-studio-presenting="true"] body {
+  background: #000;
+  overscroll-behavior: none;
+}
+.android-presentation > .android-screenreader-trigger {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  background: transparent;
 }
 .android-presentation-controls {
   position: fixed;
   z-index: 94;
-  bottom: max(8px, env(safe-area-inset-bottom));
-  left: max(8px, env(safe-area-inset-left));
-  right: max(8px, env(safe-area-inset-right));
-  display: flex;
-  justify-content: center;
+  bottom: max(8px, var(--android-safe-bottom));
+  left: max(8px, var(--android-safe-left));
+  right: max(8px, var(--android-safe-right));
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 2px;
   padding: 4px;
   background: #202020ef;
   color: white;
   border-radius: 12px;
-  overflow-x: auto;
+  max-width: 640px;
+  margin: auto;
 }
 .android-presentation-controls button {
-  flex-shrink: 0;
+  min-width: 0;
   min-height: 56px;
+  flex-direction: column;
+  padding: 6px 4px;
+  font-size: 12px;
+  gap: 4px;
+}
+.android-presentation-controls button svg {
+  width: 22px;
+  height: 22px;
+}
+.android-labeled-icon {
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
 }
 .android-presentation-position {
   display: flex;

@@ -116,8 +116,9 @@ for (const portrait of [false, true])
       .poll(() => page.evaluate(() => (window as any).__orientation))
       .toContain(portrait ? "portrait" : "landscape");
     expect(
-      await page.evaluate(() => (window as any).__fullscreenRequests[0]),
-    ).toEqual({ navigationUI: "hide" });
+      await page.evaluate(() => (window as any).__fullscreenRequests),
+    ).toEqual([]);
+    expect(await page.evaluate(() => !!document.fullscreenElement)).toBe(false);
     expect(
       await page.evaluate(() => (window as any).__edgeCalls),
     ).toBeGreaterThan(0);
@@ -159,6 +160,9 @@ test("legacy Android status-bar host overlays content during presentation and re
   page,
 }) => {
   await open(page, { portrait: false, slow: false, fail: false, legacy: true });
+  expect(
+    await page.evaluate(() => (window as any).__fullscreenRequests[0]),
+  ).toEqual({ navigationUI: "hide" });
   await expect
     .poll(() => page.evaluate(() => (window as any).__overlays))
     .toContain(true);
@@ -174,15 +178,16 @@ test("legacy Android status-bar host overlays content during presentation and re
     .toBe("show");
 });
 
-test("native bar/orientation failures keep Android browser fullscreen and slide navigation usable", async ({
+test("native bar/orientation failures keep the original Android window and slide navigation usable", async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await open(page, { portrait: false, slow: false, fail: true });
-  await expect
-    .poll(() => page.evaluate(() => !!document.fullscreenElement))
-    .toBe(true);
+  expect(await page.evaluate(() => !!document.fullscreenElement)).toBe(false);
+  expect(
+    await page.evaluate(() => (window as any).__fullscreenRequests),
+  ).toEqual([]);
   await page.keyboard.press("ArrowRight");
   await expect(page.getByTestId("presentation-view")).toHaveAttribute(
     "aria-label",

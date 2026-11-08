@@ -29,6 +29,15 @@ function plugin<T>(name: string): T | undefined {
   }
 }
 
+/** APKs already own a full-window WebView and can hide the OS chrome directly.
+ * DOM fullscreen would create a second WebChromeClient custom view with its
+ * own Escape/Back lifecycle. Keep the presentation in the original WebView. */
+export function usesAndroidPresentationWindow(): boolean {
+  if (!androidRuntime) return false;
+  const bars = plugin<SystemBars>("SystemBars");
+  return typeof bars?.hide === "function" && typeof bars.show === "function";
+}
+
 // Serialize native calls: a slow Hide finishing after Exit must not hide the editor.
 let barRequests = Promise.resolve();
 let orientationRequests = Promise.resolve();

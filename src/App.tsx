@@ -207,7 +207,7 @@ import PresentationInk, { type PresentationInkHandle } from "./PresentationInk";
 import { DEFAULT_SHAPE_FILL, EXTRA_SHAPES, shapeInsertionStyle } from "./shape-presets";
 import { androidRuntime, useAndroidBack } from "./android-platform";
 import { useAndroidTabletEditor } from "./android-editor-layout";
-import { useAndroidPresentation } from "./android-presentation";
+import { useAndroidPresentation, usesAndroidPresentationWindow } from "./android-presentation";
 import { ANDROID_FIT_VIEW, type AndroidZoomView } from "./android-zoom";
 import AndroidReader, { type AndroidReaderHandle } from "./AndroidReader";
 import AndroidEditorBar, { type AndroidEditorHandle } from "./AndroidEditorBar";
@@ -2331,6 +2331,10 @@ export default function App() {
       void window.desktop
         .setPresentationMode(true)
         .catch(() => notify("전체 화면을 사용할 수 없습니다."));
+    } else if (usesAndroidPresentationWindow()) {
+      // Native SystemBars/ScreenOrientation and the fixed presentation surface
+      // fill the APK window without creating a separate WebView custom view.
+      return;
     } else if (browserFullscreenExitPending.current) {
       // A previous show may still be exiting. Its fullscreenchange event will
       // enter fullscreen for the new show instead of closing that new session.
@@ -2430,6 +2434,7 @@ export default function App() {
   }, [presenting]);
   useEffect(() => {
     const fullscreenChanged = () => {
+      if (usesAndroidPresentationWindow()) return;
       // Observe exits even if the editor was fullscreen before the show began.
       // Ownership only controls whether stopping the show exits fullscreen.
       if (!document.fullscreenElement) {

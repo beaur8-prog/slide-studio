@@ -375,9 +375,12 @@ test("immersive touch slideshow maximizes artwork, swipes hidden slides and show
   await expect(
     page.getByRole("dialog", { name: "발표 도구", exact: true }),
   ).toBeVisible();
+  await expect(controls).toBeHidden();
   await page.keyboard.press("Escape");
   expect((await page.locator(".present-slide").boundingBox())!).toEqual(before);
   await show.click({ position: { x: 640, y: 360 } });
+  await expect(controls).toBeVisible();
+  await controls.getByRole("button", { name: "발표 도구 모음 숨기기" }).click();
   await expect(controls).toBeHidden();
   const session = await page.context().newCDPSession(page);
   await session.send("Input.dispatchTouchEvent", {

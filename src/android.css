@@ -602,6 +602,8 @@ html[data-studio-platform="android"] .presentation-ink-actions {
   flex-wrap: wrap;
 }
 .presentation-view.android-presentation {
+  /* Keep editor notifications from covering immersive presentation controls. */
+  z-index: 111;
   touch-action: none;
   padding: 0;
   overflow: hidden;

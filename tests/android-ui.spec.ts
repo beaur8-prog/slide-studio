@@ -62,7 +62,7 @@ async function fixture(page: Page, count = 3) {
   return Buffer.from(bytes);
 }
 async function open(page: Page, count = 3) {
-  await page.goto("http://127.0.0.1:5190");
+  await page.goto((process.env.STUDIO_TEST_URL || "http://127.0.0.1:5190"));
   await expect(
     page.getByRole("button", { name: "파일 열기", exact: true }),
   ).toBeVisible();
@@ -544,7 +544,7 @@ test("tablet partial italic stays on Beta and touch slide copy inserts at the ch
 test("touch file picker cancellation and invalid files do not block the next open request", async ({
   page,
 }) => {
-  await page.goto("http://127.0.0.1:5190");
+  await page.goto((process.env.STUDIO_TEST_URL || "http://127.0.0.1:5190"));
   const [first] = await Promise.all([
     page.waitForEvent("filechooser"),
     page.getByRole("button", { name: "파일 열기", exact: true }).click(),
@@ -606,7 +606,7 @@ for (const platform of ["darwin", "win32", "linux"])
         print: async () => false,
       };
     }, platform);
-    await page.goto("http://127.0.0.1:5190");
+    await page.goto((process.env.STUDIO_TEST_URL || "http://127.0.0.1:5190"));
     await expect(page.locator(".office-shell")).toBeVisible();
     await expect(page.getByTestId("android-reader")).toHaveCount(0);
     await expect(page.locator(".android-editor-bars")).toHaveCount(0);
@@ -630,7 +630,7 @@ test("native Android identity enables the reader with desktop-mode UA", async ({
     });
     (window as any).Capacitor = { getPlatform: () => "android" };
   });
-  await page.goto("http://127.0.0.1:5190");
+  await page.goto((process.env.STUDIO_TEST_URL || "http://127.0.0.1:5190"));
   await expect(page.getByTestId("android-reader")).toBeVisible();
 });
 
@@ -646,13 +646,13 @@ test("a narrow iPad touch browser retains the desktop UI because only Android is
         "Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
     });
   });
-  await page.goto("http://127.0.0.1:5190");
+  await page.goto((process.env.STUDIO_TEST_URL || "http://127.0.0.1:5190"));
   await expect(page.locator(".office-shell")).toBeVisible();
   await expect(page.getByTestId("android-reader")).toHaveCount(0);
 });
 
 async function previousDraft(page: Page) {
-  await page.goto("http://127.0.0.1:5190");
+  await page.goto((process.env.STUDIO_TEST_URL || "http://127.0.0.1:5190"));
   await expect(page.getByTestId("android-reader")).toBeVisible();
   await page.evaluate(async () => {
     const { blankDeck } = await import("/src/model.ts"),

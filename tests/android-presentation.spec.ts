@@ -213,3 +213,44 @@ test("tap tools overlay maximized artwork and automatically hide without a page 
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("android-slide-viewport")).toBeVisible();
 });
+
+test("native show-end bypasses a focused ink menu and cannot navigate away after the show", async ({
+  page,
+}) => {
+  await open(page);
+  await page
+    .getByTestId("presentation-view")
+    .click({ position: { x: 200, y: 200 } });
+  await page
+    .getByRole("button", { name: "포인터와 판서 도구", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "발표 도구", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const event = new Event("slide-studio-android-end-presentation", {
+        cancelable: true,
+      });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    }),
+  ).toBe(true);
+  await expect(page.getByTestId("presentation-view")).toHaveCount(0);
+  await expect(page.getByTestId("android-slide-viewport")).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const event = new Event("slide-studio-android-end-presentation", {
+        cancelable: true,
+      });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    }),
+  ).toBe(false);
+  await expect(page.getByTestId("android-slide-viewport")).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      sessionStorage.getItem("slide-studio-file-dirty"),
+    ),
+  ).toBe("false");
+});

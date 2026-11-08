@@ -6,8 +6,20 @@ const ANDROID =
 test.use({
   userAgent: ANDROID,
   viewport: { width: 412, height: 915 },
+  // These exercise the compact phone editor, even when its viewport is widened.
+  screen: { width: 412, height: 915 },
   hasTouch: true,
   isMobile: true,
+});
+test.beforeEach(async ({ page }) => {
+  // setViewportSize also changes Chromium's emulated screen. Keep this suite's
+  // phone hardware identity stable while exercising wide/multiwindow layouts.
+  await page.addInitScript(() => {
+    Object.defineProperties(window.screen, {
+      width: { get: () => 412 },
+      height: { get: () => 915 },
+    });
+  });
 });
 
 async function fixture(page: Page, count = 3) {
@@ -430,7 +442,7 @@ test("viewer enters editing directly on the current slide and returns without ch
   }
 });
 
-test("tablet editing uses touch actions, numeric drafts, undo and PPTX reopen", async ({
+test("phone editing uses touch actions, numeric drafts, undo and PPTX reopen", async ({
   page,
 }, info) => {
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -535,7 +547,7 @@ test("Android back closes viewer and ink tools before ending immersive presentat
   await clean(page);
 });
 
-test("tablet partial italic stays on Beta and touch slide copy inserts at the chosen gap", async ({
+test("phone partial italic stays on Beta and touch slide copy inserts at the chosen gap", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });

@@ -1,6 +1,20 @@
 # 반복 Esc 제보 후 Android 발표 창 경로 변경
 
-## 확인한 사실과 남은 정보
+## 1.0.6 후속 제보: 다른 앱에서도 Android 홈으로 이동
+
+사용자가 후속 확인에서 다음을 명확히 했다.
+
+- 현재 설치 버전은 **1.0.6**이다.
+- Esc 후 보이는 화면은 Slide Studio의 시작 화면이 아니라 **앱 아이콘이 있는 Android 런처 홈**이다.
+- 같은 외부 키보드로 **다른 앱에서도 Esc를 누르면 Android 홈으로 이동**한다.
+
+따라서 앞선 앱 내부 홈 이동 재현과 구분한다. 키보드 또는 시스템 키 매핑이 홈 동작으로 처리하는 가능성을 우선 확인한다. 단말 입력 로그를 받지 않았으므로 `KEYCODE_HOME`이 실제 전달 원인이라고 확정하지 않는다. 현재 ADB에 실제 단말 연결은 없다. [Android 공식 KeyEvent 문서](https://developer.android.com/reference/android/view/KeyEvent#KEYCODE_HOME)에 따르면 시스템 홈 키는 앱에 전달되지 않는다. 이 경우 앱의 Esc/Back 처리로 막을 수 없다.
+
+1.0.6의 [배포 소스 기록](https://github.com/beaur8-prog/office-studio/blob/codex/android-slide-local-1.0.6/android/source-lock.json)은 앱 `3702ff3`/upstream `e2644de`, 네이티브 호스트 `e06f20c`를 포함한다. 이전 수정이 사용자 설치본에 아직 없다는 설명을 이 후속 제보에 다시 적용하지 않는다.
+
+다음 확인은 외부 키보드 제조사·모델, OS 모드 전환, **설정 → 일반 → 하드웨어 키보드 → 키 맞춤 설정**의 Esc 동작이다. [삼성 공식 물리 키보드 설정 안내](https://www.samsung.com/us/support/answer/ANS10002016/)는 설정 위치와 Customize keys를 설명한다. 모델을 모르는 상태에서 Fn 조합이나 특정 매핑 변경이 반드시 해결한다고 단정하지 않는다. 앱 기능 수정·새 APK·공개 문서 갱신은 이 후속 확인에서 수행하지 않았다. 문제 해결 완료 상태가 아니다.
+
+## 확인한 사실과 남은 정보 (1.0.5 제보 당시)
 
 공개 Android Slide1.0.5(`android-v1.0.8`)를 내려받아 확인했다. 이전 Esc/Back 차단과 명시적 홈 종료 처리가 포함되어 있다. 버전이 오래됐다는 가정으로 제보를 설명하지 않는다.
 
@@ -51,6 +65,6 @@ REA 정적 인벤토리 Evidence: `ev_f98f59d4db85de3815aa55b32f37110f7fdea0ed1f
 
 원시 로그·APK 식별·DEX 코드: `qa/results/android-native-window-20261108/` (Git 제외). `baseline-viewer.log`에는 구버전 반복 검사 통과와 별도 창 미사용 조건 실패가 구분돼 있다. `current-native-tablet.log`, `current-native-phone.log`, `window-tests.log`, `browser-tests.log`, `desktop-tests.log`, `current-crash-buffer.log`에 수정본 결과가 있다.
 
-## 배포
+## 이전 검증 당시 배포 상태
 
 앱과 호스트의 개발 브랜치는 `codex/android-native-window-20261108`이다. 공개 APK/공유 문서와 사용자 설치본은 갱신하지 않았다. 다음 별도 배포 시 버전/versionCode를 올리고 새 앱 자산과 IME 변경을 기존 정식 서명으로 빌드해야 한다. 사용자 기종·OS·앱 버전은 위와 같이 확인됐으며, 외부 키보드·일반 태블릿 모드도 확인됐다. 실제 단말 로그로 남은 원인을 확인해야 한다.

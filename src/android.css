@@ -664,11 +664,21 @@ html[data-studio-platform="android"][data-studio-presenting="true"] body {
   font-size: 11px;
 }
 .android-presentation-position {
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  font-size: 14px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+.android-presentation-tools-trigger {
+  position: fixed;
+  z-index: 94;
+  right: max(8px, var(--android-safe-right));
+  bottom: max(8px, var(--android-safe-bottom));
+  background: #202020df;
+  color: white;
+  font-size: 13px;
+}
+.android-presentation-tools-trigger svg {
+  width: 20px;
+  height: 20px;
 }
 .android-presentation-controls.android-controls-hidden {
   visibility: hidden;

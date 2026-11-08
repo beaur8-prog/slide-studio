@@ -7,6 +7,7 @@ import {
   Scan,
   ZoomIn,
   ZoomOut,
+  X,
 } from "lucide-react";
 import type { PresentationInkHandle } from "./PresentationInk";
 import { useAndroidPresentationGestures } from "./android-presentation-gestures";
@@ -39,6 +40,10 @@ export default function AndroidPresentationControls({
 }) {
   const [visible, setVisible] = useState(false);
   const controls = useRef<HTMLElement>(null);
+  const hideControls = () => {
+    setVisible(false);
+    view.current?.focus({ preventScroll: true });
+  };
   const gesture = useAndroidPresentationGestures({
     host: view,
     ink,
@@ -54,10 +59,12 @@ export default function AndroidPresentationControls({
     onTap: () => setVisible((value) => !value),
   });
   useEffect(() => {
-    setVisible(ended || drawing);
+    // A drawing tool owns canvas taps, so keep the large toolbar folded and
+    // offer a separate, small trigger instead of pinning it over the slide.
+    setVisible(ended);
   }, [index, ended, drawing]);
   useEffect(() => {
-    if (!visible || ended || drawing) return;
+    if (!visible || ended) return;
     const timer = setTimeout(() => {
       if (!controls.current?.contains(document.activeElement))
         setVisible(false);
@@ -75,7 +82,7 @@ export default function AndroidPresentationControls({
       )}
       <nav
         ref={controls}
-        className={`android-presentation-controls ${visible || ended || drawing ? "" : "android-controls-hidden"}`}
+        className={`android-presentation-controls ${visible ? "" : "android-controls-hidden"}`}
         aria-label="터치 발표 도구"
         onClick={(event) => event.stopPropagation()}
       >
@@ -89,7 +96,10 @@ export default function AndroidPresentationControls({
         </button>
         <button
           aria-label="포인터와 판서 도구"
-          onClick={() => ink.current?.openMenu(12, 72)}
+          onClick={() => {
+            hideControls();
+            ink.current?.openMenu(12, 72);
+          }}
         >
           <PenLine />
           <span>펜·레이저</span>
@@ -126,19 +136,20 @@ export default function AndroidPresentationControls({
           <ZoomIn />
           <span>확대</span>
         </button>
-        <span
-          className="android-presentation-position"
-          aria-label={`슬라이드 ${index + 1} / ${total}`}
-        >
-          {index + 1} / {total}
-        </span>
+        <button aria-label="발표 도구 모음 숨기기" onClick={hideControls}>
+          <X />
+          <span className="android-presentation-position" aria-label={`슬라이드 ${index + 1} / ${total}`}>
+            {index + 1}/{total} · 숨기기
+          </span>
+        </button>
       </nav>
       <button
-        className="android-screenreader-trigger"
+        className={!visible && (drawing || ended) ? "android-presentation-tools-trigger" : "android-screenreader-trigger"}
         aria-label="발표 도구 열기"
-        onClick={() => setVisible(true)}
+        onClick={(event) => { event.stopPropagation(); setVisible(true); }}
       >
-        발표 도구 열기
+        <PenLine aria-hidden="true" />
+        <span>도구</span>
       </button>
     </>
   );

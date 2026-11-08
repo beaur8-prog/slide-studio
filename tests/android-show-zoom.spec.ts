@@ -89,10 +89,11 @@ async function pan(
 }
 async function tools(page: Page) {
   const controls = page.getByRole("navigation", { name: "터치 발표 도구" });
-  if (!(await controls.isVisible()))
-    await page
-      .getByTestId("presentation-view")
-      .click({ position: { x: 480, y: 150 } });
+  if (!(await controls.isVisible())) {
+    const trigger = page.locator(".android-presentation-tools-trigger");
+    if (await trigger.isVisible()) await trigger.click();
+    else await page.getByTestId("presentation-view").click({ position: { x: 480, y: 150 } });
+  }
   await expect(controls).toBeVisible();
   return controls;
 }
@@ -261,12 +262,86 @@ test("pinch during pen drawing cancels the draft and preserves prior ink and its
     "3.00",
   );
   await expect(page.getByTestId("ink-stroke")).toHaveCount(1);
+  await tools(page);
   await page
     .getByRole("button", { name: "화면 이동 모드", exact: true })
     .click();
   await expect(ink).toHaveAttribute("data-tool", "arrow");
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "판서 버리기" }).click();
+  await clean(page);
+});
+
+test("pen and laser controls can be hidden and reopened without changing tools or ink", async ({ page }) => {
+  await open(page);
+  const controls = page.getByRole("navigation", { name: "터치 발표 도구" });
+  const ink = page.getByTestId("presentation-ink");
+  for (const [label, tool] of [["레이저 포인터", "laser"], ["펜", "pen"]]) {
+    await tools(page);
+    await controls.getByRole("button", { name: "포인터와 판서 도구" }).click();
+    await page.getByRole("dialog", { name: "발표 도구", exact: true }).getByRole("button", { name: label, exact: true }).click();
+    await expect(ink).toHaveAttribute("data-tool", tool);
+    await expect(controls).toBeHidden();
+    await expect(page.getByRole("dialog", { name: "발표 도구", exact: true })).toHaveCount(0);
+    const trigger = page.getByRole("button", { name: "발표 도구 열기", exact: true });
+    await expect(trigger).toBeVisible();
+    if (tool === "pen") {
+      await pan(page, { x: 350, y: 150 }, { x: 430, y: 175 });
+      await expect(page.getByTestId("ink-stroke")).toHaveCount(1);
+    } else {
+      await touch(page, [{ x: 350, y: 150, id: 1 }]);
+      await expect(page.getByTestId("laser-pointer")).toBeVisible();
+      await touch(page, [], "touchEnd");
+      await expect(page.getByTestId("laser-pointer")).toBeHidden();
+    }
+    await expect(controls).toBeHidden();
+    await trigger.click();
+    await expect(controls).toBeVisible();
+    await controls.getByRole("button", { name: "발표 도구 모음 숨기기" }).click();
+    await expect(controls).toBeHidden();
+    await expect(trigger).toBeVisible();
+    await expect(ink).toHaveAttribute("data-tool", tool);
+    await expect(page.getByTestId("presentation-view")).toHaveAttribute("aria-label", /^발표 슬라이드 1 \//);
+  }
+  await expect(page.getByTestId("ink-stroke")).toHaveCount(1);
+  await tools(page);
+  await controls.getByRole("button", { name: "화면 이동 모드", exact: true }).click();
+  await expect(ink).toHaveAttribute("data-tool", "arrow");
+  await expect(controls).toBeHidden();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "판서 버리기" }).click();
+  await clean(page);
+});
+
+test("drawing toolbar auto-hides after reopening and remains recoverable", async ({ page }) => {
+  await open(page);
+  const controls = await tools(page);
+  await controls.getByRole("button", { name: "포인터와 판서 도구" }).click();
+  await page.getByRole("button", { name: "레이저 포인터", exact: true }).click();
+  await expect(controls).toBeHidden();
+  await page.clock.install();
+  await page.getByRole("button", { name: "발표 도구 열기", exact: true }).click();
+  await expect(controls).toBeVisible();
+  await page.clock.runFor(4100);
+  await expect(controls).toBeHidden();
+  await expect(page.locator(".android-presentation-tools-trigger")).toBeVisible();
+  await expect(page.getByTestId("presentation-ink")).toHaveAttribute("data-tool", "laser");
+  await page.keyboard.press("Escape");
+  await clean(page);
+});
+
+test("end-screen controls can be hidden and reopened to exit", async ({ page }) => {
+  await open(page);
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByTestId("presentation-end")).toBeVisible();
+  const controls = page.getByRole("navigation", { name: "터치 발표 도구" });
+  await expect(controls).toBeVisible();
+  await controls.getByRole("button", { name: "발표 도구 모음 숨기기" }).click();
+  await expect(controls).toBeHidden();
+  await page.getByRole("button", { name: "발표 도구 열기", exact: true }).click();
+  await controls.getByRole("button", { name: "발표 종료", exact: true }).click();
+  await expect(page.getByTestId("android-slide-viewport")).toBeVisible();
   await clean(page);
 });
 

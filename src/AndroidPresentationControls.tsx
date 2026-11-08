@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { ChevronLeft, ChevronRight, MoreHorizontal, X } from "lucide-react";
+import { MoreHorizontal, X } from "lucide-react";
 import type { PresentationInkHandle } from "./PresentationInk";
 
 export default function AndroidPresentationControls({
@@ -9,7 +9,6 @@ export default function AndroidPresentationControls({
   total,
   ended,
   onStep,
-  onJump,
   onEnd,
   onBlack,
 }: {
@@ -19,17 +18,14 @@ export default function AndroidPresentationControls({
   total: number;
   ended: boolean;
   onStep(direction: number): void;
-  onJump(index: number): void;
   onEnd(): void;
   onBlack(): void;
 }) {
-  const [visible, setVisible] = useState(true);
-  const [jump, setJump] = useState(false);
-  const [page, setPage] = useState("");
-  const [error, setError] = useState("");
+  const [visible, setVisible] = useState(false);
+  const controls = useRef<HTMLElement>(null);
   const [laser, setLaser] = useState<{ x: number; y: number } | null>(null);
-  const latest = useRef({ onStep, ended, jump });
-  latest.current = { onStep, ended, jump };
+  const latest = useRef({ onStep, ended });
+  latest.current = { onStep, ended };
   useEffect(() => {
     const node = view.current;
     if (!node) return;
@@ -49,11 +45,10 @@ export default function AndroidPresentationControls({
     const excluded = (target: EventTarget | null) =>
       target instanceof Element &&
       target.closest(
-        "button,a,input,.presentation-tools,.video-visual,.audio-visual,.android-presentation-controls,.android-presentation-jump",
+        "button,a,input,.presentation-tools,.video-visual,.audio-visual,.android-presentation-controls",
       );
     const down = (event: PointerEvent) => {
-      if (excluded(event.target) || latest.current.jump || event.button !== 0)
-        return;
+      if (excluded(event.target) || event.button !== 0) return;
       if (!event.isPrimary || pointer) {
         cancel();
         return;
@@ -97,9 +92,10 @@ export default function AndroidPresentationControls({
       if (g.laser) return;
       const dx = event.clientX - g.x,
         dy = event.clientY - g.y;
-      if (Math.abs(dx) >= 44 && Math.abs(dx) > Math.abs(dy) * 1.4)
+      if (Math.abs(dx) >= 44 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        setVisible(false);
         latest.current.onStep(dx < 0 ? 1 : -1);
-      else if (!g.cancelled) setVisible((value) => !value);
+      } else if (!g.cancelled) setVisible((value) => !value);
     };
     node.addEventListener("pointerdown", down);
     node.addEventListener("pointermove", move);
@@ -121,8 +117,17 @@ export default function AndroidPresentationControls({
   }, [view, index, ended]);
   useEffect(() => {
     setLaser(null);
-    setVisible(true);
+    setVisible(ended);
   }, [index, ended]);
+  useEffect(() => {
+    if (!visible || ended) return;
+    const timer = setTimeout(() => {
+      // Keep keyboard/screen-reader focus usable while it is inside the tools.
+      if (!controls.current?.contains(document.activeElement))
+        setVisible(false);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [visible, ended]);
   return (
     <>
       {laser && (
@@ -133,26 +138,17 @@ export default function AndroidPresentationControls({
         />
       )}
       <nav
-        className={`android-presentation-controls ${visible || jump || ended ? "" : "android-controls-hidden"}`}
+        ref={controls}
+        className={`android-presentation-controls ${visible || ended ? "" : "android-controls-hidden"}`}
         aria-label="터치 발표 도구"
         onClick={(event) => event.stopPropagation()}
       >
-        <button aria-label="이전 발표 슬라이드" onClick={() => onStep(-1)}>
-          <ChevronLeft />
-        </button>
-        <button
-          aria-label="발표 페이지로 이동"
-          onClick={() => {
-            setPage(String(index + 1));
-            setError("");
-            setJump(true);
-          }}
+        <span
+          className="android-presentation-position"
+          aria-label={`슬라이드 ${index + 1} / ${total}`}
         >
           {index + 1} / {total}
-        </button>
-        <button aria-label="다음 발표 슬라이드" onClick={() => onStep(1)}>
-          <ChevronRight />
-        </button>
+        </span>
         <button
           aria-label="포인터와 판서 도구"
           onClick={() => ink.current?.openMenu(12, 72)}
@@ -166,50 +162,13 @@ export default function AndroidPresentationControls({
           <X />
         </button>
       </nav>
-      {jump && (
-        <form
-          className="android-presentation-jump"
-          role="dialog"
-          aria-modal="true"
-          aria-label="발표 페이지로 이동"
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => {
-            event.stopPropagation();
-            if (event.key === "Escape") {
-              event.preventDefault();
-              setJump(false);
-            }
-          }}
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (
-              !/^\d+$/.test(page) ||
-              Number(page) < 1 ||
-              Number(page) > total
-            ) {
-              setError(`1~${total} 사이의 번호를 입력하세요.`);
-              return;
-            }
-            onJump(Number(page) - 1);
-            setJump(false);
-          }}
-        >
-          <label>
-            슬라이드 번호
-            <input
-              autoFocus
-              inputMode="numeric"
-              value={page}
-              onChange={(event) => setPage(event.target.value)}
-            />
-          </label>
-          {error && <p role="alert">{error}</p>}
-          <button type="submit">이동</button>
-          <button type="button" onClick={() => setJump(false)}>
-            취소
-          </button>
-        </form>
-      )}
+      <button
+        className="android-sr-only"
+        aria-label="발표 도구 열기"
+        onClick={() => setVisible(true)}
+      >
+        발표 도구 열기
+      </button>
     </>
   );
 }

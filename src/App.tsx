@@ -205,6 +205,7 @@ import ScreenshotDialog from "./ScreenshotDialog";
 import PresentationInk, { type PresentationInkHandle } from "./PresentationInk";
 import { DEFAULT_SHAPE_FILL, EXTRA_SHAPES, shapeInsertionStyle } from "./shape-presets";
 import { androidRuntime, useAndroidBack } from "./android-platform";
+import { useAndroidPresentation } from "./android-presentation";
 import AndroidReader, { type AndroidReaderHandle } from "./AndroidReader";
 import AndroidEditorBar, { type AndroidEditorHandle } from "./AndroidEditorBar";
 import AndroidPresentationControls from "./AndroidPresentationControls";
@@ -724,6 +725,7 @@ export default function App() {
     }
   });
   const [presenting, setPresenting] = useState(false);
+  useAndroidPresentation(presenting, deck.width >= deck.height);
   const [androidBackgrounded, setAndroidBackgrounded] = useState(androidRuntime && document.hidden);
   useEffect(() => {
     if (!androidRuntime) return;
@@ -763,7 +765,7 @@ export default function App() {
     w: window.innerWidth,
     h: window.innerHeight,
   });
-  const [androidPresentationSize, setAndroidPresentationSize] = useState({ w: innerWidth, h: Math.max(1, innerHeight - 96) });
+  const [androidPresentationSize, setAndroidPresentationSize] = useState({ w: innerWidth, h: innerHeight });
   useLayoutEffect(() => {
     if (!androidRuntime || !presenting || !presentationView.current) return;
     const observer = new ResizeObserver(([entry]) => {
@@ -2317,7 +2319,7 @@ export default function App() {
     } else if (!document.fullscreenElement) {
       browserPresentationFullscreen.current = true;
       void document.documentElement
-        .requestFullscreen()
+        .requestFullscreen(androidRuntime ? { navigationUI: "hide" } : undefined)
         .then(() => {
           // Esc may be pressed before an asynchronous fullscreen request finishes.
           if (!presentationActive.current && document.fullscreenElement) {
@@ -2591,7 +2593,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (presenting) {
-        if (androidRuntime && e.target instanceof Element && e.target.closest(".android-presentation-controls,.android-presentation-jump")) return;
+        if (androidRuntime && e.target instanceof Element && e.target.closest(".android-presentation-controls")) return;
         if (e.key !== "Escape" && e.target instanceof Element && e.target.closest(".video-visual, .audio-visual")) return;
         if (presentationInk.current?.handleKey(e)) return;
         if (
@@ -3923,8 +3925,6 @@ export default function App() {
     if (modal) { setModal(null); return true; }
     if (pendingInk) { setPendingInk(null); return true; }
     if (presenting) {
-      const jump = document.querySelector<HTMLInputElement>(".android-presentation-jump input");
-      if (jump) { jump.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); return true; }
       if (presentationInk.current?.handleKey(new KeyboardEvent("keydown", { key: "Escape" }))) return true;
       stopPresent(); return true;
     }
@@ -6458,6 +6458,7 @@ export default function App() {
             )
               return;
             event.preventDefault();
+            if (androidRuntime) return;
             presentationInk.current?.openMenu(event.clientX, event.clientY);
           }}
         >
@@ -6487,7 +6488,7 @@ export default function App() {
           </PresentationAudio>
           {androidRuntime && <AndroidPresentationControls view={presentationView} ink={presentationInk}
             index={presentIndex} total={deck.slides.length} ended={presentEnded} onStep={movePresent}
-            onJump={index => showPresentationSlide(index)} onEnd={stopPresent}
+            onEnd={stopPresent}
             onBlack={() => { setWhiteout(false); setBlackout(value => !value); }} />}
           {presentNotes && !presentEnded && !androidRuntime && (
             <div className="present-notes" onClick={(e) => e.stopPropagation()}>

@@ -313,48 +313,64 @@ test("sharing and downloading use exact original bytes; failed import leaves the
   await clean(page);
 });
 
-test("touch slideshow skips hidden slides, exposes pointer tools and keeps notes private", async ({
+test("immersive touch slideshow maximizes artwork, swipes hidden slides and shows tools only on demand", async ({
   page,
 }, info) => {
   await open(page);
   await page.getByRole("button", { name: "현재 슬라이드에서 발표" }).click();
-  await expect(page.locator(".android-presentation")).toBeVisible();
+  const show = page.getByTestId("presentation-view"),
+    controls = page.getByRole("navigation", { name: "터치 발표 도구" });
+  await expect(show).toBeVisible();
+  await expect(controls).toBeHidden();
   await expect(page.locator(".present-notes")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "발표 페이지로 이동" }),
+  ).toHaveCount(0);
   for (const size of [
     { width: 800, height: 360 },
+    { width: 1280, height: 800 },
     { width: 412, height: 915 },
+    { width: 1280, height: 720 },
   ]) {
     await page.setViewportSize(size);
     await expect
       .poll(async () => {
         const slide = (await page.locator(".present-slide").boundingBox())!;
-        const controls = (await page
-          .locator(".android-presentation-controls")
-          .boundingBox())!;
+        const scale = Math.min(size.width / 1280, size.height / 720);
         return (
-          slide.y + slide.height <= controls.y &&
-          slide.x >= 0 &&
-          slide.x + slide.width <= size.width + 1
+          Math.abs(slide.width - 1280 * scale) < 1 &&
+          Math.abs(slide.height - 720 * scale) < 1
         );
       })
       .toBe(true);
+    await expect(controls).toBeHidden();
+    expect(await show.evaluate((node) => getComputedStyle(node).padding)).toBe(
+      "0px",
+    );
+    await page.screenshot({
+      path: info.outputPath(`immersive-${size.width}x${size.height}.png`),
+    });
   }
-  await page.getByRole("button", { name: "다음 발표 슬라이드" }).click();
-  await expect(
-    page.getByRole("button", { name: "발표 페이지로 이동" }),
-  ).toHaveText("3 / 3");
-  await page.getByRole("button", { name: "이전 발표 슬라이드" }).click();
+  await swipe(page, { x: 800, y: 360 }, { x: 450, y: 360 });
+  await expect(show).toHaveAttribute("aria-label", /^발표 슬라이드 3 \//);
+  await expect(controls).toBeHidden();
+  await swipe(page, { x: 450, y: 360 }, { x: 800, y: 360 });
+  await expect(show).toHaveAttribute("aria-label", /^발표 슬라이드 1 \//);
+  await show.click({ position: { x: 640, y: 360 } });
+  await expect(controls).toBeVisible();
+  const before = (await page.locator(".present-slide").boundingBox())!;
   await page.getByRole("button", { name: "포인터와 판서 도구" }).click();
   await expect(
     page.getByRole("dialog", { name: "발표 도구", exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
-  const box = (await page.locator(".present-slide").boundingBox())!;
-  const y = box.y + box.height / 2;
+  expect((await page.locator(".present-slide").boundingBox())!).toEqual(before);
+  await show.click({ position: { x: 640, y: 360 } });
+  await expect(controls).toBeHidden();
   const session = await page.context().newCDPSession(page);
   await session.send("Input.dispatchTouchEvent", {
     type: "touchStart",
-    touchPoints: [{ x: 200, y, id: 1 }],
+    touchPoints: [{ x: 640, y: 360, id: 1 }],
   });
   await expect(page.getByTestId("android-touch-laser")).toBeVisible();
   await session.send("Input.dispatchTouchEvent", {
@@ -363,10 +379,10 @@ test("touch slideshow skips hidden slides, exposes pointer tools and keeps notes
   });
   await expect(page.getByTestId("android-touch-laser")).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "발표 페이지로 이동" }),
-  ).toHaveText("1 / 3");
-  await page.screenshot({ path: info.outputPath("android-presentation.png") });
-  await page.getByRole("button", { name: "발표 종료" }).click();
+    page.getByRole("dialog", { name: "발표 도구", exact: true }),
+  ).toHaveCount(0);
+  await expect(show).toHaveAttribute("aria-label", /^발표 슬라이드 1 \//);
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("android-slide-viewport")).toBeVisible();
   await session.detach();
   await clean(page);
@@ -454,7 +470,7 @@ test("slide grid mounts only nearby previews in a large document", async ({
   await clean(page);
 });
 
-test("Android back closes nested panels and slideshow page input before leaving the document", async ({
+test("Android back closes viewer and ink tools before ending immersive presentation", async ({
   page,
 }) => {
   await open(page);
@@ -463,9 +479,14 @@ test("Android back closes nested panels and slideshow page input before leaving 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByTestId("android-slide-viewport")).toBeVisible();
   await page.getByRole("button", { name: "현재 슬라이드에서 발표" }).click();
-  await page.getByRole("button", { name: "발표 페이지로 이동" }).click();
+  await page
+    .getByTestId("presentation-view")
+    .click({ position: { x: 200, y: 400 } });
+  await page.getByRole("button", { name: "포인터와 판서 도구" }).click();
   await page.keyboard.press("Escape");
-  await expect(page.locator(".android-presentation-jump")).toHaveCount(0);
+  await expect(
+    page.getByRole("dialog", { name: "발표 도구", exact: true }),
+  ).toHaveCount(0);
   await expect(page.locator(".android-presentation")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("android-slide-viewport")).toBeVisible();

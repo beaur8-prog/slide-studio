@@ -2,6 +2,8 @@
 
 대상: 1.6.23 개발 소스. [Android UI 계획](ANDROID-UI-IMPROVEMENT-PLAN-2026-11-07.md)의 보기·탐색·발표와 기본 터치 편집을 반영했다. **이번 결과는 Android용 UI 소스이며, APK/AAB 배포나 Android 실기기 검증 완료를 의미하지 않는다.**
 
+2026-11-08 후속 변경: 발표의 상시 탐색 바·페이지 이동 팝업과 하단 예약 공간을 제거하고, 전체 화면 표시·스와이프·필요할 때만 여는 도구로 바꿨다. 아래 기록은 최초 구현 시점의 결과이며, 현재 발표 동작은 [몰입형 발표 변경·검증 기록](ANDROID-IMMERSIVE-PRESENTATION-2026-11-08.md)을 따른다.
+
 ## 적용 조건과 데스크톱 격리
 
 - Electron의 `window.desktop.platform`이 있으면 그 값을 우선한다. `darwin`, `win32`, `linux`에서는 Android UI를 활성화하지 않는다.

@@ -481,9 +481,34 @@ html[data-studio-platform="android"] .presentation-ink-colors button {
 html[data-studio-platform="android"] .presentation-ink-actions {
   flex-wrap: wrap;
 }
-.android-presentation {
+.presentation-view.android-presentation {
   touch-action: none;
   padding: 0;
+  overflow: hidden;
+  background: #000;
+  isolation: isolate;
+  outline: none;
+  border: 0;
+  box-shadow: none;
+}
+html[data-studio-platform="android"][data-studio-presenting="true"],
+html[data-studio-platform="android"][data-studio-presenting="true"] body {
+  background: #000;
+  overscroll-behavior: none;
+}
+.android-presentation > .android-screenreader-trigger {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  background: transparent;
 }
 .android-presentation-controls {
   position: fixed;
@@ -491,19 +516,26 @@ html[data-studio-platform="android"] .presentation-ink-actions {
   bottom: max(8px, env(safe-area-inset-bottom));
   left: max(8px, env(safe-area-inset-left));
   right: max(8px, env(safe-area-inset-right));
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 2px;
   padding: 4px;
   background: #202020ef;
   color: white;
   border-radius: 12px;
-  overflow-x: auto;
+  max-width: 640px;
+  margin: auto;
 }
 .android-presentation-controls button {
-  flex-shrink: 0;
+  min-width: 0;
   min-height: 56px;
+  flex-direction: column;
+  padding: 6px 4px;
+  font-size: 12px;
+  gap: 4px;
 }
+.android-presentation-controls button svg { width: 22px; height: 22px; }
+.android-labeled-icon { flex-direction: column; gap: 2px; font-size: 11px; }
 .android-presentation-position {
   display: flex;
   align-items: center;

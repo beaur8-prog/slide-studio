@@ -21,6 +21,7 @@ import { SlideVisual } from "./SlideCanvas";
 import type { Slide } from "./types";
 import { touchesInk, type InkPoint, type InkStroke } from "./presentation-ink";
 import { androidRuntime } from "./android-platform";
+import type { AndroidZoomView } from "./android-zoom";
 import "./presentation-ink.css";
 
 type Tool = "arrow" | "laser" | "pen" | "highlighter" | "eraser";
@@ -40,6 +41,7 @@ type Gesture = {
   opacity?: number;
 };
 export interface PresentationInkHandle {
+  cancelGesture(): void;
   openMenu(x: number, y: number): void;
   handleKey(event: KeyboardEvent): boolean;
   command(action: string): void;
@@ -74,13 +76,16 @@ const PresentationInk = forwardRef<
     ended: boolean;
     blackout: boolean;
     paused?: boolean;
+    viewportTransform?: AndroidZoomView;
+    onToolChange?: (tool: Tool) => void;
     onSlideLink: (id: string) => void;
   }
 >(function PresentationInk(
-  { slide, width, height, scale, ended, blackout, paused = false, onSlideLink },
+  { slide, width, height, scale, ended, blackout, paused = false, viewportTransform, onToolChange, onSlideLink },
   ref,
 ) {
   const [tool, setTool] = useState<Tool>("arrow");
+  const pointerScale = scale * (viewportTransform?.zoom ?? 1);
   const toolRef = useRef<Tool>("arrow");
   const [color, setColor] = useState(colors[0][0]);
   const [penWidth, setPenWidth] = useState(4);
@@ -146,6 +151,7 @@ const PresentationInk = forwardRef<
     finish(true);
     toolRef.current = next;
     setTool(next);
+    onToolChange?.(next);
     hidePointer();
     setMenu(null);
     setMessage("");
@@ -187,6 +193,7 @@ const PresentationInk = forwardRef<
     });
   };
   useImperativeHandle(ref, () => ({
+    cancelGesture() { finish(true); hidePointer(); },
     openMenu,
     command,
     snapshot() {
@@ -255,7 +262,7 @@ const PresentationInk = forwardRef<
     hidePointer();
     setMenu(null);
     // End, blackout, resize, and direct jumps must never retain a pointer grab.
-  }, [slide.id, ended, blackout, scale, paused]);
+  }, [slide.id, ended, blackout, scale, paused, viewportTransform?.zoom]);
   useLayoutEffect(() => {
     if (!menu || !panel.current) return;
     const bounds = panel.current.getBoundingClientRect();
@@ -290,7 +297,7 @@ const PresentationInk = forwardRef<
   const erase = (from: InkPoint, to: InkPoint) => {
     const d = drawing(),
       next = d.strokes.filter(
-        (stroke) => !touchesInk(stroke, from, to, 10 / scale),
+        (stroke) => !touchesInk(stroke, from, to, 10 / pointerScale),
       );
     if (next.length !== d.strokes.length) {
       d.strokes = next;
@@ -329,7 +336,8 @@ const PresentationInk = forwardRef<
         <div
           key={slide.id}
           className={`present-slide ${slide.transition === "fade" ? "fade-in" : ""}`}
-          style={{ width: width * scale, height: height * scale }}
+          style={{ width: width * scale, height: height * scale,
+            transform: viewportTransform ? `translate(${viewportTransform.x}px, ${viewportTransform.y}px) scale(${viewportTransform.zoom})` : undefined }}
         >
           <SlideVisual
             slide={slide}
@@ -431,10 +439,10 @@ const PresentationInk = forwardRef<
               data-testid="laser-pointer"
               className="laser-pointer"
               visibility="hidden"
-              r={6 / scale}
+              r={6 / pointerScale}
               fill={color}
               stroke="white"
-              strokeWidth={1 / scale}
+              strokeWidth={1 / pointerScale}
             />
           </svg>
         </div>

@@ -10,13 +10,30 @@ test.use({
 
 async function open(
   page: Page,
-  options = { portrait: false, slow: false, fail: false },
+  options: {
+    portrait: boolean;
+    slow: boolean;
+    fail: boolean;
+    legacy?: boolean;
+  } = { portrait: false, slow: false, fail: false },
 ) {
-  await page.addInitScript(({ slow, fail }) => {
+  await page.addInitScript(({ slow, fail, legacy }) => {
     const state = window as any;
     state.__bars = [];
     state.__orientation = [];
     state.__fullscreenRequests = [];
+    state.__overlays = [];
+    state.__edgeCalls = 0;
+    state.CapacitorSystemBarsAndroidInterface = legacy
+      ? undefined
+      : {
+          onDOMReady() {
+            state.__edgeCalls++;
+            state.__edgeViewport = document
+              .querySelector('meta[name="viewport"]')
+              ?.getAttribute("content");
+          },
+        };
     const original = Element.prototype.requestFullscreen;
     Element.prototype.requestFullscreen = function (options) {
       state.__fullscreenRequests.push(options);
@@ -44,12 +61,25 @@ async function open(
         state.__orientation.push("unlock");
       },
     };
+    const status = {
+      ...bars,
+      getInfo: async () => ({ overlays: false }),
+      setOverlaysWebView: async ({ overlay }: { overlay: boolean }) => {
+        state.__overlays.push(overlay);
+      },
+    };
     state.Capacitor = {
       getPlatform: () => "android",
       isPluginAvailable: (name: string) =>
-        ["SystemBars", "ScreenOrientation"].includes(name),
+        [legacy ? "StatusBar" : "SystemBars", "ScreenOrientation"].includes(
+          name,
+        ),
       registerPlugin: (name: string) =>
-        name === "SystemBars" ? bars : orientation,
+        name === "SystemBars"
+          ? bars
+          : name === "StatusBar"
+            ? status
+            : orientation,
     };
   }, options);
   await page.goto("http://127.0.0.1:5190");
@@ -64,13 +94,11 @@ async function open(
     }
     return JSON.stringify(deck);
   }, options.portrait);
-  await page
-    .locator('input[accept*=".pptx"]')
-    .setInputFiles({
-      name: "immersive.slide",
-      mimeType: "application/json",
-      buffer: Buffer.from(fixture),
-    });
+  await page.locator('input[accept*=".pptx"]').setInputFiles({
+    name: "immersive.slide",
+    mimeType: "application/json",
+    buffer: Buffer.from(fixture),
+  });
   await expect(page.getByTestId("android-slide-viewport")).toBeVisible();
   await page.getByRole("button", { name: "현재 슬라이드에서 발표" }).click();
   await expect(page.getByTestId("presentation-view")).toBeVisible();
@@ -90,6 +118,12 @@ for (const portrait of [false, true])
     expect(
       await page.evaluate(() => (window as any).__fullscreenRequests[0]),
     ).toEqual({ navigationUI: "hide" });
+    expect(
+      await page.evaluate(() => (window as any).__edgeCalls),
+    ).toBeGreaterThan(0);
+    expect(await page.evaluate(() => (window as any).__edgeViewport)).toContain(
+      "viewport-fit=cover",
+    );
     await expect(
       page.getByRole("navigation", { name: "터치 발표 도구" }),
     ).toBeHidden();
@@ -116,6 +150,25 @@ test("a late native Hide cannot finish after restoring bars and leave the reader
     "show",
   );
   await page.evaluate(() => (window as any).__finishHide());
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__bars.at(-1)))
+    .toBe("show");
+});
+
+test("legacy Android status-bar host overlays content during presentation and restores its prior layout", async ({
+  page,
+}) => {
+  await open(page, { portrait: false, slow: false, fail: false, legacy: true });
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__overlays))
+    .toContain(true);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__bars))
+    .toContain("hide");
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__overlays.at(-1)))
+    .toBe(false);
   await expect
     .poll(() => page.evaluate(() => (window as any).__bars.at(-1)))
     .toBe("show");

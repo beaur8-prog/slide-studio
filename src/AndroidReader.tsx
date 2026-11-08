@@ -208,8 +208,13 @@ export default forwardRef<
               >
                 <Play />
               </button>
-              <button aria-label="문서 메뉴" onClick={() => open("more")}>
+              <button
+                className="android-labeled-icon"
+                aria-label="문서 메뉴"
+                onClick={() => open("more")}
+              >
                 <MoreHorizontal />
+                <span>메뉴</span>
               </button>
             </header>
             {props.warnings.length > 0 && (
@@ -266,6 +271,7 @@ export default forwardRef<
                 <ChevronRight />
               </button>
               <button
+                className="android-labeled-icon"
                 aria-label="화면에 맞춤"
                 title={`현재 확대 ${Math.round(zoom * 100)}%`}
                 onClick={() => {
@@ -274,6 +280,7 @@ export default forwardRef<
                 }}
               >
                 <Maximize />
+                <span>화면 맞춤</span>
               </button>
             </nav>
             <p className="android-sr-only" role="status">

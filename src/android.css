@@ -294,15 +294,48 @@ html[data-studio-platform="android"] {
   clip-path: inset(50%);
 }
 
-/* Existing desktop editor actions and renderer, within Android-only chrome. */
+/* Both Android editors reserve native safe areas. Tablets retain desktop chrome. */
 .office-shell.android-editor {
   min-width: 0;
   height: 100dvh;
   padding: var(--android-safe-top) var(--android-safe-right)
     var(--android-safe-bottom) var(--android-safe-left);
 }
-.android-editor > :is(.topbar, .tabs, .ribbon, .statusbar) {
+.android-editor-phone > :is(.topbar, .tabs, .ribbon, .statusbar) {
   display: none;
+}
+.android-editor-tablet .shape-popover {
+  max-height: calc(100dvh - var(--android-safe-top) - var(--android-safe-bottom) - 179px);
+  overflow-y: auto;
+}
+/* Keep every desktop command at its normal size on a portrait tablet. The
+   existing ribbon scrolls when needed; its existing galleries open outside the
+   scroll viewport so all presets remain reachable. */
+@media (max-width: 969px) {
+  .android-editor-tablet > :is(.topbar, .tabs, .ribbon, .statusbar) {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+  .android-editor-tablet > :is(.topbar, .tabs, .statusbar) > * {
+    flex-shrink: 0;
+  }
+  .android-editor-tablet :is(.tabs, .ribbon) .popover {
+    position: fixed;
+    top: calc(var(--android-safe-top) + 171px);
+    left: max(8px, var(--android-safe-left));
+    max-width: calc(100vw - var(--android-safe-left) - var(--android-safe-right) - 16px);
+    max-height: calc(100dvh - var(--android-safe-top) - var(--android-safe-bottom) - 179px);
+    overflow: auto;
+  }
+  .android-editor-tablet .tabs .popover {
+    top: calc(var(--android-safe-top) + 74px);
+  }
+  .android-editor-tablet .command-popover {
+    position: fixed;
+    top: calc(var(--android-safe-top) + 40px);
+    max-width: calc(100vw - var(--android-safe-left) - var(--android-safe-right) - 16px);
+  }
 }
 .android-editor-bars {
   position: relative;
@@ -454,30 +487,30 @@ html[data-studio-platform="android"] {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-.android-editor .workspace {
+.android-editor-phone .workspace {
   min-width: 0;
 }
-.office-shell.android-editor .canvas-area {
+.office-shell.android-editor-phone .canvas-area {
   padding: 12px;
 }
-.android-editor .canvas-topline {
+.android-editor-phone .canvas-topline {
   padding: 0 12px;
 }
-.android-editor .canvas-scrollbar {
+.android-editor-phone .canvas-scrollbar {
   display: none;
 }
-.android-editor .slide-sidebar {
+.android-editor-phone .slide-sidebar {
   width: 176px;
   flex-shrink: 0;
 }
-.android-editor .thumbnail-row {
+.android-editor-phone .thumbnail-row {
   padding-left: 24px;
 }
-.android-editor .thumbnail-preview {
+.android-editor-phone .thumbnail-preview {
   max-width: 144px;
   overflow: hidden;
 }
-.android-editor .inspector {
+.android-editor-phone .inspector {
   position: fixed;
   z-index: 25;
   right: var(--android-safe-right);
@@ -488,33 +521,33 @@ html[data-studio-platform="android"] {
   overflow-y: auto;
   box-shadow: -8px 0 24px #0006;
 }
-.android-editor .inspector :is(button, input, select) {
+.android-editor-phone .inspector :is(button, input, select) {
   min-height: 48px;
   font-size: 16px;
 }
-.android-editor .inspector :is(.icon-button, button) {
+.android-editor-phone .inspector :is(.icon-button, button) {
   min-width: 48px;
 }
-.android-editor .notes-pane {
+.android-editor-phone .notes-pane {
   min-height: 104px;
   font-size: 16px;
 }
-.android-editor .notes-pane textarea {
+.android-editor-phone .notes-pane textarea {
   font-size: 16px;
 }
-.android-editor .notes-resize-handle {
+.android-editor-phone .notes-resize-handle {
   top: -16px;
   height: 32px;
 }
-.android-editor .notes-resize-handle::after {
+.android-editor-phone .notes-resize-handle::after {
   top: 14px;
 }
-.android-editor :is(.resize-handle, .rotation-handle)::before {
+.android-editor-phone :is(.resize-handle, .rotation-handle)::before {
   content: "";
   position: absolute;
   inset: calc(-20px * var(--inverse-scale));
 }
-.android-editor .slide-sorter {
+.android-editor-phone .slide-sorter {
   grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
   overflow-x: hidden;
 }
@@ -524,20 +557,22 @@ html[data-studio-platform="android"] .modal-backdrop {
   padding: max(12px, var(--android-safe-top)) 12px
     max(12px, var(--android-safe-bottom));
 }
-html[data-studio-platform="android"]
+html[data-studio-platform="android"]:not([data-studio-editor-layout="tablet"])
   :is(.dialog, .chart-editor-dialog, .image-crop-dialog) {
   width: min(100%, 720px);
   min-width: 0;
   max-height: 92dvh;
   overflow: auto;
 }
-html[data-studio-platform="android"]
-  :is(.dialog, .object-context-menu, .text-color-palette, .presentation-tools)
+html[data-studio-platform="android"]:not([data-studio-editor-layout="tablet"])
+  :is(.dialog, .object-context-menu, .text-color-palette)
+  :is(button, input, select),
+html[data-studio-platform="android"] .presentation-tools
   :is(button, input, select) {
   min-height: 48px;
   font-size: 16px;
 }
-html[data-studio-platform="android"]
+html[data-studio-platform="android"]:not([data-studio-editor-layout="tablet"])
   :is(.object-context-menu, .text-color-palette) {
   max-width: calc(100vw - 16px);
   max-height: 80dvh;
@@ -648,7 +683,7 @@ html[data-studio-platform="android"][data-studio-presenting="true"] body {
   pointer-events: none;
 }
 @media (max-width: 839px) {
-  .android-editor .slide-sidebar {
+  .android-editor-phone .slide-sidebar {
     display: none;
   }
 }
@@ -659,7 +694,7 @@ html[data-studio-platform="android"][data-studio-presenting="true"] body {
     max-height: min(32dvh, 280px);
     box-shadow: none;
   }
-  .android-editor .inspector {
+  .android-editor-phone .inspector {
     position: relative;
     top: auto;
     right: auto;

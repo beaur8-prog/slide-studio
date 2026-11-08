@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { androidRuntime } from "./android-platform";
 
 type SystemBars = { hide(): Promise<void>; show(): Promise<void> };
@@ -44,7 +44,13 @@ function requestOrientation(action: () => Promise<void> | void) {
 /** Browser Fullscreen is requested synchronously by the presentation button.
  * These optional native APIs hide both system bars in a Capacitor Android host.
  * No listeners, plugins or orientation changes are installed on desktop/iOS. */
-export function useAndroidPresentation(active: boolean, landscape: boolean) {
+export function useAndroidPresentation(
+  active: boolean,
+  landscape: boolean,
+  onExit: () => void,
+) {
+  const exit = useRef(onExit);
+  exit.current = onExit;
   useEffect(() => {
     if (!androidRuntime || !active) return;
     const root = document.documentElement;
@@ -153,16 +159,24 @@ export function useAndroidPresentation(active: boolean, landscape: boolean) {
     const fullscreen = () => {
       if (document.fullscreenElement) lock();
     };
+    // A native Escape/Back can bypass a focused WebView key handler. It must
+    // end only the current show, never become a request to close the Activity.
+    const end = (event: Event) => {
+      event.preventDefault();
+      exit.current();
+    };
     enter();
     window.addEventListener("focus", enter);
     document.addEventListener("visibilitychange", enter);
     document.addEventListener("fullscreenchange", fullscreen);
+    window.addEventListener("slide-studio-android-end-presentation", end);
     return () => {
       disposed = true;
       delete root.dataset.studioPresenting;
       window.removeEventListener("focus", enter);
       document.removeEventListener("visibilitychange", enter);
       document.removeEventListener("fullscreenchange", fullscreen);
+      window.removeEventListener("slide-studio-android-end-presentation", end);
       if (bars) requestBars(() => bars.show());
       if (locked || locking)
         void requestOrientation(() => {

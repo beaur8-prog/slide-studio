@@ -206,6 +206,7 @@ import ScreenshotDialog from "./ScreenshotDialog";
 import PresentationInk, { type PresentationInkHandle } from "./PresentationInk";
 import { DEFAULT_SHAPE_FILL, EXTRA_SHAPES, shapeInsertionStyle } from "./shape-presets";
 import { androidRuntime, useAndroidBack } from "./android-platform";
+import { useAndroidTabletEditor } from "./android-editor-layout";
 import { useAndroidPresentation } from "./android-presentation";
 import { ANDROID_FIT_VIEW, type AndroidZoomView } from "./android-zoom";
 import AndroidReader, { type AndroidReaderHandle } from "./AndroidReader";
@@ -431,11 +432,20 @@ function LibraryContents({
 }
 
 export default function App() {
+  const androidTablet = useAndroidTabletEditor();
+  const androidPhoneEditor = androidRuntime && !androidTablet;
   const [androidMode, setAndroidMode] = useState<"view" | "edit">("view");
   const [androidHome, setAndroidHome] = useState(true);
   const [androidHasDocument, setAndroidHasDocument] = useState(false);
   const [androidRecovery, setAndroidRecovery] = useState<Deck | null>(null);
   const androidReadOnly = androidRuntime && androidMode === "view";
+  useEffect(() => {
+    if (!androidRuntime) return;
+    const root = document.documentElement;
+    if (androidTablet && !androidReadOnly) root.dataset.studioEditorLayout = "tablet";
+    else delete root.dataset.studioEditorLayout;
+    return () => { delete root.dataset.studioEditorLayout; };
+  }, [androidTablet, androidReadOnly]);
   const mutationAllowed = useRef(!androidReadOnly);
   mutationAllowed.current = !androidReadOnly;
   const androidReader = useRef<AndroidReaderHandle>(null);
@@ -704,7 +714,7 @@ export default function App() {
   const [zoom, setZoom] = useState<number | null>(null);
   const [fitScale, setFitScale] = useState(0.6);
   const scale = zoom === null ? fitScale : zoom;
-  const [notesVisible, setNotesVisible] = useState(!androidRuntime);
+  const [notesVisible, setNotesVisible] = useState(!androidPhoneEditor);
   const [grid, setGrid] = useState(false);
   const [gridVisible, setGridVisible] = useState(false);
   const [smartGuides, setSmartGuides] = useState(true);
@@ -730,7 +740,7 @@ export default function App() {
   const [presenting, setPresenting] = useState(false);
   const [androidPresentationZoom, setAndroidPresentationZoom] = useState<AndroidZoomView>(ANDROID_FIT_VIEW);
   const [androidPresentationTool, setAndroidPresentationTool] = useState("arrow");
-  useAndroidPresentation(presenting, deck.width >= deck.height);
+  useAndroidPresentation(presenting, deck.width >= deck.height, () => stopPresent());
   const [androidBackgrounded, setAndroidBackgrounded] = useState(androidRuntime && document.hidden);
   useEffect(() => {
     if (!androidRuntime) return;
@@ -1395,8 +1405,8 @@ export default function App() {
         const { clientWidth: width, clientHeight: height } = canvasArea.current;
         setFitScale(
           Math.min(
-            (width - (androidRuntime ? 24 : 64)) / deck.width,
-            (androidRuntime ? Math.max(24, height - 24) : height - 60) / deck.height,
+            (width - (androidPhoneEditor ? 24 : 64)) / deck.width,
+            (androidPhoneEditor ? Math.max(24, height - 24) : height - 60) / deck.height,
             1.25,
           ),
         );
@@ -1406,7 +1416,7 @@ export default function App() {
     ro.observe(canvasArea.current);
     measure();
     return () => ro.disconnect();
-  }, [deck.width, deck.height, ready, sorter, notesVisible, androidMode]);
+  }, [deck.width, deck.height, ready, sorter, notesVisible, androidMode, androidPhoneEditor]);
   useEffect(() => {
     const resize = () =>
       setWindowSize({ w: window.innerWidth, h: window.innerHeight });
@@ -2308,7 +2318,7 @@ export default function App() {
       const next = isSample ? sampleDeck() : blankDeck();
       if (!isSample) next.slides = [newSlide(layout)];
       replaceDeck(next);
-      if (androidRuntime) { mutationAllowed.current = true; setAndroidMode("edit"); }
+      if (androidRuntime) { mutationAllowed.current = true; setAndroidMode("edit"); setNotesVisible(androidTablet); }
       notify("새 프레젠테이션을 만들었습니다.");
     } catch {
       notify(
@@ -3899,7 +3909,7 @@ export default function App() {
       await preserveAndroidRecovery();
       mutationAllowed.current = true;
       setAndroidMode("edit"); setAndroidHome(false);
-      setSelected([]); setEditing(null); setNotesVisible(false); setZoom(null);
+      setSelected([]); setEditing(null); setNotesVisible(androidTablet); setZoom(null);
     } catch (error) { notify(error instanceof Error ? error.message : "이전 편집 자료를 보관하지 못했습니다."); }
     finally { setBusy(""); }
   };
@@ -3957,6 +3967,8 @@ export default function App() {
     if (objectMenu || slideMenu) { setObjectMenu(null); setSlideMenu(null); return true; }
     if (!androidReadOnly) {
       if (androidEditor.current?.back()) return true;
+      if (menu) { setMenu(null); return true; }
+      if (findOpen) { closeFind(); return true; }
       if (inspectorVisible) { setInspectorVisible(false); return true; }
       if (editing) { commitPendingInputs(); setEditing(null); return true; }
       if (source === "escape") { setSelected([]); setTableSelection(null); return true; }
@@ -3983,7 +3995,7 @@ export default function App() {
         onRecover={() => {
           if (!androidRecovery || !canReplaceDocument()) return;
           replaceDeck(androidRecovery); setFileSnapshot(null); setAndroidRecovery(null);
-          mutationAllowed.current = true; setAndroidMode("edit");
+          mutationAllowed.current = true; setAndroidMode("edit"); setNotesVisible(androidTablet);
         }} onBackups={() => setModal("recovery")}
         onHome={setAndroidHome} onOpen={() => void openProject()} onNew={() => void createDocument()}
         onSelect={index => { const target = deck.slides[index]; if (target) selectSlide(target.id); }}
@@ -3991,7 +4003,7 @@ export default function App() {
         onShare={() => void shareAndroidOriginal()} onDownload={downloadAndroidOriginal} onSave={() => void savePptx()}
       /> :
       <div
-        className={`app-shell office-shell ${androidRuntime ? "android-editor" : ""} ${window.desktop?.platform === "win32" ? "desktop-windows" : ""} ${painterMode ? "format-painting" : ""}`}
+        className={`app-shell office-shell ${androidRuntime ? `android-editor ${androidTablet ? "android-editor-tablet" : "android-editor-phone"}` : ""} ${window.desktop?.platform === "win32" ? "desktop-windows" : ""} ${painterMode ? "format-painting" : ""}`}
         inert={presenting}
         onPointerDownCapture={event => {
           if (!painterMode || !formatSample || event.button !== 0 || modal || busy) return;
@@ -4011,7 +4023,7 @@ export default function App() {
           });
         }}
       >
-        {androidRuntime && <AndroidEditorBar ref={androidEditor} name={deck.name} dirty={hasFileChanges}
+        {androidPhoneEditor && <AndroidEditorBar ref={androidEditor} name={deck.name} dirty={hasFileChanges}
           disabled={!!busy || !!modal || presenting || !!pendingInk} canUndo={!!history.past.length || inlineUndoAvailable || pendingPreview}
           canRedo={!!history.future.length || inlineRedoAvailable} fontTools={fontTools}
           canEditText={!!selectedElement && ["text", "shape"].includes(selectedElement.type) && !selectedElement.locked}
@@ -6643,7 +6655,7 @@ export default function App() {
                   if (!withinCapacity({
                     elements: Object.fromEntries(Object.entries(pendingInk).map(([id, strokes]) => [id, strokes.length])),
                   })) return;
-                  if (androidReadOnly) { mutationAllowed.current = true; setAndroidMode("edit"); }
+                  if (androidReadOnly) { mutationAllowed.current = true; setAndroidMode("edit"); setNotesVisible(androidTablet); }
                   commit((d) => ({
                     ...d,
                     slides: d.slides.map((s) => {

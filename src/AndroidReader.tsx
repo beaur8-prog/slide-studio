@@ -17,6 +17,7 @@ import {
   MoreHorizontal,
   Play,
   Plus,
+  Printer,
   Search,
   Share2,
   StickyNote,
@@ -59,6 +60,7 @@ export default forwardRef<
     onShare: () => void;
     onDownload: () => void;
     onSave: () => void;
+    onPrint: () => void;
     hasRecovery: boolean;
     hasBackups: boolean;
     onRecover: () => void;
@@ -321,6 +323,9 @@ export default forwardRef<
             </header>
             {panel === "more" && (
               <div className="android-menu-items">
+                <button onClick={() => { close(); props.onPrint(); }}>
+                  <Printer />인쇄·PDF 저장
+                </button>
                 <button onClick={() => open("search")}>
                   <Search />
                   문서 검색

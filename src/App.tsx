@@ -123,6 +123,7 @@ import ImageCropDialog from "./ImageCropDialog";
 import { readEditableChart } from "./chart-editing";
 import SlidePreview from "./SlidePreview";
 import { usePrintRendering } from "./print-rendering";
+import { androidPrintDocument, androidPrintHost } from "./android-print";
 import { IMAGE_ACCEPT, assertImageCapacity, remainingAssetBytes, frameImageCrop, imageSize, readImageFile, type ImageCrop } from "./image-editing";
 import { DEFAULT_SEARCH_OPTIONS, findDocumentText, replaceDocumentMatches, slideSearchText } from "./document-search";
 import TextColorPalette from "./TextColorPalette";
@@ -2206,7 +2207,16 @@ export default function App() {
             (image) => image.decode().catch(() => {}),
           ),
         );
-        window.print();
+        const host = androidRuntime ? androidPrintHost() : undefined;
+        if (host) {
+          if (!host.printDocument) throw new Error("인쇄를 지원하는 최신 Android 앱으로 업데이트해 주세요.");
+          setBusy("인쇄용 슬라이드를 준비하고 있습니다");
+          const document = await androidPrintDocument(deck.name, deck.width, deck.height);
+          setBusy("시스템 인쇄 창에서 인쇄 또는 PDF 저장을 완료해 주세요");
+          const status = await host.printDocument(document);
+          if (status === "submitted") notify("인쇄 작업을 보냈습니다.");
+          else if (status === "cancelled") notify("인쇄를 취소했습니다.");
+        } else window.print();
       }
     } catch (error) {
       notify(
@@ -3986,6 +3996,7 @@ export default function App() {
         onSelect={index => { const target = deck.slides[index]; if (target) selectSlide(target.id); }}
         onEdit={() => void enterAndroidEdit()} onPresent={() => startPresent()}
         onShare={() => void shareAndroidOriginal()} onDownload={downloadAndroidOriginal} onSave={() => void savePptx()}
+        onPrint={() => void printDeck()}
       /> :
       <div
         className={`app-shell office-shell ${androidRuntime ? `android-editor ${androidTablet ? "android-editor-tablet" : "android-editor-phone"}` : ""} ${window.desktop?.platform === "win32" ? "desktop-windows" : ""} ${painterMode ? "format-painting" : ""}`}
@@ -4013,7 +4024,7 @@ export default function App() {
           canRedo={!!history.future.length || inlineRedoAvailable} fontTools={fontTools}
           canEditText={!!selectedElement && ["text", "shape"].includes(selectedElement.type) && !selectedElement.locked}
           onEditText={() => { if (selectedElement) { begin(); setEditing(selectedElement.id); } }}
-          onPresent={startPresent}
+          onPresent={startPresent} onPrint={() => void printDeck()}
           designTools={<>
             {THEMES.map(theme => <button key={theme.id} aria-pressed={deck.theme === theme.id} onClick={() => applyTheme(theme.id)}>
               <span className="android-theme-swatch" style={{ background: theme.background, color: theme.text }}>Aa</span>{theme.name}

@@ -12,6 +12,7 @@ import {
   Image,
   Play,
   Plus,
+  Printer,
   Redo2,
   Save,
   Settings2,
@@ -51,6 +52,7 @@ export default forwardRef<
     viewTools: ReactNode;
     onDone(): void;
     onSave(): void;
+    onPrint(): void;
     onOpen(): void;
     onUndo(): void;
     onRedo(): void;
@@ -260,6 +262,9 @@ export default forwardRef<
         )}
         {tab === "view" && (
           <div className="android-ribbon-actions">
+            <button onClick={() => { setPanel(null); props.onPrint(); }}>
+              <Printer />인쇄·PDF 저장
+            </button>
             <button onClick={props.onNotes}>
               <StickyNote />
               발표자 노트

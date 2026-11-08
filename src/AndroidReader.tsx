@@ -203,6 +203,14 @@ export default forwardRef<
                 </small>
               </div>
               <button
+                className="android-labeled-icon"
+                aria-label="편집"
+                onClick={props.onEdit}
+              >
+                <Edit3 />
+                <span>편집</span>
+              </button>
+              <button
                 aria-label="현재 슬라이드에서 발표"
                 onClick={props.onPresent}
               >

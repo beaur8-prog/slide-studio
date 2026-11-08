@@ -388,6 +388,48 @@ test("immersive touch slideshow maximizes artwork, swipes hidden slides and show
   await clean(page);
 });
 
+test("viewer enters editing directly on the current slide and returns without changing the document", async ({
+  page,
+}, info) => {
+  await open(page);
+  await page
+    .getByRole("button", { name: "다음 슬라이드", exact: true })
+    .click();
+  for (const size of [
+    { width: 360, height: 800 },
+    { width: 800, height: 360 },
+    { width: 1280, height: 800 },
+  ]) {
+    await page.setViewportSize(size);
+    const edit = page
+      .locator(".android-topbar")
+      .getByRole("button", { name: "편집", exact: true });
+    await expect(edit).toBeVisible();
+    await expect(edit).toHaveText("편집");
+    const box = (await edit.boundingBox())!;
+    expect(box.width).toBeGreaterThanOrEqual(48);
+    expect(box.height).toBeGreaterThanOrEqual(48);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(size.width);
+    await page.screenshot({
+      path: info.outputPath(`viewer-edit-${size.width}.png`),
+    });
+    await edit.click();
+    await expect(page.locator(".android-editor")).toBeVisible();
+    await page.getByRole("button", { name: "선택", exact: true }).click();
+    await expect(page.locator(".android-edit-panel")).toContainText(
+      "Alpha Beta 2",
+    );
+    await page
+      .getByRole("button", { name: "보기로 돌아가기", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "페이지로 이동 · 2 / 3" }),
+    ).toBeVisible();
+    await clean(page);
+  }
+});
+
 test("tablet editing uses touch actions, numeric drafts, undo and PPTX reopen", async ({
   page,
 }, info) => {

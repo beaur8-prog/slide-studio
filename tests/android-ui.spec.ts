@@ -806,3 +806,160 @@ test("backup failure keeps the old Android draft and cancels opening a new edito
     }),
   ).toEqual({ name: "이전 Android 편집 자료", backups: 0 });
 });
+
+test("editor starts a show on the current slide and Escape returns to editing without leaving the app", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page);
+  await page
+    .getByRole("button", { name: "다음 슬라이드", exact: true })
+    .click();
+  await page
+    .locator(".android-topbar")
+    .getByRole("button", { name: "편집", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "슬라이드 쇼 시작", exact: true })
+    .click();
+  await expect(page.getByTestId("presentation-view")).toHaveAttribute(
+    "aria-label",
+    /^발표 슬라이드 2 \//,
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("presentation-view")).toHaveCount(0);
+  await expect(page.locator(".android-editor")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".android-editor")).toBeVisible();
+  await page
+    .getByRole("button", { name: "보기로 돌아가기", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "페이지로 이동 · 2 / 3" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("android-slide-viewport")).toBeVisible();
+  await clean(page);
+});
+
+test("Android ribbon tabs expose insertion, design, transitions, show and view without dirtying on selection", async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page);
+  await page
+    .locator(".android-topbar")
+    .getByRole("button", { name: "편집", exact: true })
+    .click();
+  await expect(
+    page.getByRole("tablist", { name: "편집 리본" }).getByRole("tab"),
+  ).toHaveCount(6);
+  for (const name of ["삽입", "디자인", "전환", "슬라이드 쇼", "보기", "홈"]) {
+    await page.getByRole("tab", { name, exact: true }).click();
+    await expect(page.getByRole("tab", { name, exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await clean(page);
+  }
+  await page.getByRole("tab", { name: "전환", exact: true }).click();
+  await page
+    .getByRole("tabpanel", { name: "전환", exact: true })
+    .getByRole("button", { name: "페이드", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("button", { name: "페이드", exact: true })
+      .filter({ visible: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "실행 취소", exact: true }).click();
+  await clean(page);
+  await page.getByRole("tab", { name: "홈", exact: true }).click();
+  await page.getByRole("button", { name: "글자", exact: true }).click();
+  await expect(page.locator(".android-edit-panel")).toHaveCSS(
+    "position",
+    "relative",
+  );
+  await expect(page.locator(".android-editor .canvas-area")).toHaveCSS(
+    "padding",
+    "12px",
+  );
+  const fitted = () =>
+    page.evaluate(() => {
+      const area = document
+        .querySelector(".android-editor .canvas-area")!
+        .getBoundingClientRect();
+      const art = document
+        .querySelector(".editable-slide")!
+        .getBoundingClientRect();
+      return (
+        art.left >= area.left &&
+        art.right <= area.right + 1 &&
+        art.top >= area.top &&
+        art.bottom <= area.bottom + 1
+      );
+    });
+  await expect.poll(fitted).toBe(true);
+  await page.screenshot({ path: info.outputPath("tablet-ribbon.png") });
+  await page
+    .getByRole("button", { name: "편집 옵션 닫기", exact: true })
+    .click();
+  await page.getByRole("button", { name: "서식", exact: true }).click();
+  await expect(page.locator(".android-editor .inspector")).toBeVisible();
+  await expect(page.locator(".android-editor .inspector")).toHaveCSS(
+    "position",
+    "relative",
+  );
+  const pane = (await page
+    .locator(".android-editor .inspector")
+    .boundingBox())!;
+  const area = (await page
+    .locator(".android-editor .canvas-area")
+    .boundingBox())!;
+  expect(area.x + area.width).toBeLessThanOrEqual(pane.x + 1);
+  await expect.poll(fitted).toBe(true);
+  await page.getByRole("button", { name: "서식", exact: true }).click();
+  await page.getByRole("tab", { name: "홈", exact: true }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.getByRole("tab", { name: "삽입", exact: true }),
+  ).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "텍스트 상자", exact: true }),
+  ).toBeVisible();
+  for (const size of [
+    { width: 360, height: 800 },
+    { width: 800, height: 360 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.getByRole("tab", { name: "슬라이드 쇼", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "처음부터 발표", exact: true }),
+    ).toBeVisible();
+    await expect.poll(fitted).toBe(true);
+    await page.screenshot({
+      path: info.outputPath(`ribbon-${size.width}.png`),
+    });
+    expect(
+      await page
+        .locator(".android-editor")
+        .evaluate((el) => el.scrollWidth <= innerWidth),
+    ).toBe(true);
+    const button = await page
+      .getByRole("button", { name: "슬라이드 쇼 시작", exact: true })
+      .boundingBox();
+    expect(button!.width).toBeGreaterThanOrEqual(48);
+    expect(button!.height).toBeGreaterThanOrEqual(48);
+  }
+  await page.getByRole("tab", { name: "슬라이드 쇼", exact: true }).click();
+  await page
+    .getByRole("button", { name: "처음부터 발표", exact: true })
+    .click();
+  await expect(page.getByTestId("presentation-view")).toHaveAttribute(
+    "aria-label",
+    /^발표 슬라이드 1 \//,
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".android-editor")).toBeVisible();
+  await clean(page);
+});

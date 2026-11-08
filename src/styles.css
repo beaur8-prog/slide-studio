@@ -1839,6 +1839,7 @@ button:not(:disabled):active {
     background: white !important;
   }
   .app-shell,
+  .android-app,
   .toast,
   dialog,
   .modal-backdrop,

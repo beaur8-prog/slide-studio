@@ -1,3 +1,4 @@
+import "./android-native";
 import {
   recordTextUndo,
   textUndoCheckpoints,
@@ -643,6 +644,7 @@ export default function App() {
   const activeFindIndex = Math.min(findIndex, Math.max(0, findResults.matches.length - 1));
   const activeFindMatch = findResults.matches[activeFindIndex];
   const [ready, setReady] = useState(false);
+  const [androidIncomingFile, setAndroidIncomingFile] = useState<File | null>(null);
   const [hasRecoveryBackups, setHasRecoveryBackups] = useState(false);
   const [autosaveBlocked, setAutosaveBlocked] = useState(false);
   const autosaveBlockedRef = useRef(false);
@@ -2111,6 +2113,9 @@ export default function App() {
         setFileContext(typeof result === "string" ? undefined : result);
       return !!result;
     }
+    if (androidRuntime && window.slideStudioAndroid) {
+      return window.slideStudioAndroid.saveFile({ name, data, type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+    }
     const url = URL.createObjectURL(new Blob([new Uint8Array(data)]));
     const link = document.createElement("a");
     link.href = url;
@@ -2206,7 +2211,8 @@ export default function App() {
             (image) => image.decode().catch(() => {}),
           ),
         );
-        window.print();
+        if (androidRuntime && window.slideStudioAndroid?.print) await window.slideStudioAndroid.print();
+        else window.print();
       }
     } catch (error) {
       notify(
@@ -3919,6 +3925,20 @@ export default function App() {
     setInspectorVisible(false); setNotesVisible(false); setSorter(false); setFindOpen(false);
     setAndroidMode("view");
   };
+  useEffect(() => {
+    if (!androidRuntime || !window.slideStudioAndroid?.onOpenFile) return;
+    return window.slideStudioAndroid.onOpenFile(file => setAndroidIncomingFile(current => {
+      if (current) { notify("열기 대기 중인 파일이 있습니다. 잠시 뒤 다시 열어 주세요."); return current; }
+      return new window.File([new Uint8Array(file.data)], file.name, {type:file.type});
+    }));
+  }, []);
+  useEffect(() => {
+    if (!ready || busy || modal || !androidIncomingFile || openingFile.current || savingPptx.current || printing.current) return;
+    const input = document.querySelector<HTMLInputElement>('input[type="file"][accept*="pptx"]');
+    if (!input) return;
+    const transfer = new DataTransfer(); transfer.items.add(androidIncomingFile);
+    input.files=transfer.files; input.dispatchEvent(new Event("change",{bubbles:true})); setAndroidIncomingFile(null);
+  }, [ready,busy,modal,androidIncomingFile]);
   const downloadAndroidOriginal = () => {
     const file = androidOriginal.current;
     if (!file) return;
